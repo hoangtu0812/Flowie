@@ -3,7 +3,6 @@ from typing import Literal
 
 from fastapi import Depends
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import text
 
 from ...core.clock import utcnow
 from ...core.errors import ApiError
@@ -11,6 +10,14 @@ from ...core.timezones import time_zone
 from ...core.utc_responses import UtcAPIRouter
 from ...db.session import get_session
 from .auth import current_user
+from .commands import (
+    WRITE_PREFERENCES_INSERT_USER_UI_PREFERENCES,
+    WRITE_PREFERENCES_UPDATE_USER_UI_PREFERENCES,
+    WRITE_PREFERENCES_UPDATE_USERS,
+)
+from .queries import (
+    READ_PREFERENCES_SELECT_USER_UI_PREFERENCES,
+)
 
 router = UtcAPIRouter(
     prefix="/api/v1/users/me/ui-preferences", tags=["account-preferences"]
@@ -90,9 +97,7 @@ async def read_preferences(db, user_id):
     row = (
         (
             await db.execute(
-                text(
-                    "SELECT preferences,version FROM user_ui_preferences WHERE user_id=:user"
-                ),
+                READ_PREFERENCES_SELECT_USER_UI_PREFERENCES,
                 {"user": user_id},
             )
         )
@@ -120,11 +125,11 @@ async def write_preferences(db, user_id, payload):
         "now": utcnow(),
     }
     query = (
-        "INSERT INTO user_ui_preferences(user_id,preferences,updated_at) VALUES (:user,CAST(:values AS jsonb),:now) ON CONFLICT(user_id) DO NOTHING RETURNING version,preferences"
+        WRITE_PREFERENCES_INSERT_USER_UI_PREFERENCES
         if payload.expectedVersion == 0
-        else "UPDATE user_ui_preferences SET preferences=preferences || CAST(:values AS jsonb),version=version+1,updated_at=:now WHERE user_id=:user AND version=:expected RETURNING version,preferences"
+        else WRITE_PREFERENCES_UPDATE_USER_UI_PREFERENCES
     )
-    saved = (await db.execute(text(query), params)).mappings().first()
+    saved = (await db.execute(query, params)).mappings().first()
     if saved is None:
         raise ApiError(
             409,
@@ -134,7 +139,7 @@ async def write_preferences(db, user_id, payload):
     values = UiValues.model_validate(known_values(saved["preferences"])).model_dump()
     if "timezone" in payload.values.model_fields_set and values["timezone"]:
         await db.execute(
-            text("UPDATE users SET timezone=:zone,updated_at=:now WHERE id=:user"),
+            WRITE_PREFERENCES_UPDATE_USERS,
             {"zone": values["timezone"], "now": params["now"], "user": user_id},
         )
     return {

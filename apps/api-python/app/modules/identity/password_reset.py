@@ -6,12 +6,26 @@ from hashlib import sha256
 from secrets import token_urlsafe
 
 from argon2 import PasswordHasher
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import cuid, hash_token
+from .commands import (
+    CONSUME_RESET_UPDATE_PASSWORD_RESET_TOKENS,
+    CONSUME_RESET_UPDATE_USERS,
+    ISSUE_RESET_INSERT_PASSWORD_RESET_TOKENS,
+    ISSUE_RESET_UPDATE_PASSWORD_RESET_TOKENS,
+    LIMIT_REQUEST_DELETE_AUTH_RATE_LIMITS,
+    LIMIT_REQUEST_INSERT_AUTH_RATE_LIMITS,
+    consume_reset_update_sql,
+)
+from .queries import (
+    CONSUME_RESET_SELECT_PASSWORD_RESET_TOKENS,
+    CONSUME_RESET_SELECT_PASSWORD_RESET_TOKENS_2,
+    CONSUME_RESET_SELECT_USERS,
+    ISSUE_RESET_SELECT_USERS,
+)
 
 
 async def limit_request(
@@ -21,16 +35,12 @@ async def limit_request(
     key = sha256(f"{secret}:{kind}:{identity}".encode()).hexdigest()
     count = (
         await db.execute(
-            text("""INSERT INTO auth_rate_limits (key,window_start,count)
-        VALUES (:key,:now,1) ON CONFLICT(key) DO UPDATE SET
-        count=CASE WHEN auth_rate_limits.window_start<:cutoff THEN 1 ELSE auth_rate_limits.count+1 END,
-        window_start=CASE WHEN auth_rate_limits.window_start<:cutoff THEN :now ELSE auth_rate_limits.window_start END
-        RETURNING count"""),
+            LIMIT_REQUEST_INSERT_AUTH_RATE_LIMITS,
             {"key": key, "now": now, "cutoff": now - timedelta(hours=1)},
         )
     ).scalar_one()
     await db.execute(
-        text("DELETE FROM auth_rate_limits WHERE window_start<:cutoff"),
+        LIMIT_REQUEST_DELETE_AUTH_RATE_LIMITS,
         {"cutoff": now - timedelta(days=1)},
     )
     await db.commit()
@@ -42,9 +52,7 @@ async def issue_reset(db: AsyncSession, email: str) -> str | None:
     user = (
         (
             await db.execute(
-                text(
-                    "SELECT id FROM users WHERE email=:email AND status='ACTIVE' AND password_hash IS NOT NULL FOR UPDATE"
-                ),
+                ISSUE_RESET_SELECT_USERS,
                 {"email": email},
             )
         )
@@ -55,14 +63,11 @@ async def issue_reset(db: AsyncSession, email: str) -> str | None:
         return None
     now, token = utcnow(), token_urlsafe(48)
     await db.execute(
-        text(
-            "UPDATE password_reset_tokens SET used_at=:now WHERE user_id=:user AND used_at IS NULL"
-        ),
+        ISSUE_RESET_UPDATE_PASSWORD_RESET_TOKENS,
         {"now": now, "user": user["id"]},
     )
     await db.execute(
-        text("""INSERT INTO password_reset_tokens (id,user_id,token_hash,expires_at,created_at)
-        VALUES (:id,:user,:hash,:expires,:now)"""),
+        ISSUE_RESET_INSERT_PASSWORD_RESET_TOKENS,
         {
             "id": cuid(),
             "user": user["id"],
@@ -82,20 +87,18 @@ async def consume_reset(db: AsyncSession, token: str, password: str) -> str:
     # Issuing and consuming resets lock the user before any token to avoid lock inversion.
     candidate = (
         await db.execute(
-            text("SELECT user_id FROM password_reset_tokens WHERE token_hash=:hash"),
+            CONSUME_RESET_SELECT_PASSWORD_RESET_TOKENS,
             {"hash": hash_token(token)},
         )
     ).scalar_one_or_none()
     if candidate:
         await db.execute(
-            text("SELECT id FROM users WHERE id=:id FOR UPDATE"), {"id": candidate}
+            CONSUME_RESET_SELECT_USERS, {"id": candidate}
         )
     row = (
         (
             await db.execute(
-                text("""SELECT r.id,r.user_id FROM password_reset_tokens r
-        JOIN users u ON u.id=r.user_id WHERE r.token_hash=:hash AND r.used_at IS NULL
-        AND r.expires_at>:now AND u.status='ACTIVE' AND u.password_hash IS NOT NULL FOR UPDATE OF r,u"""),
+                CONSUME_RESET_SELECT_PASSWORD_RESET_TOKENS_2,
                 {"hash": hash_token(token), "now": now},
             )
         )
@@ -110,22 +113,16 @@ async def consume_reset(db: AsyncSession, token: str, password: str) -> str:
         )
     user = row["user_id"]
     await db.execute(
-        text(
-            "UPDATE users SET password_hash=:password, auth_version=auth_version+1, updated_at=:now WHERE id=:user"
-        ),
+        CONSUME_RESET_UPDATE_USERS,
         {"password": password_hash, "now": now, "user": user},
     )
     await db.execute(
-        text(
-            "UPDATE password_reset_tokens SET used_at=:now WHERE user_id=:user AND used_at IS NULL"
-        ),
+        CONSUME_RESET_UPDATE_PASSWORD_RESET_TOKENS,
         {"now": now, "user": user},
     )
     for table in ("sessions", "personal_api_keys", "mcp_connections"):
         await db.execute(
-            text(
-                f"UPDATE {table} SET revoked_at=:now WHERE user_id=:user AND revoked_at IS NULL"
-            ),
+            consume_reset_update_sql(table),
             {"now": now, "user": user},
         )
     await db.commit()

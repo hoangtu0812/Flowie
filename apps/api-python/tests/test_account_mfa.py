@@ -19,7 +19,7 @@ from app.core.errors import ApiError
 from app.core.identifiers import cuid
 from app.db.session import get_session
 from app.main import create_app
-from app.modules.identity.security.mfa import commands
+from app.modules.identity.security.mfa import actions
 from app.modules.identity.security.mfa.crypto import (
     decrypt_secret,
     encrypt_secret,
@@ -150,7 +150,7 @@ async def verify_mfa():
             actor = await active_identity(db, decode_access(original, settings))
             await db.commit()
             with pytest.raises(ApiError):
-                await commands.setup(db, actor, "wrong", request, settings)
+                await actions.setup(db, actor, "wrong", request, settings)
             assert (
                 await db.execute(
                     text(
@@ -159,7 +159,7 @@ async def verify_mfa():
                     {"id": identifier},
                 )
             ).scalar_one() == 1
-            setup = await commands.setup(db, actor, password, request, settings)
+            setup = await actions.setup(db, actor, password, request, settings)
             assert (
                 setup["qr"].startswith("data:image/svg+xml")
                 and "otpauth" in setup["uri"]
@@ -170,7 +170,7 @@ async def verify_mfa():
                 code=totp(setup["secret"], counter),
                 kind="AUTHENTICATOR",
             )
-            codes, tokens = await commands.enable(db, actor, proof, request, settings)
+            codes, tokens = await actions.enable(db, actor, proof, request, settings)
             assert len(set(codes)) == 10
             assert await active_identity(db, decode_access(original, settings)) is None
             with pytest.raises(ApiError):
@@ -316,7 +316,7 @@ async def verify_mfa():
             sso_actor = await active_identity(db, decode_access(sso_token, settings))
             await db.commit()
             with pytest.raises(ApiError) as fresh:
-                await commands.setup(db, sso_actor, None, request, settings)
+                await actions.setup(db, sso_actor, None, request, settings)
             assert fresh.value.status_code == 403
             await db.rollback()
             sso_token, _ = await create_session(
@@ -328,22 +328,22 @@ async def verify_mfa():
                 authenticated_at=utcnow(),
             )
             sso_actor = await active_identity(db, decode_access(sso_token, settings))
-            assert (await commands.setup(db, sso_actor, None, request, settings))[
+            assert (await actions.setup(db, sso_actor, None, request, settings))[
                 "secret"
             ]
             # Replacing recovery material and disabling require both factors.
             proof.code, proof.kind = codes[3], "RECOVERY"
-            newer = await commands.change(
+            newer = await actions.change(
                 db, replacement_actor, proof, request, settings
             )
             assert len(newer) == 10
             proof.code = codes[4]
             with pytest.raises(ApiError):
-                await commands.change(
+                await actions.change(
                     db, replacement_actor, proof, request, settings, disable=True
                 )
             proof.code = newer[0]
-            await commands.change(
+            await actions.change(
                 db, replacement_actor, proof, request, settings, disable=True
             )
             assert (

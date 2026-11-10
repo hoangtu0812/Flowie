@@ -9,7 +9,6 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from fastapi import Depends, File, Query, Request, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import utcnow
@@ -18,6 +17,19 @@ from ...core.utc_responses import UtcAPIRouter as APIRouter
 from ...db.session import get_session
 from ...storage.minio import MinioStorage
 from .auth import current_user
+from .commands import (
+    UPLOAD_AVATAR_UPDATE_USERS,
+    update_me_update_users_sql,
+)
+from .queries import (
+    GET_AVATAR_SELECT_USERS,
+    PROFILE_MANAGED_BY_SELECT_USER_IDENTITIES,
+    UPLOAD_AVATAR_SELECT_USERS,
+    WORKSPACE_MEMBER_ACCESS_SELECT_WORKSPACE_MEMBERS,
+    WORKSPACE_MEMBERS_SELECT_PROJECT_MEMBERS,
+    WORKSPACE_MEMBERS_SELECT_TEAM_MEMBERS,
+    workspace_members_select_workspace_members_sql,
+)
 
 router = APIRouter(prefix='/api/v1/users', tags=['users'])
 MAX_AVATAR_BYTES = 5 * 1024 * 1024
@@ -63,10 +75,7 @@ def _profile(row: Any, profile_managed_by: str | None = None) -> dict[str, objec
 
 async def _profile_managed_by(db: AsyncSession, user_id: str) -> str | None:
     result = await db.execute(
-        text(
-            """SELECT provider::text FROM user_identities
-               WHERE user_id = :user_id AND provider = 'MICROSOFT' LIMIT 1"""
-        ),
+        PROFILE_MANAGED_BY_SELECT_USER_IDENTITIES,
         {'user_id': user_id},
     )
     return result.scalar_one_or_none()
@@ -119,10 +128,7 @@ async def update_me(
     updates.append('updated_at = CURRENT_TIMESTAMP')
     try:
         result = await db.execute(
-            text(
-                f'''UPDATE users SET {', '.join(updates)} WHERE id = :id
-                    RETURNING id, name, email, username, title, timezone, avatar_url, created_at'''
-            ),
+            update_me_update_users_sql(updates),
             params,
         )
         await db.commit()
@@ -158,16 +164,12 @@ async def upload_avatar(
     object_key = f'{AVATAR_PREFIX}{user["id"]}/{token_urlsafe(18)}.{extension}'
     await MinioStorage(request.app.state.settings).put(object_key, body, content_type)
     await db.execute(
-        text(
-            '''UPDATE users
-               SET avatar_url = :object_key, updated_at = CURRENT_TIMESTAMP
-               WHERE id = :id'''
-        ),
+        UPLOAD_AVATAR_UPDATE_USERS,
         {'id': user['id'], 'object_key': object_key},
     )
     await db.commit()
     stored = await db.execute(
-        text('SELECT id, name, email, username, title, timezone, avatar_url, created_at FROM users WHERE id = :id'),
+        UPLOAD_AVATAR_SELECT_USERS,
         {'id': user['id']},
     )
     # The storage key remains internal. The public route below always resolves
@@ -180,7 +182,7 @@ async def upload_avatar(
 @router.get('/{user_id}/avatar')
 async def get_avatar(user_id: str, request: Request, db: AsyncSession = Depends(get_session)) -> Response:
     """Serve an uploaded avatar without exposing the internal MinIO object key."""
-    result = await db.execute(text('SELECT avatar_url FROM users WHERE id = :id'), {'id': user_id})
+    result = await db.execute(GET_AVATAR_SELECT_USERS, {'id': user_id})
     row = result.mappings().first()
     object_key = row['avatar_url'] if row else None
     if not object_key or not object_key.startswith(AVATAR_PREFIX):
@@ -192,10 +194,7 @@ async def get_avatar(user_id: str, request: Request, db: AsyncSession = Depends(
 
 async def _workspace_member_access(db: AsyncSession, workspace_id: str, user_id: str) -> None:
     result = await db.execute(
-        text(
-            """SELECT 1 FROM workspace_members
-               WHERE workspace_id = :workspace_id AND user_id = :user_id AND status = 'ACTIVE'"""
-        ),
+        WORKSPACE_MEMBER_ACCESS_SELECT_WORKSPACE_MEMBERS,
         {'workspace_id': workspace_id, 'user_id': user_id},
     )
     if result.scalar_one_or_none() is None:
@@ -213,13 +212,7 @@ async def _workspace_members(
 
     condition = 'AND wm.user_id = :user_id' if user_id else ''
     result = await db.execute(
-        text(
-            f"""SELECT u.id, u.name, u.email, u.username, u.title, u.timezone, u.avatar_url,
-                       u.created_at, u.last_seen_at, wm.role, wm.joined_at, wm.created_at AS member_created_at
-                FROM workspace_members wm JOIN users u ON u.id = wm.user_id
-                WHERE wm.workspace_id = :workspace_id AND wm.status = 'ACTIVE' {condition}
-                ORDER BY wm.joined_at ASC"""
-        ),
+        workspace_members_select_workspace_members_sql(condition),
         {'workspace_id': workspace_id, **({'user_id': user_id} if user_id else {})},
     )
     rows = result.mappings().all()
@@ -228,21 +221,11 @@ async def _workspace_members(
 
     member_ids = [row['id'] for row in rows]
     teams = await db.execute(
-        text(
-            """SELECT tm.user_id, tm.role, t.id, t.name, t.identifier, t.icon
-               FROM team_members tm JOIN teams t ON t.id = tm.team_id
-               WHERE tm.user_id = ANY(:ids) AND t.workspace_id = :workspace_id
-                 AND t.archived_at IS NULL"""
-        ),
+        WORKSPACE_MEMBERS_SELECT_TEAM_MEMBERS,
         {'ids': member_ids, 'workspace_id': workspace_id},
     )
     projects = await db.execute(
-        text(
-            """SELECT pm.user_id, p.id, p.name, p.identifier
-               FROM project_members pm JOIN projects p ON p.id = pm.project_id
-               WHERE pm.user_id = ANY(:ids) AND p.workspace_id = :workspace_id
-                 AND p.archived_at IS NULL"""
-        ),
+        WORKSPACE_MEMBERS_SELECT_PROJECT_MEMBERS,
         {'ids': member_ids, 'workspace_id': workspace_id},
     )
 

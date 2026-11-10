@@ -17,7 +17,7 @@ from app.db.session import get_session
 from app.main import create_app
 from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.identity.security.credentials import revoke_credential
-from app.modules.identity.security.queries import (
+from app.modules.identity.security.inventory import (
     credential_page,
     event_page,
     session_page,

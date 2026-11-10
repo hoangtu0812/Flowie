@@ -2,12 +2,26 @@ from datetime import timedelta
 from secrets import token_urlsafe
 
 import jwt
-from sqlalchemy import text
 
 from ....core.clock import utcnow
 from ....core.errors import ApiError
 from ....core.identifiers import cuid, hash_token
+from .commands import (
+    CREATE_SESSION_INSERT_SESSIONS,
+    LOGOUT_SESSION_UPDATE_SESSIONS,
+    ROTATE_SESSION_UPDATE_SESSIONS,
+    revoke_sessions_update_sessions_sql,
+)
 from .events import record_event, request_metadata
+from .queries import (
+    ACTIVE_IDENTITY_SELECT_SESSIONS,
+    LOCK_ACCOUNT_SELECT_USERS,
+    LOGOUT_SESSION_SELECT_SESSIONS,
+    LOGOUT_SESSION_SELECT_SESSIONS_2,
+    LOGOUT_SESSION_SELECT_USERS,
+    ROTATE_SESSION_SELECT_SESSIONS,
+    ROTATE_SESSION_SELECT_SESSIONS_2,
+)
 
 
 def expired():
@@ -60,12 +74,7 @@ async def active_identity(db, claims):
     row = (
         (
             await db.execute(
-                text(
-                    """SELECT u.*,s.id AS session_id,s.auth_method AS session_auth_method,s.authenticated_at AS session_authenticated_at FROM sessions s JOIN users u ON u.id=s.user_id
-        LEFT JOIN account_mfa m ON m.user_id=u.id
-        WHERE s.id=:session AND s.user_id=:user AND s.revoked_at IS NULL AND s.expires_at>:now AND u.status='ACTIVE' AND u.auth_version=:version
-        AND (m.enabled_at IS NULL OR s.mfa_verified_at>=m.enabled_at)"""
-                ),
+                ACTIVE_IDENTITY_SELECT_SESSIONS,
                 {
                     "session": claims["sid"],
                     "user": claims["sub"],
@@ -84,7 +93,7 @@ async def lock_account(db, identifier):
     row = (
         (
             await db.execute(
-                text("SELECT * FROM users WHERE id=:id FOR UPDATE"), {"id": identifier}
+                LOCK_ACCOUNT_SELECT_USERS, {"id": identifier}
             )
         )
         .mappings()
@@ -119,10 +128,7 @@ async def create_session(
         raise expired()
     identifier, refresh, now = cuid(), token_urlsafe(48), utcnow()
     await db.execute(
-        text(
-            """INSERT INTO sessions(id,user_id,refresh_token_hash,ip_address,user_agent,expires_at,created_at,last_used_at,authenticated_at,auth_method,mfa_verified_at)
-        VALUES (:id,:user,:hash,:ip,:agent,:expires,:now,:now,:authenticated,:method,:mfa)"""
-        ),
+        CREATE_SESSION_INSERT_SESSIONS,
         {
             "id": identifier,
             "user": user["id"],
@@ -143,7 +149,7 @@ async def create_session(
 async def rotate_session(db, refresh, request, settings):
     owner = (
         await db.execute(
-            text("SELECT user_id FROM sessions WHERE refresh_token_hash=:hash"),
+            ROTATE_SESSION_SELECT_SESSIONS,
             {"hash": hash_token(refresh)},
         )
     ).scalar_one_or_none()
@@ -154,9 +160,7 @@ async def rotate_session(db, refresh, request, settings):
     row = (
         (
             await db.execute(
-                text(
-                    "SELECT * FROM sessions WHERE refresh_token_hash=:hash AND user_id=:user AND revoked_at IS NULL AND expires_at>:now FOR UPDATE"
-                ),
+                ROTATE_SESSION_SELECT_SESSIONS_2,
                 {"hash": hash_token(refresh), "user": owner, "now": now},
             )
         )
@@ -179,9 +183,7 @@ async def rotate_session(db, refresh, request, settings):
         raise expired()
     replacement = token_urlsafe(48)
     await db.execute(
-        text(
-            "UPDATE sessions SET refresh_token_hash=:hash,last_used_at=:now,expires_at=:expires WHERE id=:id"
-        ),
+        ROTATE_SESSION_UPDATE_SESSIONS,
         {
             "id": row["id"],
             "hash": hash_token(replacement),
@@ -210,11 +212,7 @@ async def revoke_sessions(db, user, request, *, identifier=None):
     rows = (
         (
             await db.execute(
-                text(
-                    "UPDATE sessions SET revoked_at=:now WHERE user_id=:user AND revoked_at IS NULL AND "
-                    + predicate
-                    + " RETURNING id"
-                ),
+                revoke_sessions_update_sessions_sql(predicate),
                 {
                     "id": identifier,
                     "session": user["session_id"],
@@ -242,9 +240,7 @@ async def logout_session(db, request, settings):
             row = (
                 (
                     await db.execute(
-                        text(
-                            "SELECT id,user_id FROM sessions WHERE id=:id AND user_id=:user AND revoked_at IS NULL"
-                        ),
+                        LOGOUT_SESSION_SELECT_SESSIONS_2,
                         {"id": claims["sid"], "user": claims["sub"]},
                     )
                 )
@@ -258,9 +254,7 @@ async def logout_session(db, request, settings):
         row = (
             (
                 await db.execute(
-                    text(
-                        "SELECT id,user_id FROM sessions WHERE refresh_token_hash=:hash AND revoked_at IS NULL AND expires_at>:now"
-                    ),
+                    LOGOUT_SESSION_SELECT_SESSIONS,
                     {"hash": hash_token(refresh), "now": utcnow()},
                 )
             )
@@ -271,13 +265,11 @@ async def logout_session(db, request, settings):
         return None
     # A logout authorized before rotation still revokes the same stable device ID.
     await db.execute(
-        text("SELECT id FROM users WHERE id=:user FOR UPDATE"), {"user": row["user_id"]}
+        LOGOUT_SESSION_SELECT_USERS, {"user": row["user_id"]}
     )
     changed = (
         await db.execute(
-            text(
-                "UPDATE sessions SET revoked_at=:now WHERE id=:id AND user_id=:user AND revoked_at IS NULL RETURNING id"
-            ),
+            LOGOUT_SESSION_UPDATE_SESSIONS,
             {"id": row["id"], "user": row["user_id"], "now": utcnow()},
         )
     ).scalar_one_or_none()

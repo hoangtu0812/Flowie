@@ -16,7 +16,6 @@ from argon2 import PasswordHasher
 from fastapi import Depends, Query, Request
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,6 +35,52 @@ from ...services.registration_verification import (
 )
 from ...storage.minio import MinioStorage
 from ..work_items.workflow_catalog import DEFAULT_ISSUE_STATUSES
+from .commands import (
+    CREATE_WORKSPACE_BOOTSTRAP_INSERT_ISSUE_STATUSES,
+    CREATE_WORKSPACE_BOOTSTRAP_INSERT_ORGANIZATIONS,
+    CREATE_WORKSPACE_BOOTSTRAP_INSERT_TEAM_MEMBERS,
+    CREATE_WORKSPACE_BOOTSTRAP_INSERT_TEAMS,
+    CREATE_WORKSPACE_BOOTSTRAP_INSERT_WORKSPACE_AGENT_TOOLS,
+    CREATE_WORKSPACE_BOOTSTRAP_INSERT_WORKSPACE_MEMBERS,
+    CREATE_WORKSPACE_BOOTSTRAP_INSERT_WORKSPACES,
+    JOIN_TENANT_WORKSPACES_INSERT_AUDIT_LOGS,
+    JOIN_TENANT_WORKSPACES_INSERT_WORKSPACE_MEMBERS,
+    LOGIN_UPDATE_USERS,
+    MICROSOFT_CALLBACK_UPDATE_USERS,
+    REFRESH_PRESENCE_UPDATE_USERS,
+    REQUEST_REGISTRATION_VERIFICATION_DELETE_REGISTRATION_VERIFICATION_TOKENS,
+    REQUEST_REGISTRATION_VERIFICATION_DELETE_REGISTRATION_VERIFICATION_TOKENS_2,
+    REQUEST_REGISTRATION_VERIFICATION_INSERT_REGISTRATION_VERIFICATION_TOKENS,
+    REVOKE_API_KEY_UPDATE_PERSONAL_API_KEYS,
+    UPSERT_MICROSOFT_USER_DELETE_USER_IDENTITIES,
+    UPSERT_MICROSOFT_USER_INSERT_USER_IDENTITIES,
+    UPSERT_MICROSOFT_USER_INSERT_USER_IDENTITIES_2,
+    UPSERT_MICROSOFT_USER_INSERT_USERS,
+    UPSERT_MICROSOFT_USER_UPDATE_SESSIONS,
+    UPSERT_MICROSOFT_USER_UPDATE_USER_IDENTITIES,
+    UPSERT_MICROSOFT_USER_UPDATE_USERS,
+    VERIFY_REGISTRATION_DELETE_REGISTRATION_VERIFICATION_TOKENS,
+    VERIFY_REGISTRATION_DELETE_REGISTRATION_VERIFICATION_TOKENS_2,
+    VERIFY_REGISTRATION_INSERT_USER_IDENTITIES,
+    VERIFY_REGISTRATION_INSERT_USERS,
+    VERIFY_REGISTRATION_UPDATE_REGISTRATION_VERIFICATION_TOKENS,
+)
+from .queries import (
+    FIRST_WORKSPACE_SELECT_WORKSPACE_MEMBERS,
+    JOIN_TENANT_WORKSPACES_SELECT_WORKSPACES,
+    LIST_API_KEYS_SELECT_PERSONAL_API_KEYS,
+    LIST_SESSIONS_SELECT_SESSIONS,
+    REQUEST_REGISTRATION_VERIFICATION_SELECT_REGISTRATION_VERIFICATION_TOKENS,
+    REQUEST_REGISTRATION_VERIFICATION_SELECT_REGISTRATION_VERIFICATION_TOKENS_2,
+    UNIQUE_WORKSPACE_SLUG_SELECT_WORKSPACES,
+    UPSERT_MICROSOFT_USER_SELECT_USER_IDENTITIES,
+    UPSERT_MICROSOFT_USER_SELECT_USER_IDENTITIES_2,
+    UPSERT_MICROSOFT_USER_SELECT_USERS,
+    VERIFY_REGISTRATION_SELECT_REGISTRATION_VERIFICATION_TOKENS,
+    find_user_by_email_select_users_sql,
+    find_user_by_id_select_users_sql,
+    upsert_microsoft_user_select_users_sql,
+)
 
 router = APIRouter(prefix='/api/v1/auth', tags=['auth'])
 password_hasher = PasswordHasher()
@@ -229,27 +274,18 @@ def _authenticated_user(row: Any) -> dict[str, Any]:
 
 
 async def _find_user_by_email(db: AsyncSession, email: str) -> Any | None:
-    result = await db.execute(text(f'SELECT {USER_COLUMNS} FROM users WHERE email = :email'), {'email': email})
+    result = await db.execute(find_user_by_email_select_users_sql(USER_COLUMNS), {'email': email})
     return result.mappings().first()
 
 
 async def _find_user_by_id(db: AsyncSession, user_id: str) -> Any | None:
-    result = await db.execute(text(f'SELECT {USER_COLUMNS} FROM users WHERE id = :id'), {'id': user_id})
+    result = await db.execute(find_user_by_id_select_users_sql(USER_COLUMNS), {'id': user_id})
     return result.mappings().first()
 
 
 async def _first_workspace(db: AsyncSession, user_id: str) -> dict[str, str] | None:
     result = await db.execute(
-        text(
-            '''
-            SELECT w.id, w.slug, w.name
-            FROM workspace_members AS wm
-            INNER JOIN workspaces AS w ON w.id = wm.workspace_id
-            WHERE wm.user_id = :user_id AND wm.status = 'ACTIVE'
-            ORDER BY wm.created_at ASC
-            LIMIT 1
-            '''
-        ),
+        FIRST_WORKSPACE_SELECT_WORKSPACE_MEMBERS,
         {'user_id': user_id},
     )
     row = result.mappings().first()
@@ -268,7 +304,7 @@ async def _unique_workspace_slug(db: AsyncSession, name: str) -> str:
         # VI: Slug cũ của workspace khác vẫn mở workspace đó, còn slug dành riêng hoặc giống id sẽ
         # VI: không mở được workspace, nên tất cả đều coi như đã có chủ.
         exists = await db.execute(
-            text('SELECT 1 FROM workspaces WHERE slug = :slug UNION ALL SELECT 1 FROM workspace_slugs WHERE slug = :slug LIMIT 1'),
+            UNIQUE_WORKSPACE_SLUG_SELECT_WORKSPACES,
             {'slug': slug},
         )
         if exists.scalar_one_or_none() is None and slug not in RESERVED_WORKSPACE_SLUGS and not GENERATED_ID.fullmatch(slug):
@@ -290,21 +326,11 @@ async def create_workspace_bootstrap(
     workspace_id = cuid()
     team_id = cuid()
     await db.execute(
-        text(
-            '''
-            INSERT INTO organizations (id, name, slug, owner_id, created_at, updated_at)
-            VALUES (:id, :name, :slug, :owner_id, :now, :now)
-            '''
-        ),
+        CREATE_WORKSPACE_BOOTSTRAP_INSERT_ORGANIZATIONS,
         {'id': organization_id, 'name': organization_name, 'slug': slug, 'owner_id': user_id, 'now': now},
     )
     await db.execute(
-        text(
-            '''
-            INSERT INTO workspaces (id, organization_id, name, slug, timezone, created_at, updated_at)
-            VALUES (:id, :organization_id, :name, :slug, 'UTC', :now, :now)
-            '''
-        ),
+        CREATE_WORKSPACE_BOOTSTRAP_INSERT_WORKSPACES,
         {'id': workspace_id, 'organization_id': organization_id, 'name': workspace_name, 'slug': slug, 'now': now},
     )
     for tool_key in (
@@ -313,40 +339,24 @@ async def create_workspace_bootstrap(
         'initiatives.delivery', 'cycles.progress',
     ):
         await db.execute(
-            text('''INSERT INTO workspace_agent_tools (id, workspace_id, tool_key, created_at, updated_at)
-                    VALUES (:id, :workspace_id, :tool_key, :now, :now)'''),
+            CREATE_WORKSPACE_BOOTSTRAP_INSERT_WORKSPACE_AGENT_TOOLS,
             {'id': cuid(), 'workspace_id': workspace_id, 'tool_key': tool_key, 'now': now},
         )
     await db.execute(
-        text(
-            '''
-            INSERT INTO workspace_members (id, workspace_id, user_id, status, role, joined_at, created_at, updated_at)
-            VALUES (:id, :workspace_id, :user_id, 'ACTIVE', 'OWNER', :now, :now, :now)
-            '''
-        ),
+        CREATE_WORKSPACE_BOOTSTRAP_INSERT_WORKSPACE_MEMBERS,
         {'id': cuid(), 'workspace_id': workspace_id, 'user_id': user_id, 'now': now},
     )
     await db.execute(
-        text(
-            '''
-            INSERT INTO teams (id, workspace_id, name, identifier, description, created_at, updated_at)
-            VALUES (:id, :workspace_id, 'General', 'GEN', 'Default team for this workspace.', :now, :now)
-            '''
-        ),
+        CREATE_WORKSPACE_BOOTSTRAP_INSERT_TEAMS,
         {'id': team_id, 'workspace_id': workspace_id, 'now': now},
     )
     await db.execute(
-        text("INSERT INTO team_members (team_id, user_id, role) VALUES (:team_id, :user_id, 'LEAD')"),
+        CREATE_WORKSPACE_BOOTSTRAP_INSERT_TEAM_MEMBERS,
         {'team_id': team_id, 'user_id': user_id},
     )
     for position, (status_name, category, color) in enumerate(DEFAULT_ISSUE_STATUSES):
         await db.execute(
-            text(
-                '''
-                INSERT INTO issue_statuses (id, workspace_id, name, category, color, position, created_at, updated_at)
-                VALUES (:id, :workspace_id, :name, :category, :color, :position, :now, :now)
-                '''
-            ),
+            CREATE_WORKSPACE_BOOTSTRAP_INSERT_ISSUE_STATUSES,
             {
                 'id': cuid(),
                 'workspace_id': workspace_id,
@@ -431,50 +441,24 @@ async def request_registration_verification(
                 raise ApiError(409, 'An account already exists for this email address.', 'Conflict')
             if fingerprint:
                 recent_requests = await db.execute(
-                    text(
-                        '''
-                        SELECT COUNT(*) FROM registration_verification_tokens
-                        WHERE request_fingerprint = :fingerprint
-                          AND created_at > :window_start
-                        '''
-                    ),
+                    REQUEST_REGISTRATION_VERIFICATION_SELECT_REGISTRATION_VERIFICATION_TOKENS_2,
                     {'fingerprint': fingerprint, 'window_start': now - timedelta(minutes=10)},
                 )
                 if int(recent_requests.scalar_one()) >= 5:
                     raise ApiError(429, 'Too many registration requests. Please try again later.', 'Too Many Requests')
             existing_pending = await db.execute(
-                text(
-                    '''
-                    SELECT last_sent_at FROM registration_verification_tokens
-                    WHERE email = :email
-                    FOR UPDATE
-                    '''
-                ),
+                REQUEST_REGISTRATION_VERIFICATION_SELECT_REGISTRATION_VERIFICATION_TOKENS,
                 {'email': email},
             )
             last_pending = existing_pending.mappings().first()
             if last_pending and last_pending['last_sent_at'] > now - timedelta(minutes=1):
                 raise ApiError(429, 'Wait one minute before requesting another verification code.', 'Too Many Requests')
             await db.execute(
-                text(
-                    '''
-                    DELETE FROM registration_verification_tokens WHERE email = :email
-                    '''
-                ),
+                REQUEST_REGISTRATION_VERIFICATION_DELETE_REGISTRATION_VERIFICATION_TOKENS,
                 {'email': email},
             )
             await db.execute(
-                text(
-                    '''
-                    INSERT INTO registration_verification_tokens (
-                        id, email, name, password_hash, timezone, code_hash, request_fingerprint,
-                        expires_at, created_at, last_sent_at
-                    ) VALUES (
-                        :id, :email, :name, :password_hash, :timezone, :code_hash, :request_fingerprint,
-                        :expires_at, :created_at, :last_sent_at
-                    )
-                    '''
-                ),
+                REQUEST_REGISTRATION_VERIFICATION_INSERT_REGISTRATION_VERIFICATION_TOKENS,
                 {
                     'id': cuid(),
                     'email': email,
@@ -495,7 +479,7 @@ async def request_registration_verification(
         await deliver_registration_code(request.app.state.settings, email=email, code=code, expires_at=expires_at)
     except RegistrationDeliveryError as error:
         await db.execute(
-            text('DELETE FROM registration_verification_tokens WHERE email = :email AND code_hash = :code_hash'),
+            REQUEST_REGISTRATION_VERIFICATION_DELETE_REGISTRATION_VERIFICATION_TOKENS_2,
             {'email': email, 'code_hash': hash_token(code)},
         )
         await db.commit()
@@ -514,26 +498,19 @@ async def verify_registration(
     now = utcnow()
     async with db.begin():
         result = await db.execute(
-            text(
-                '''
-                SELECT id, email, name, password_hash, timezone, code_hash, expires_at, attempt_count
-                FROM registration_verification_tokens
-                WHERE email = :email
-                FOR UPDATE
-                '''
-            ),
+            VERIFY_REGISTRATION_SELECT_REGISTRATION_VERIFICATION_TOKENS,
             {'email': email},
         )
         pending = result.mappings().first()
         if not pending or pending['expires_at'] <= now:
             if pending:
-                await db.execute(text('DELETE FROM registration_verification_tokens WHERE id = :id'), {'id': pending['id']})
+                await db.execute(VERIFY_REGISTRATION_DELETE_REGISTRATION_VERIFICATION_TOKENS_2, {'id': pending['id']})
             raise ApiError(400, 'The verification code has expired. Request a new code.', 'Bad Request')
         if pending['attempt_count'] >= 5:
             raise ApiError(429, 'Too many incorrect codes. Request a new code.', 'Too Many Requests')
         if not compare_digest(pending['code_hash'], hash_token(payload.code)):
             await db.execute(
-                text('UPDATE registration_verification_tokens SET attempt_count = attempt_count + 1 WHERE id = :id'),
+                VERIFY_REGISTRATION_UPDATE_REGISTRATION_VERIFICATION_TOKENS,
                 {'id': pending['id']},
             )
             raise ApiError(400, 'The verification code is incorrect.', 'Bad Request')
@@ -554,27 +531,11 @@ async def verify_registration(
             'created_at': now,
         }
         await db.execute(
-            text(
-                '''
-                INSERT INTO users (
-                    id, email, name, timezone, password_hash, is_platform_admin,
-                    email_verified_at, status, created_at, updated_at
-                ) VALUES (
-                    :id, :email, :name, :timezone, :password_hash, :is_platform_admin,
-                    :email_verified_at, :status, :created_at, :updated_at
-                )
-                '''
-            ),
+            VERIFY_REGISTRATION_INSERT_USERS,
             {**user, 'updated_at': now},
         )
         await db.execute(
-            text(
-                '''
-                INSERT INTO user_identities (
-                    id, user_id, provider, provider_account_id, email, created_at, updated_at
-                ) VALUES (:id, :user_id, 'LOCAL', :provider_account_id, :email, :now, :now)
-                '''
-            ),
+            VERIFY_REGISTRATION_INSERT_USER_IDENTITIES,
             {'id': cuid(), 'user_id': user['id'], 'provider_account_id': email, 'email': email, 'now': now},
         )
         await create_workspace_bootstrap(
@@ -584,7 +545,7 @@ async def verify_registration(
             workspace_name=f"{user['name']}'s workspace",
             now=now,
         )
-        await db.execute(text('DELETE FROM registration_verification_tokens WHERE id = :id'), {'id': pending['id']})
+        await db.execute(VERIFY_REGISTRATION_DELETE_REGISTRATION_VERIFICATION_TOKENS, {'id': pending['id']})
         access_token, refresh_token, data = await _create_session(db, user, request, request.app.state.settings)
 
     response = JSONResponse({'data': data}, status_code=201)
@@ -603,32 +564,20 @@ async def _join_tenant_workspaces(db: AsyncSession, user_id: str, tenant_id: str
     VI: giữ người bị xoá hoặc đã tự rời ở ngoài. Họ vào với vai trò member, không thuộc team nào.
     """
     open_workspaces = await db.execute(
-        text(
-            '''SELECT w.id FROM workspaces w
-               WHERE lower(w.auto_join_tenant_id) = :tenant_id
-                 AND NOT EXISTS (SELECT 1 FROM workspace_members m WHERE m.workspace_id = w.id AND m.user_id = :user_id)
-                 AND NOT EXISTS (SELECT 1 FROM workspace_auto_join_blocks b WHERE b.workspace_id = w.id AND b.user_id = :user_id)'''
-        ),
+        JOIN_TENANT_WORKSPACES_SELECT_WORKSPACES,
         {'tenant_id': tenant_id.lower(), 'user_id': user_id},
     )
     joined = 0
     for workspace_id in open_workspaces.scalars().all():
         member_id = cuid()
         inserted = await db.execute(
-            text(
-                '''INSERT INTO workspace_members (id, workspace_id, user_id, status, role, joined_at, created_at, updated_at)
-                   VALUES (:id, :workspace_id, :user_id, 'ACTIVE', 'MEMBER', :now, :now, :now)
-                   ON CONFLICT (workspace_id, user_id) DO NOTHING RETURNING id'''
-            ),
+            JOIN_TENANT_WORKSPACES_INSERT_WORKSPACE_MEMBERS,
             {'id': member_id, 'workspace_id': workspace_id, 'user_id': user_id, 'now': now},
         )
         if inserted.first() is None:
             continue
         await db.execute(
-            text(
-                '''INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at)
-                   VALUES (:id, :workspace_id, :actor_id, 'workspace.member.auto_joined', 'workspace-member', :entity_id, CAST('{}' AS jsonb), :now)'''
-            ),
+            JOIN_TENANT_WORKSPACES_INSERT_AUDIT_LOGS,
             {'id': cuid(), 'workspace_id': workspace_id, 'actor_id': user_id, 'entity_id': member_id, 'now': now},
         )
         joined += 1
@@ -646,24 +595,14 @@ async def _upsert_microsoft_user(
     now = utcnow()
     async with db.begin():
         identity = await db.execute(
-            text(
-                '''SELECT users.id, users.email, users.name, users.username, users.title,
-                           users.timezone, users.avatar_url, users.password_hash,
-                           users.is_platform_admin, users.email_verified_at, users.status,
-                           users.created_at
-                    FROM user_identities identity
-                    JOIN users ON users.id = identity.user_id
-                    WHERE identity.provider = 'MICROSOFT'
-                      AND identity.provider_account_id = :provider_account_id
-                    FOR UPDATE OF users'''
-            ),
+            UPSERT_MICROSOFT_USER_SELECT_USER_IDENTITIES,
             {'provider_account_id': provider_account_id},
         )
         user = identity.mappings().first()
         if not user:
             # Email can bootstrap an unlinked account; subsequent logins must use tenant/object identity.
             matches = (await db.execute(
-                text(f'SELECT {USER_COLUMNS} FROM users WHERE lower(email) = :email FOR UPDATE'),
+                upsert_microsoft_user_select_users_sql(USER_COLUMNS),
                 {'email': profile.email.lower()},
             )).mappings().all()
             if len(matches) > 1:
@@ -671,21 +610,13 @@ async def _upsert_microsoft_user(
             user = matches[0] if matches else None
             if user:
                 linked = (await db.execute(
-                    text("SELECT id FROM user_identities WHERE user_id = :id AND provider = 'MICROSOFT'"),
+                    UPSERT_MICROSOFT_USER_SELECT_USER_IDENTITIES_2,
                     {'id': user['id']},
                 )).first()
                 if linked:
                     raise ApiError(409, 'This email is already linked to another Microsoft account.', 'Conflict')
                 await db.execute(
-                    text(
-                        '''INSERT INTO user_identities (
-                               id, user_id, provider, provider_account_id, email, tenant_id,
-                               created_at, updated_at
-                           ) VALUES (
-                               :id, :user_id, 'MICROSOFT', :provider_account_id, :email,
-                               :tenant_id, :now, :now
-                           )'''
-                    ),
+                    UPSERT_MICROSOFT_USER_INSERT_USER_IDENTITIES,
                     {
                         'id': cuid(),
                         'user_id': user['id'],
@@ -698,16 +629,7 @@ async def _upsert_microsoft_user(
             else:
                 user_id = cuid()
                 await db.execute(
-                    text(
-                        '''INSERT INTO users (
-                               id, email, name, timezone, password_hash, is_platform_admin,
-                               email_verified_at, status, created_at, updated_at, last_login_at,
-                               last_seen_at
-                           ) VALUES (
-                               :id, :email, :name, :timezone, NULL, :is_platform_admin,
-                               :now, 'ACTIVE', :now, :now, :now, :now
-                           )'''
-                    ),
+                    UPSERT_MICROSOFT_USER_INSERT_USERS,
                     {
                         'id': user_id,
                         'email': profile.email,
@@ -718,15 +640,7 @@ async def _upsert_microsoft_user(
                     },
                 )
                 await db.execute(
-                    text(
-                        '''INSERT INTO user_identities (
-                               id, user_id, provider, provider_account_id, email, tenant_id,
-                               created_at, updated_at
-                           ) VALUES (
-                               :id, :user_id, 'MICROSOFT', :provider_account_id, :email,
-                               :tenant_id, :now, :now
-                           )'''
-                    ),
+                    UPSERT_MICROSOFT_USER_INSERT_USER_IDENTITIES_2,
                     {
                         'id': cuid(),
                         'user_id': user_id,
@@ -751,27 +665,18 @@ async def _upsert_microsoft_user(
         if user['status'] != 'ACTIVE':
             raise ApiError(403, 'This Flowie account is not active.', 'Forbidden')
         collision = (await db.execute(
-            text('SELECT id FROM users WHERE lower(email) = :email AND id <> :id'),
+            UPSERT_MICROSOFT_USER_SELECT_USERS,
             {'email': profile.email.lower(), 'id': user['id']},
         )).first()
         if collision:
             raise ApiError(409, 'This Microsoft email belongs to another Flowie account.', 'Conflict')
         if user['password_hash']:
             await db.execute(
-                text('UPDATE sessions SET revoked_at = :now WHERE user_id = :id AND revoked_at IS NULL'),
+                UPSERT_MICROSOFT_USER_UPDATE_SESSIONS,
                 {'id': user['id'], 'now': now},
             )
         await db.execute(
-            text(
-                '''UPDATE users SET name = :name, email = :email,
-                       auth_version = auth_version + CASE WHEN password_hash IS NOT NULL THEN 1 ELSE 0 END,
-                       password_hash = NULL,
-                       timezone = COALESCE((SELECT preferences->>'timezone' FROM user_ui_preferences WHERE user_id=users.id), :timezone, timezone),
-                       is_platform_admin = (CAST(:is_environment_admin AS boolean) OR platform_role IS NOT NULL),
-                       email_verified_at = COALESCE(email_verified_at, :now),
-                       last_login_at = :now, last_seen_at = :now, updated_at = :now
-                   WHERE id = :id'''
-            ),
+            UPSERT_MICROSOFT_USER_UPDATE_USERS,
             {
                 'id': user['id'],
                 'name': profile.name,
@@ -782,14 +687,11 @@ async def _upsert_microsoft_user(
             },
         )
         await db.execute(
-            text("DELETE FROM user_identities WHERE user_id = :id AND provider = 'LOCAL'"),
+            UPSERT_MICROSOFT_USER_DELETE_USER_IDENTITIES,
             {'id': user['id']},
         )
         await db.execute(
-            text(
-                '''UPDATE user_identities SET email = :email, tenant_id = :tenant_id, updated_at = :now
-                   WHERE provider = 'MICROSOFT' AND provider_account_id = :provider_account_id'''
-            ),
+            UPSERT_MICROSOFT_USER_UPDATE_USER_IDENTITIES,
             {
                 'provider_account_id': provider_account_id,
                 'email': profile.email,
@@ -883,9 +785,7 @@ async def microsoft_callback(
                 avatar_url, photo.body, photo.content_type
             )
         await db.execute(
-            text(
-                'UPDATE users SET avatar_url = :avatar_url, updated_at = :now WHERE id = :id'
-            ),
+            MICROSOFT_CALLBACK_UPDATE_USERS,
             {'id': user_id, 'avatar_url': avatar_url, 'now': utcnow()},
         )
         await db.commit()
@@ -947,10 +847,7 @@ async def login(payload: LoginInput, request: Request, db: AsyncSession = Depend
         return response
     timezone_name = _valid_timezone(payload.timezone)
     await db.execute(
-        text('''UPDATE users SET last_login_at = :now, last_seen_at = :now,
-                    timezone = COALESCE((SELECT preferences->>'timezone' FROM user_ui_preferences WHERE user_id=users.id), :timezone, timezone),
-                    is_platform_admin = :is_platform_admin, updated_at = :now
-                WHERE id = :id'''),
+        LOGIN_UPDATE_USERS,
         {
             'id': user['id'],
             'now': utcnow(),
@@ -973,7 +870,7 @@ async def refresh_presence(
     """Persist an explicit browser heartbeat without marking background API reads as activity."""
     now = utcnow()
     await db.execute(
-        text('UPDATE users SET last_seen_at = :now WHERE id = :id'),
+        REFRESH_PRESENCE_UPDATE_USERS,
         {'id': user['id'], 'now': now},
     )
     await db.commit()
@@ -1020,14 +917,7 @@ async def list_sessions(
     current_refresh = request.cookies.get('flowie_refresh')
     current_hash = hash_token(current_refresh) if current_refresh else None
     result = await db.execute(
-        text(
-            '''
-            SELECT id, refresh_token_hash, ip_address, user_agent, expires_at, created_at, last_used_at
-            FROM sessions
-            WHERE user_id = :user_id AND revoked_at IS NULL AND expires_at > :now
-            ORDER BY last_used_at DESC
-            '''
-        ),
+        LIST_SESSIONS_SELECT_SESSIONS,
         {'user_id': user['id'], 'now': utcnow()},
     )
     sessions = []
@@ -1086,16 +976,7 @@ async def list_api_keys(
     user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)
 ) -> dict[str, list[dict[str, Any]]]:
     result = await db.execute(
-        text(
-            '''
-            SELECT id, name, prefix, expires_at, last_used_at, created_at
-            FROM personal_api_keys
-            WHERE user_id = :user_id
-              AND revoked_at IS NULL
-              AND (expires_at IS NULL OR expires_at > :now)
-            ORDER BY created_at DESC
-            '''
-        ),
+        LIST_API_KEYS_SELECT_PERSONAL_API_KEYS,
         {'user_id': user['id'], 'now': utcnow()},
     )
     return {'data': [_api_key(row) for row in result.mappings().all()]}
@@ -1115,14 +996,7 @@ async def revoke_api_key(
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
     result = await db.execute(
-        text(
-            '''
-            UPDATE personal_api_keys
-            SET revoked_at = :now
-            WHERE id = :id AND user_id = :user_id AND revoked_at IS NULL
-            RETURNING id
-            '''
-        ),
+        REVOKE_API_KEY_UPDATE_PERSONAL_API_KEYS,
         {'id': key_id, 'user_id': user['id'], 'now': utcnow()},
     )
     if not result.scalar_one_or_none():

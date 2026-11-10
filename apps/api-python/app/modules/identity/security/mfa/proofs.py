@@ -3,12 +3,14 @@ import json
 from datetime import timedelta
 from hmac import compare_digest
 
-from sqlalchemy import text
-
 from .....core.clock import utcnow
 from .....core.errors import ApiError
 from .....services.auth_policy import microsoft_sign_in_enabled
 from ..events import record_event
+from .commands import (
+    CONSUME_FACTOR_UPDATE_ACCOUNT_MFA,
+    CONSUME_FACTOR_UPDATE_ACCOUNT_MFA_2,
+)
 from .crypto import decrypt_secret, matching_counter, recovery_hash
 
 
@@ -54,9 +56,7 @@ async def consume_factor(db, configured, user, code, kind, settings):
         if not matched:
             return False
         await db.execute(
-            text(
-                "UPDATE account_mfa SET recovery_hashes=CAST(:hashes AS jsonb) WHERE user_id=:user"
-            ),
+            CONSUME_FACTOR_UPDATE_ACCOUNT_MFA_2,
             {
                 "user": user,
                 "hashes": json.dumps(
@@ -70,7 +70,7 @@ async def consume_factor(db, configured, user, code, kind, settings):
     if counter is None:
         return False
     await db.execute(
-        text("UPDATE account_mfa SET last_counter=:counter WHERE user_id=:user"),
+        CONSUME_FACTOR_UPDATE_ACCOUNT_MFA,
         {"user": user, "counter": counter},
     )
     return True

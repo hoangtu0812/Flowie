@@ -1,14 +1,22 @@
 from datetime import timedelta
 from secrets import token_urlsafe
 
-from sqlalchemy import text
-
 from .....core.clock import utcnow
 from .....core.errors import ApiError
 from .....core.identifiers import cuid, hash_token
 from ..events import record_event
 from ..sessions import create_session, expired, lock_account
+from .commands import (
+    BEGIN_LOGIN_INSERT_MFA_CHALLENGES,
+    FINISH_LOGIN_UPDATE_MFA_CHALLENGES,
+    FINISH_LOGIN_UPDATE_MFA_CHALLENGES_2,
+    FINISH_LOGIN_UPDATE_USERS,
+)
 from .proofs import consume_factor, reject
+from .queries import (
+    FINISH_LOGIN_SELECT_MFA_CHALLENGES,
+    FINISH_LOGIN_SELECT_MFA_CHALLENGES_2,
+)
 from .repository import factor
 
 COOKIE = "flowie_mfa_challenge"
@@ -49,10 +57,7 @@ async def begin_login(
         return None
     now, raw = utcnow(), token_urlsafe(48)
     await db.execute(
-        text(
-            """INSERT INTO mfa_challenges(id,user_id,token_hash,auth_version,auth_method,authenticated_at,next_path,expires_at,created_at)
-    VALUES (:id,:user,:hash,:version,:method,:proof,:next,:expires,:now)"""
-        ),
+        BEGIN_LOGIN_INSERT_MFA_CHALLENGES,
         {
             "id": cuid(),
             "user": user["id"],
@@ -73,7 +78,7 @@ async def finish_login(db, raw, code, kind, request, settings):
     from .....services.auth_policy import require_password_sign_in
     owner = (
         await db.execute(
-            text("SELECT user_id FROM mfa_challenges WHERE token_hash=:hash"),
+            FINISH_LOGIN_SELECT_MFA_CHALLENGES,
             {"hash": hash_token(raw)},
         )
     ).scalar_one_or_none()
@@ -87,7 +92,7 @@ async def finish_login(db, raw, code, kind, request, settings):
     challenge = (
         (
             await db.execute(
-                text("SELECT * FROM mfa_challenges WHERE token_hash=:hash FOR UPDATE"),
+                FINISH_LOGIN_SELECT_MFA_CHALLENGES_2,
                 {"hash": hash_token(raw)},
             )
         )
@@ -109,7 +114,7 @@ async def finish_login(db, raw, code, kind, request, settings):
         await reject(db, owner, request, kind)
     # Commit the failure budget even if a missing encryption key returns 503.
     await db.execute(
-        text("UPDATE mfa_challenges SET attempts=attempts+1 WHERE id=:id"),
+        FINISH_LOGIN_UPDATE_MFA_CHALLENGES,
         {"id": challenge["id"]},
     )
     try:
@@ -120,7 +125,7 @@ async def finish_login(db, raw, code, kind, request, settings):
     if not accepted:
         await reject(db, owner, request, kind)
     await db.execute(
-        text("UPDATE mfa_challenges SET consumed_at=:now WHERE id=:id"),
+        FINISH_LOGIN_UPDATE_MFA_CHALLENGES_2,
         {"id": challenge["id"], "now": now},
     )
     tokens = await create_session(
@@ -133,7 +138,7 @@ async def finish_login(db, raw, code, kind, request, settings):
         mfa_verified_at=now,
     )
     await db.execute(
-        text("UPDATE users SET last_login_at=:now,last_seen_at=:now WHERE id=:user"),
+        FINISH_LOGIN_UPDATE_USERS,
         {"user": owner, "now": now},
     )
     await record_event(db, owner, "MFA_VERIFIED", kind, request)

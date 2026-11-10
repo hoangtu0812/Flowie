@@ -18,7 +18,7 @@ from ...auth import (
 )
 from ...password_reset import limit_request
 from ..api import private_response
-from . import commands
+from . import actions
 from .crypto import keyring
 from .login import COOKIE, clear_challenge, finish_login
 from .repository import factor
@@ -73,7 +73,7 @@ async def setup(
 ):
     await account_limit(db, request, user)
     return {
-        "data": await commands.setup(
+        "data": await actions.setup(
             db, user, payload.password, request, request.app.state.settings
         )
     }
@@ -87,7 +87,7 @@ async def enable(
     db=Depends(get_session),
 ):
     await account_limit(db, request, user)
-    codes, tokens = await commands.enable(
+    codes, tokens = await actions.enable(
         db, user, payload, request, request.app.state.settings
     )
     response = JSONResponse({"data": {"recoveryCodes": codes}})
@@ -106,7 +106,7 @@ async def change(
     db=Depends(get_session),
 ):
     await account_limit(db, request, user)
-    codes = await commands.change(
+    codes = await actions.change(
         db,
         user,
         payload,

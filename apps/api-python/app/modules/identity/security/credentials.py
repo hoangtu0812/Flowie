@@ -1,8 +1,11 @@
-from sqlalchemy import text
 
 from ....core.clock import utcnow
 from ....core.errors import ApiError
 from ...audit.write import record_change
+from .commands import (
+    REVOKE_CREDENTIAL_UPDATE_MCP_CONNECTIONS,
+    REVOKE_CREDENTIAL_UPDATE_PERSONAL_API_KEYS,
+)
 from .events import record_event
 from .sessions import active_identity, expired, lock_account
 
@@ -20,9 +23,7 @@ async def revoke_credential(db, user, request, kind, identifier):
     if kind == "MCP":
         workspace = (
             await db.execute(
-                text(
-                    "UPDATE mcp_connections SET revoked_at=:now WHERE id=:id AND user_id=:user AND revoked_at IS NULL RETURNING workspace_id"
-                ),
+                REVOKE_CREDENTIAL_UPDATE_MCP_CONNECTIONS,
                 {"id": identifier, "user": user["id"], "now": utcnow()},
             )
         ).scalar_one_or_none()
@@ -39,9 +40,7 @@ async def revoke_credential(db, user, request, kind, identifier):
     elif kind == "LEGACY_API_KEY":
         row = (
             await db.execute(
-                text(
-                    "UPDATE personal_api_keys SET revoked_at=:now WHERE id=:id AND user_id=:user AND revoked_at IS NULL RETURNING id"
-                ),
+                REVOKE_CREDENTIAL_UPDATE_PERSONAL_API_KEYS,
                 {"id": identifier, "user": user["id"], "now": utcnow()},
             )
         ).scalar_one_or_none()

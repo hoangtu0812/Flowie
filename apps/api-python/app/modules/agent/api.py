@@ -20,7 +20,7 @@ from fastapi import Depends, File, Form, Query, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
-from sqlalchemy import CursorResult, text
+from sqlalchemy import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import utcnow
@@ -53,6 +53,83 @@ from ..teams.insights_api import (
 from ..work_items.issues_api import (
     CreateIssueInput,
     create_issue,
+)
+from .commands import (
+    ACCEPT_PROPOSAL_INSERT_AUDIT_LOGS,
+    ACCEPT_PROPOSAL_UPDATE_AGENT_MESSAGES,
+    ACCEPT_PROPOSAL_UPDATE_AGENT_MESSAGES_2,
+    ACCEPT_PROPOSAL_UPDATE_AGENT_MESSAGES_3,
+    ACCEPT_PROPOSAL_UPDATE_AGENT_MESSAGES_4,
+    APPLY_ASSIGNMENT_INSERT_AUDIT_LOGS,
+    APPLY_ASSIGNMENT_UPDATE_ISSUES,
+    APPLY_PROJECT_SCHEDULE_INSERT_ACTIVITIES,
+    APPLY_PROJECT_SCHEDULE_INSERT_AUDIT_LOGS,
+    APPLY_PROJECT_SCHEDULE_UPDATE_ISSUES,
+    CREATE_PERSONAL_SKILL_INSERT_USER_AGENT_SKILLS,
+    INSTALL_SKILL_INSERT_USER_AGENT_SKILLS,
+    INSTALL_TOOL_INSERT_AUDIT_LOGS,
+    INSTALL_TOOL_INSERT_WORKSPACE_AGENT_TOOLS,
+    PERSIST_TURN_INSERT_AGENT_CONVERSATIONS,
+    PERSIST_TURN_INSERT_AGENT_MESSAGES,
+    PERSIST_TURN_INSERT_AGENT_MESSAGES_2,
+    PERSIST_TURN_UPDATE_AGENT_CONVERSATIONS,
+    PROJECT_FACTS_UPDATE_PROJECT_UPDATES,
+    REMOVE_SKILL_DELETE_USER_AGENT_SKILLS,
+    REMOVE_TOOL_DELETE_WORKSPACE_AGENT_TOOLS,
+    REMOVE_TOOL_INSERT_AUDIT_LOGS,
+    SAVE_PROVIDER_INSERT_AUDIT_LOGS,
+    SAVE_PROVIDER_INSERT_WORKSPACE_AGENT_PROVIDERS,
+    SAVE_PROVIDER_UPDATE_WORKSPACE_AGENT_PROVIDERS,
+    UPDATE_ISSUE_DEFAULTS_UPDATE_USER_AGENT_SKILLS,
+    UPDATE_PERSONAL_SKILL_UPDATE_USER_AGENT_SKILLS,
+)
+from .queries import (
+    ACCEPT_PROPOSAL_SELECT_AGENT_MESSAGES,
+    ANALYST_TURN_SELECT_AGENT_MESSAGES,
+    APPLY_ASSIGNMENT_SELECT_ISSUES,
+    APPLY_ASSIGNMENT_SELECT_WORKSPACE_MEMBERS,
+    CHECK_PROVIDER_SELECT_WORKSPACE_AGENT_PROVIDERS,
+    CONFIGURED_PROVIDER_SELECT_WORKSPACE_AGENT_PROVIDERS,
+    CONVERSATION_SOURCE_TEXT_SELECT_AGENT_MESSAGES,
+    CYCLE_PROGRESS_INSIGHT_SELECT_CYCLES,
+    GET_CONVERSATION_SELECT_AGENT_CONVERSATIONS,
+    GET_CONVERSATION_SELECT_AGENT_MESSAGES,
+    INITIATIVE_DELIVERY_INSIGHT_SELECT_INITIATIVES,
+    INSTALLED_TOOL_KEYS_SELECT_WORKSPACE_AGENT_TOOLS,
+    ISSUE_ASSIGNEE_INSIGHT_SELECT_ISSUES,
+    ISSUE_COUNT_INSIGHT_SELECT_ISSUES,
+    ISSUE_STATUS_INSIGHT_SELECT_ISSUES,
+    LIST_CONVERSATIONS_SELECT_AGENT_CONVERSATIONS,
+    LIST_PROVIDERS_SELECT_WORKSPACE_AGENT_PROVIDERS,
+    LIST_PROVIDERS_SELECT_WORKSPACE_MEMBERS,
+    LIST_SKILLS_SELECT_USER_AGENT_SKILLS,
+    LIST_TOOLS_SELECT_WORKSPACE_MEMBERS,
+    MENTIONED_ISSUES_SELECT_ISSUES,
+    OVERDUE_ISSUE_INSIGHT_SELECT_ISSUES,
+    OVERDUE_ISSUE_INSIGHT_SELECT_ISSUES_2,
+    PERSIST_TURN_SELECT_AGENT_MESSAGES,
+    PERSIST_TURN_SELECT_AGENT_MESSAGES_2,
+    PERSONAL_SKILLS_SELECT_USER_AGENT_SKILLS,
+    PORTFOLIO_FACTS_SELECT_ISSUES,
+    PROCESS_MESSAGE_SELECT_AGENT_CONVERSATIONS,
+    PROCESS_MESSAGE_SELECT_AGENT_MESSAGES,
+    PROJECT_DELIVERY_INSIGHT_SELECT_PROJECTS,
+    PROJECT_FACTS_SELECT_ISSUES,
+    PROJECT_FACTS_SELECT_ISSUES_2,
+    PROJECT_FACTS_SELECT_ISSUES_3,
+    PROJECT_FACTS_SELECT_ISSUES_4,
+    PROJECT_FACTS_SELECT_PROJECT_MILESTONES,
+    PROJECT_FACTS_SELECT_PROJECTS,
+    PROJECT_PROGRESS_INSIGHT_SELECT_PROJECTS,
+    PROJECT_SCHEDULE_FACTS_SELECT_ISSUES,
+    PROJECT_SCHEDULE_FACTS_SELECT_PROJECTS,
+    SAVE_PROVIDER_SELECT_WORKSPACE_AGENT_PROVIDERS,
+    SAVE_PROVIDER_SELECT_WORKSPACE_AGENT_PROVIDERS_2,
+    STALE_ISSUE_INSIGHT_SELECT_ISSUES,
+    WORKLOAD_INSIGHT_SELECT_ISSUES,
+    WORKLOAD_INSIGHT_SELECT_TEAMS,
+    WORKSPACE_CATALOG_SELECT_PROJECTS,
+    WORKSPACE_CATALOG_SELECT_TEAMS,
 )
 
 router = APIRouter(prefix='/api/v1/agent', tags=['agent'])
@@ -255,10 +332,7 @@ async def configured_provider(settings: Any, db: AsyncSession, workspace_id: str
     ghi usage bằng session riêng.
     """
     result = await db.execute(
-        text('''SELECT provider, endpoint, model, api_key_encrypted
-                FROM workspace_agent_providers
-                WHERE workspace_id = :workspace_id AND enabled = true
-                ORDER BY updated_at DESC LIMIT 1'''),
+        CONFIGURED_PROVIDER_SELECT_WORKSPACE_AGENT_PROVIDERS,
         {'workspace_id': workspace_id},
     )
     row = result.mappings().first()
@@ -283,14 +357,11 @@ def _usable_provider(settings: Any, db: AsyncSession, row: Any, workspace_id: st
 
 async def _workspace_catalog(db: AsyncSession, workspace_id: str) -> dict[str, Any]:
     teams = await db.execute(
-        text('''SELECT id, name, identifier FROM teams
-                WHERE workspace_id = :workspace_id AND deleted_at IS NULL AND archived_at IS NULL
-                ORDER BY name'''),
+        WORKSPACE_CATALOG_SELECT_TEAMS,
         {'workspace_id': workspace_id},
     )
     projects = await db.execute(
-        text('''SELECT id, name, identifier, team_id FROM projects
-                WHERE workspace_id = :workspace_id AND archived_at IS NULL ORDER BY name'''),
+        WORKSPACE_CATALOG_SELECT_PROJECTS,
         {'workspace_id': workspace_id},
     )
     return {'teams': [dict(row) for row in teams.mappings().all()], 'projects': [dict(row) for row in projects.mappings().all()]}
@@ -497,38 +568,12 @@ async def _overdue_issue_insight(
     today = datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).date()
     params = {'workspace_id': workspace_id, 'user_id': user_id, 'today': today}
     summary = await db.execute(
-        text('''SELECT COUNT(*)::int AS total,
-                       COUNT(DISTINCT issue.team_id)::int AS team_count,
-                       COALESCE(MAX(:today - issue.due_date::date), 0)::int AS longest_days
-                FROM issues issue
-                JOIN issue_statuses status ON status.id = issue.status_id
-                WHERE issue.workspace_id = :workspace_id
-                  AND issue.archived_at IS NULL
-                  AND issue.due_date::date < :today
-                  AND status.category NOT IN ('COMPLETED', 'CANCELED')
-                  AND EXISTS(
-                      SELECT 1 FROM team_members member
-                      WHERE member.team_id = issue.team_id AND member.user_id = :user_id
-                  )'''),
+        OVERDUE_ISSUE_INSIGHT_SELECT_ISSUES,
         params,
     )
     totals = summary.mappings().one()
     by_team = await db.execute(
-        text('''SELECT team.name, COUNT(*)::int AS total
-                FROM issues issue
-                JOIN teams team ON team.id = issue.team_id
-                JOIN issue_statuses status ON status.id = issue.status_id
-                WHERE issue.workspace_id = :workspace_id
-                  AND issue.archived_at IS NULL
-                  AND issue.due_date::date < :today
-                  AND status.category NOT IN ('COMPLETED', 'CANCELED')
-                  AND EXISTS(
-                      SELECT 1 FROM team_members member
-                      WHERE member.team_id = issue.team_id AND member.user_id = :user_id
-                  )
-                GROUP BY team.id, team.name
-                ORDER BY total DESC, team.name ASC
-                LIMIT 5'''),
+        OVERDUE_ISSUE_INSIGHT_SELECT_ISSUES_2,
         params,
     )
     teams = [dict(row) for row in by_team.mappings().all()]
@@ -550,12 +595,7 @@ async def _overdue_issue_insight(
 
 
 async def _issue_count_insight(db: AsyncSession, workspace_id: str, user_id: str) -> ReadOnlyInsight:
-    result = await db.execute(text('''SELECT COUNT(*)::int AS total,
-                    COUNT(*) FILTER (WHERE status.category = 'COMPLETED')::int AS completed,
-                    COUNT(*) FILTER (WHERE status.category NOT IN ('COMPLETED', 'CANCELED'))::int AS open
-            FROM issues issue JOIN issue_statuses status ON status.id = issue.status_id
-            WHERE issue.workspace_id = :workspace_id AND issue.archived_at IS NULL
-              AND EXISTS (SELECT 1 FROM team_members member WHERE member.team_id = issue.team_id AND member.user_id = :user_id)'''), {'workspace_id': workspace_id, 'user_id': user_id})
+    result = await db.execute(ISSUE_COUNT_INSIGHT_SELECT_ISSUES, {'workspace_id': workspace_id, 'user_id': user_id})
     row = result.mappings().one()
     return {'capability': 'issues.count', 'content': f"Bạn có quyền xem {row['total']} issue: {row['open']} chưa hoàn thành và {row['completed']} đã hoàn thành.", 'data': dict(row)}
 
@@ -570,11 +610,7 @@ async def _workload_insight(db: AsyncSession, workspace_id: str, user_id: str) -
     """
     today = hcm_today()
     teams = await db.execute(
-        text('''SELECT team.id, team.name FROM teams team
-                WHERE team.workspace_id = :workspace_id AND team.archived_at IS NULL
-                  AND EXISTS (SELECT 1 FROM team_members member
-                              WHERE member.team_id = team.id AND member.user_id = :user_id)
-                ORDER BY team.name ASC LIMIT 20'''),
+        WORKLOAD_INSIGHT_SELECT_TEAMS,
         {'workspace_id': workspace_id, 'user_id': user_id},
     )
     team_rows = [dict(row) for row in teams.mappings().all()]
@@ -585,12 +621,7 @@ async def _workload_insight(db: AsyncSession, workspace_id: str, user_id: str) -
             'data': {'asOfDate': today, 'teams': []},
         }
     unassigned = await db.execute(
-        text('''SELECT issue.team_id, COUNT(*)::int AS total
-                FROM issues issue JOIN issue_statuses status ON status.id = issue.status_id
-                WHERE issue.workspace_id = :workspace_id AND issue.archived_at IS NULL
-                  AND issue.assignee_id IS NULL
-                  AND status.category NOT IN ('COMPLETED', 'CANCELED')
-                GROUP BY issue.team_id'''),
+        WORKLOAD_INSIGHT_SELECT_ISSUES,
         {'workspace_id': workspace_id},
     )
     unassigned_by_team = {row['team_id']: row['total'] for row in unassigned.mappings().all()}
@@ -698,35 +729,21 @@ async def _explain_assignment(
 
 
 async def _issue_status_insight(db: AsyncSession, workspace_id: str, user_id: str) -> ReadOnlyInsight:
-    result = await db.execute(text('''SELECT status.name, status.category, COUNT(*)::int AS total
-            FROM issues issue JOIN issue_statuses status ON status.id = issue.status_id
-            WHERE issue.workspace_id = :workspace_id AND issue.archived_at IS NULL
-              AND EXISTS (SELECT 1 FROM team_members member WHERE member.team_id = issue.team_id AND member.user_id = :user_id)
-            GROUP BY status.id, status.name, status.category ORDER BY total DESC, status.name'''), {'workspace_id': workspace_id, 'user_id': user_id})
+    result = await db.execute(ISSUE_STATUS_INSIGHT_SELECT_ISSUES, {'workspace_id': workspace_id, 'user_id': user_id})
     rows = [dict(row) for row in result.mappings().all()]
     detail = ', '.join(f"{row['name']}: {row['total']}" for row in rows) or 'chưa có issue'
     return {'capability': 'issues.by_status', 'content': f'Issue theo trạng thái: {detail}.', 'data': {'statuses': rows}}
 
 
 async def _issue_assignee_insight(db: AsyncSession, workspace_id: str, user_id: str) -> ReadOnlyInsight:
-    result = await db.execute(text('''SELECT COALESCE(assignee.name, 'Chưa phân công') AS name, COUNT(*)::int AS total
-            FROM issues issue LEFT JOIN users assignee ON assignee.id = issue.assignee_id
-            WHERE issue.workspace_id = :workspace_id AND issue.archived_at IS NULL
-              AND EXISTS (SELECT 1 FROM team_members member WHERE member.team_id = issue.team_id AND member.user_id = :user_id)
-            GROUP BY assignee.id, assignee.name ORDER BY total DESC, name LIMIT 10'''), {'workspace_id': workspace_id, 'user_id': user_id})
+    result = await db.execute(ISSUE_ASSIGNEE_INSIGHT_SELECT_ISSUES, {'workspace_id': workspace_id, 'user_id': user_id})
     rows = [dict(row) for row in result.mappings().all()]
     detail = ', '.join(f"{row['name']}: {row['total']}" for row in rows) or 'chưa có issue'
     return {'capability': 'issues.by_assignee', 'content': f'Issue theo người phụ trách: {detail}.', 'data': {'assignees': rows}}
 
 
 async def _project_progress_insight(db: AsyncSession, workspace_id: str, user_id: str) -> ReadOnlyInsight:
-    result = await db.execute(text('''SELECT project.name, project.identifier, COUNT(issue.id)::int AS total,
-                    COUNT(issue.id) FILTER (WHERE status.category = 'COMPLETED')::int AS completed
-            FROM projects project LEFT JOIN issues issue ON issue.project_id = project.id AND issue.archived_at IS NULL
-            LEFT JOIN issue_statuses status ON status.id = issue.status_id
-            WHERE project.workspace_id = :workspace_id AND project.archived_at IS NULL
-              AND (project.team_id IS NULL OR EXISTS (SELECT 1 FROM team_members member WHERE member.team_id = project.team_id AND member.user_id = :user_id))
-            GROUP BY project.id, project.name, project.identifier ORDER BY project.name LIMIT 50'''), {'workspace_id': workspace_id, 'user_id': user_id})
+    result = await db.execute(PROJECT_PROGRESS_INSIGHT_SELECT_PROJECTS, {'workspace_id': workspace_id, 'user_id': user_id})
     rows = [dict(row) for row in result.mappings().all()]
     for row in rows:
         row['progressPercent'] = round(row['completed'] * 100 / row['total']) if row['total'] else 0
@@ -765,28 +782,7 @@ def _project_delivery_reason(row: dict[str, Any], today: date) -> tuple[str, lis
 async def _project_delivery_insight(db: AsyncSession, workspace_id: str, user_id: str) -> ReadOnlyInsight:
     today = datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).date()
     result = await db.execute(
-        text('''SELECT project.name, project.identifier, project.health, project.target_date::date AS target_date,
-                       COUNT(issue.id)::int AS total,
-                       COUNT(issue.id) FILTER (WHERE status.category = 'COMPLETED')::int AS completed,
-                       COUNT(issue.id) FILTER (
-                           WHERE status.category NOT IN ('COMPLETED', 'CANCELED')
-                             AND issue.due_date::date < :today
-                       )::int AS overdue_issues
-                FROM projects project
-                LEFT JOIN issues issue ON issue.project_id = project.id AND issue.archived_at IS NULL
-                LEFT JOIN issue_statuses status ON status.id = issue.status_id
-                WHERE project.workspace_id = :workspace_id
-                  AND project.archived_at IS NULL
-                  AND project.status NOT IN ('done', 'shipped', 'canceled', 'duplicate')
-                  AND (
-                      project.team_id IS NULL OR EXISTS (
-                          SELECT 1 FROM team_members member
-                          WHERE member.team_id = project.team_id AND member.user_id = :user_id
-                      )
-                  )
-                GROUP BY project.id, project.name, project.identifier, project.health, project.target_date
-                ORDER BY project.target_date NULLS LAST, project.name
-                LIMIT 100'''),
+        PROJECT_DELIVERY_INSIGHT_SELECT_PROJECTS,
         {'workspace_id': workspace_id, 'user_id': user_id, 'today': today},
     )
     rows: list[dict[str, Any]] = []
@@ -834,21 +830,7 @@ async def _stale_issue_insight(db: AsyncSession, workspace_id: str, user_id: str
     today = datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).date()
     stale_since = today - timedelta(days=14)
     result = await db.execute(
-        text('''SELECT issue.identifier, issue.title, issue.updated_at::date AS updated_date,
-                       issue.due_date::date AS due_date, status.name AS status_name,
-                       (:today - issue.updated_at::date)::int AS inactive_days
-                FROM issues issue
-                JOIN issue_statuses status ON status.id = issue.status_id
-                WHERE issue.workspace_id = :workspace_id
-                  AND issue.archived_at IS NULL
-                  AND status.category NOT IN ('COMPLETED', 'CANCELED')
-                  AND issue.updated_at::date <= :stale_since
-                  AND EXISTS (
-                      SELECT 1 FROM team_members member
-                      WHERE member.team_id = issue.team_id AND member.user_id = :user_id
-                  )
-                ORDER BY issue.updated_at ASC, issue.identifier ASC
-                LIMIT 20'''),
+        STALE_ISSUE_INSIGHT_SELECT_ISSUES,
         {'workspace_id': workspace_id, 'user_id': user_id, 'today': today, 'stale_since': stale_since},
     )
     rows = [
@@ -877,27 +859,7 @@ async def _stale_issue_insight(db: AsyncSession, workspace_id: str, user_id: str
 async def _initiative_delivery_insight(db: AsyncSession, workspace_id: str, user_id: str) -> ReadOnlyInsight:
     today = datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).date()
     result = await db.execute(
-        text('''SELECT initiative.name, initiative.health, initiative.target_date::date AS target_date,
-                       COUNT(DISTINCT project.id)::int AS total_projects,
-                       COUNT(DISTINCT project.id) FILTER (
-                           WHERE project.status IN ('done', 'shipped')
-                       )::int AS completed_projects
-                FROM initiatives initiative
-                LEFT JOIN initiative_projects link ON link.initiative_id = initiative.id
-                LEFT JOIN projects project ON project.id = link.project_id
-                    AND project.archived_at IS NULL
-                    AND (
-                        project.team_id IS NULL OR EXISTS (
-                            SELECT 1 FROM team_members member
-                            WHERE member.team_id = project.team_id AND member.user_id = :user_id
-                        )
-                    )
-                WHERE initiative.workspace_id = :workspace_id
-                  AND initiative.archived_at IS NULL
-                  AND initiative.status NOT IN ('completed', 'canceled')
-                GROUP BY initiative.id, initiative.name, initiative.health, initiative.target_date
-                ORDER BY initiative.target_date NULLS LAST, initiative.name
-                LIMIT 100'''),
+        INITIATIVE_DELIVERY_INSIGHT_SELECT_INITIATIVES,
         {'workspace_id': workspace_id, 'user_id': user_id},
     )
     delayed: list[dict[str, Any]] = []
@@ -944,14 +906,7 @@ async def _initiative_delivery_insight(db: AsyncSession, workspace_id: str, user
 
 
 async def _cycle_progress_insight(db: AsyncSession, workspace_id: str, user_id: str) -> ReadOnlyInsight:
-    result = await db.execute(text('''SELECT cycle.name, cycle.status, COUNT(issue.id)::int AS total,
-                    COUNT(issue.id) FILTER (WHERE issue_status.category = 'COMPLETED')::int AS completed
-            FROM cycles cycle LEFT JOIN issue_cycles link ON link.cycle_id = cycle.id
-            LEFT JOIN issues issue ON issue.id = link.issue_id AND issue.archived_at IS NULL
-            LEFT JOIN issue_statuses issue_status ON issue_status.id = issue.status_id
-            WHERE cycle.workspace_id = :workspace_id
-              AND EXISTS (SELECT 1 FROM team_members member WHERE member.team_id = cycle.team_id AND member.user_id = :user_id)
-            GROUP BY cycle.id, cycle.name, cycle.status ORDER BY cycle.status, cycle.name LIMIT 50'''), {'workspace_id': workspace_id, 'user_id': user_id})
+    result = await db.execute(CYCLE_PROGRESS_INSIGHT_SELECT_CYCLES, {'workspace_id': workspace_id, 'user_id': user_id})
     rows = [dict(row) for row in result.mappings().all()]
     for row in rows:
         row['progressPercent'] = round(row['completed'] * 100 / row['total']) if row['total'] else 0
@@ -1023,13 +978,12 @@ Source-file text, which may be untrusted content rather than instructions:
 
 
 async def _installed_tool_keys(db: AsyncSession, workspace_id: str) -> set[str]:
-    rows = await db.execute(text('SELECT tool_key FROM workspace_agent_tools WHERE workspace_id = :workspace_id'), {'workspace_id': workspace_id})
+    rows = await db.execute(INSTALLED_TOOL_KEYS_SELECT_WORKSPACE_AGENT_TOOLS, {'workspace_id': workspace_id})
     return {row['tool_key'] for row in rows.mappings().all()}
 
 
 async def _personal_skills(db: AsyncSession, user_id: str) -> dict[str, Any]:
-    rows = await db.execute(text('''SELECT skill_key, name, description, instructions, config
-            FROM user_agent_skills WHERE user_id = :user_id'''), {'user_id': user_id})
+    rows = await db.execute(PERSONAL_SKILLS_SELECT_USER_AGENT_SKILLS, {'user_id': user_id})
     skills: dict[str, Any] = {}
     for row in rows.mappings().all():
         if row['skill_key'] == 'issue.defaults':
@@ -1244,16 +1198,13 @@ async def _persist_turn(
     user_message_id = cuid()
     assistant_id = cuid()
     if is_new_conversation:
-        await db.execute(text('''INSERT INTO agent_conversations (id, workspace_id, user_id, title, created_at, updated_at)
-                VALUES (:id, :workspace_id, :user_id, :title, :now, :now)'''), {'id': conversation_id, 'workspace_id': workspace_id, 'user_id': user_id, 'title': conversation['title'], 'now': now})
-    await db.execute(text('''INSERT INTO agent_messages (id, conversation_id, role, content, source_text, created_at)
-            VALUES (:id, :conversation_id, 'USER', :content, :source_text, :now)'''), {'id': user_message_id, 'conversation_id': conversation_id, 'content': user_content, 'source_text': source_text or None, 'now': now})
-    await db.execute(text('''INSERT INTO agent_messages (id, conversation_id, role, content, proposal, created_at)
-            VALUES (:id, :conversation_id, 'ASSISTANT', :content, CAST(:proposal AS jsonb), :now)'''), {'id': assistant_id, 'conversation_id': conversation_id, 'content': assistant_content, 'proposal': json.dumps(proposal) if proposal else None, 'now': now})
-    await db.execute(text('UPDATE agent_conversations SET updated_at = :now WHERE id = :id'), {'id': conversation_id, 'now': now})
+        await db.execute(PERSIST_TURN_INSERT_AGENT_CONVERSATIONS, {'id': conversation_id, 'workspace_id': workspace_id, 'user_id': user_id, 'title': conversation['title'], 'now': now})
+    await db.execute(PERSIST_TURN_INSERT_AGENT_MESSAGES, {'id': user_message_id, 'conversation_id': conversation_id, 'content': user_content, 'source_text': source_text or None, 'now': now})
+    await db.execute(PERSIST_TURN_INSERT_AGENT_MESSAGES_2, {'id': assistant_id, 'conversation_id': conversation_id, 'content': assistant_content, 'proposal': json.dumps(proposal) if proposal else None, 'now': now})
+    await db.execute(PERSIST_TURN_UPDATE_AGENT_CONVERSATIONS, {'id': conversation_id, 'now': now})
     await db.commit()
-    user_message = await db.execute(text('SELECT * FROM agent_messages WHERE id = :id'), {'id': user_message_id})
-    assistant = await db.execute(text('SELECT * FROM agent_messages WHERE id = :id'), {'id': assistant_id})
+    user_message = await db.execute(PERSIST_TURN_SELECT_AGENT_MESSAGES, {'id': user_message_id})
+    assistant = await db.execute(PERSIST_TURN_SELECT_AGENT_MESSAGES_2, {'id': assistant_id})
     return {
         'conversation': {'id': conversation_id, 'title': conversation['title']},
         'userMessage': _message_view(user_message.mappings().one()),
@@ -1326,21 +1277,15 @@ async def _conversation_source_text(db: AsyncSession, conversation_id: str) -> s
     VI: File nguồn của các lượt lập kế hoạch trước, mới nhất trước, để câu trả lời làm rõ vẫn có
     VI: tài liệu. File gửi trước lần áp dụng kế hoạch gần nhất bị loại, khớp với lịch sử lập kế hoạch.
     """
-    rows = await db.execute(text('''SELECT source_text FROM agent_messages
-            WHERE conversation_id = :conversation_id AND source_text IS NOT NULL
-              AND created_at > COALESCE((
-                  SELECT MAX(applied_at) FROM agent_messages
-                  WHERE conversation_id = :conversation_id AND applied_at IS NOT NULL
-              ), to_timestamp(0))
-            ORDER BY created_at DESC, id DESC LIMIT 5'''), {'conversation_id': conversation_id})
+    rows = await db.execute(CONVERSATION_SOURCE_TEXT_SELECT_AGENT_MESSAGES, {'conversation_id': conversation_id})
     return '\n\n'.join(row['source_text'] for row in rows.mappings().all())
 
 
 @router.get('/providers')
 async def list_providers(workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
     await workspace_access(db, workspaceId, user['id'])
-    manager = await db.execute(text("SELECT role FROM workspace_members WHERE workspace_id = :workspace_id AND user_id = :user_id AND status = 'ACTIVE'"), {'workspace_id': workspaceId, 'user_id': user['id']})
-    rows = await db.execute(text('SELECT * FROM workspace_agent_providers WHERE workspace_id = :workspace_id ORDER BY provider'), {'workspace_id': workspaceId})
+    manager = await db.execute(LIST_PROVIDERS_SELECT_WORKSPACE_MEMBERS, {'workspace_id': workspaceId, 'user_id': user['id']})
+    rows = await db.execute(LIST_PROVIDERS_SELECT_WORKSPACE_AGENT_PROVIDERS, {'workspace_id': workspaceId})
     return {'data': {'canManage': manager.scalar_one() in {'OWNER', 'ADMIN'}, 'providers': [_provider_view(row) for row in rows.mappings().all()]}}
 
 
@@ -1348,29 +1293,23 @@ async def list_providers(workspaceId: str = Query(min_length=1), user: Any = Dep
 async def save_provider(provider: ProviderName, payload: ProviderInput, request: Request, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
     await workspace_manager(db, workspaceId, user['id'])
     endpoint = _validated_endpoint(provider, payload.endpoint, request.app.state.settings.agent_provider_allowed_hosts)
-    current = await db.execute(text('SELECT api_key_encrypted FROM workspace_agent_providers WHERE workspace_id = :workspace_id AND provider = CAST(:provider AS "AgentProvider")'), {'workspace_id': workspaceId, 'provider': provider})
+    current = await db.execute(SAVE_PROVIDER_SELECT_WORKSPACE_AGENT_PROVIDERS, {'workspace_id': workspaceId, 'provider': provider})
     existing_key = current.scalar_one_or_none()
     if not payload.apiKey and not existing_key:
         raise ApiError(400, 'An API key is required when configuring a provider for the first time.', 'Bad Request')
     key = _cipher(request).encrypt(payload.apiKey.strip().encode('utf-8')).decode('ascii') if payload.apiKey else existing_key
     if payload.enabled:
-        await db.execute(text('UPDATE workspace_agent_providers SET enabled = false, updated_at = :now WHERE workspace_id = :workspace_id'), {'workspace_id': workspaceId, 'now': utcnow()})
-    await db.execute(text('''INSERT INTO workspace_agent_providers
-            (id, workspace_id, provider, endpoint, model, api_key_encrypted, enabled, created_at, updated_at)
-            VALUES (:id, :workspace_id, CAST(:provider AS "AgentProvider"), :endpoint, :model, :api_key, :enabled, :now, :now)
-            ON CONFLICT (workspace_id, provider) DO UPDATE SET endpoint = EXCLUDED.endpoint,
-            model = EXCLUDED.model, api_key_encrypted = EXCLUDED.api_key_encrypted,
-            enabled = EXCLUDED.enabled, updated_at = EXCLUDED.updated_at'''), {
+        await db.execute(SAVE_PROVIDER_UPDATE_WORKSPACE_AGENT_PROVIDERS, {'workspace_id': workspaceId, 'now': utcnow()})
+    await db.execute(SAVE_PROVIDER_INSERT_WORKSPACE_AGENT_PROVIDERS, {
         'id': cuid(), 'workspace_id': workspaceId, 'provider': provider, 'endpoint': endpoint,
         'model': payload.model.strip(), 'api_key': key, 'enabled': payload.enabled, 'now': utcnow(),
     })
-    await db.execute(text('''INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at)
-            VALUES (:id, :workspace_id, :actor_id, 'agent.provider.updated', 'workspace_agent_provider', :entity_id, CAST(:metadata AS jsonb), :now)'''), {
+    await db.execute(SAVE_PROVIDER_INSERT_AUDIT_LOGS, {
         'id': cuid(), 'workspace_id': workspaceId, 'actor_id': user['id'], 'entity_id': provider,
         'metadata': json.dumps({'provider': provider, 'enabled': payload.enabled}), 'now': utcnow(),
     })
     await db.commit()
-    row = await db.execute(text('SELECT * FROM workspace_agent_providers WHERE workspace_id = :workspace_id AND provider = CAST(:provider AS "AgentProvider")'), {'workspace_id': workspaceId, 'provider': provider})
+    row = await db.execute(SAVE_PROVIDER_SELECT_WORKSPACE_AGENT_PROVIDERS_2, {'workspace_id': workspaceId, 'provider': provider})
     return {'data': _provider_view(row.mappings().one())}
 
 
@@ -1388,8 +1327,7 @@ async def check_provider(provider: ProviderName, request: Request, workspaceId: 
     settings = request.app.state.settings
     await limit_request(db, settings.auth_jwt_secret, 'agent-provider-test', user['id'], PROVIDER_TEST_HOURLY_LIMIT)
     result = await db.execute(
-        text('''SELECT provider, endpoint, model, api_key_encrypted FROM workspace_agent_providers
-                WHERE workspace_id = :workspace_id AND provider = CAST(:provider AS "AgentProvider")'''),
+        CHECK_PROVIDER_SELECT_WORKSPACE_AGENT_PROVIDERS,
         {'workspace_id': workspaceId, 'provider': provider},
     )
     row = result.mappings().first()
@@ -1409,7 +1347,7 @@ async def check_provider(provider: ProviderName, request: Request, workspaceId: 
 @router.get('/tools')
 async def list_tools(workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
     await workspace_access(db, workspaceId, user['id'])
-    role = await db.execute(text("SELECT role FROM workspace_members WHERE workspace_id = :workspace_id AND user_id = :user_id AND status = 'ACTIVE'"), {'workspace_id': workspaceId, 'user_id': user['id']})
+    role = await db.execute(LIST_TOOLS_SELECT_WORKSPACE_MEMBERS, {'workspace_id': workspaceId, 'user_id': user['id']})
     installed = await _installed_tool_keys(db, workspaceId)
     return {'data': {'canManage': role.scalar_one() in {'OWNER', 'ADMIN'}, 'tools': [
         {'key': key, 'title': title, 'description': description, 'installed': key in installed}
@@ -1423,11 +1361,8 @@ async def install_tool(tool_key: str, workspaceId: str = Query(min_length=1), us
         raise ApiError(404, 'Agent tool not found.', 'Not Found')
     await workspace_manager(db, workspaceId, user['id'])
     now = utcnow()
-    await db.execute(text('''INSERT INTO workspace_agent_tools (id, workspace_id, tool_key, created_at, updated_at)
-            VALUES (:id, :workspace_id, :tool_key, :now, :now)
-            ON CONFLICT (workspace_id, tool_key) DO NOTHING'''), {'id': cuid(), 'workspace_id': workspaceId, 'tool_key': tool_key, 'now': now})
-    await db.execute(text('''INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at)
-            VALUES (:id, :workspace_id, :actor_id, 'agent.tool.installed', 'workspace_agent_tool', :entity_id, '{}'::jsonb, :now)'''), {'id': cuid(), 'workspace_id': workspaceId, 'actor_id': user['id'], 'entity_id': tool_key, 'now': now})
+    await db.execute(INSTALL_TOOL_INSERT_WORKSPACE_AGENT_TOOLS, {'id': cuid(), 'workspace_id': workspaceId, 'tool_key': tool_key, 'now': now})
+    await db.execute(INSTALL_TOOL_INSERT_AUDIT_LOGS, {'id': cuid(), 'workspace_id': workspaceId, 'actor_id': user['id'], 'entity_id': tool_key, 'now': now})
     await db.commit()
     title, description = TOOL_DETAILS[tool_key]
     return {'data': {'key': tool_key, 'title': title, 'description': description, 'installed': True}}
@@ -1438,9 +1373,8 @@ async def remove_tool(tool_key: str, workspaceId: str = Query(min_length=1), use
     if tool_key not in TOOL_DETAILS:
         raise ApiError(404, 'Agent tool not found.', 'Not Found')
     await workspace_manager(db, workspaceId, user['id'])
-    await db.execute(text('DELETE FROM workspace_agent_tools WHERE workspace_id = :workspace_id AND tool_key = :tool_key'), {'workspace_id': workspaceId, 'tool_key': tool_key})
-    await db.execute(text('''INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at)
-            VALUES (:id, :workspace_id, :actor_id, 'agent.tool.removed', 'workspace_agent_tool', :entity_id, '{}'::jsonb, :now)'''), {'id': cuid(), 'workspace_id': workspaceId, 'actor_id': user['id'], 'entity_id': tool_key, 'now': utcnow()})
+    await db.execute(REMOVE_TOOL_DELETE_WORKSPACE_AGENT_TOOLS, {'workspace_id': workspaceId, 'tool_key': tool_key})
+    await db.execute(REMOVE_TOOL_INSERT_AUDIT_LOGS, {'id': cuid(), 'workspace_id': workspaceId, 'actor_id': user['id'], 'entity_id': tool_key, 'now': utcnow()})
     await db.commit()
     title, description = TOOL_DETAILS[tool_key]
     return {'data': {'key': tool_key, 'title': title, 'description': description, 'installed': False}}
@@ -1454,9 +1388,7 @@ def _skill_view(key: str, installed: bool, config: Any = None) -> dict[str, Any]
 @router.get('/skills')
 async def list_skills(user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
     installed = await _personal_skills(db, user['id'])
-    rows = await db.execute(text('''SELECT skill_key, name, description, instructions, config
-            FROM user_agent_skills WHERE user_id = :user_id AND skill_key LIKE 'custom.%'
-            ORDER BY updated_at DESC, created_at DESC'''), {'user_id': user['id']})
+    rows = await db.execute(LIST_SKILLS_SELECT_USER_AGENT_SKILLS, {'user_id': user['id']})
     custom = [
         {
             'key': row['skill_key'], 'title': row['name'], 'description': row['description'],
@@ -1471,9 +1403,7 @@ async def list_skills(user: Any = Depends(current_user), db: AsyncSession = Depe
 @router.post('/skills')
 async def create_personal_skill(payload: PersonalSkillInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
     key, now = f'custom.{cuid()}', utcnow()
-    await db.execute(text('''INSERT INTO user_agent_skills
-            (id, user_id, skill_key, name, description, instructions, config, created_at, updated_at)
-            VALUES (:id, :user_id, :skill_key, :name, :description, :instructions, '{}'::jsonb, :now, :now)'''), {
+    await db.execute(CREATE_PERSONAL_SKILL_INSERT_USER_AGENT_SKILLS, {
         'id': cuid(), 'user_id': user['id'], 'skill_key': key, 'name': payload.name.strip(),
         'description': payload.description.strip() if payload.description else None,
         'instructions': payload.instructions.strip(), 'now': now,
@@ -1488,9 +1418,7 @@ async def install_skill(skill_key: str, user: Any = Depends(current_user), db: A
         raise ApiError(404, 'Agent skill not found.', 'Not Found')
     now = utcnow()
     config = {'defaultPriority': 'NONE', 'dueInDays': None}
-    await db.execute(text('''INSERT INTO user_agent_skills (id, user_id, skill_key, config, created_at, updated_at)
-            VALUES (:id, :user_id, :skill_key, CAST(:config AS jsonb), :now, :now)
-            ON CONFLICT (user_id, skill_key) DO NOTHING'''), {'id': cuid(), 'user_id': user['id'], 'skill_key': skill_key, 'config': json.dumps(config), 'now': now})
+    await db.execute(INSTALL_SKILL_INSERT_USER_AGENT_SKILLS, {'id': cuid(), 'user_id': user['id'], 'skill_key': skill_key, 'config': json.dumps(config), 'now': now})
     await db.commit()
     return {'data': _skill_view(skill_key, True, config)}
 
@@ -1499,8 +1427,7 @@ async def install_skill(skill_key: str, user: Any = Depends(current_user), db: A
 async def update_issue_defaults(payload: IssueDefaultsInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
     skill_key = 'issue.defaults'
     config = payload.model_dump(mode='json')
-    result = await db.execute(text('''UPDATE user_agent_skills SET config = CAST(:config AS jsonb), updated_at = :now
-            WHERE user_id = :user_id AND skill_key = :skill_key'''), {'user_id': user['id'], 'skill_key': skill_key, 'config': json.dumps(config), 'now': utcnow()})
+    result = await db.execute(UPDATE_ISSUE_DEFAULTS_UPDATE_USER_AGENT_SKILLS, {'user_id': user['id'], 'skill_key': skill_key, 'config': json.dumps(config), 'now': utcnow()})
     if cast(CursorResult[Any], result).rowcount != 1:
         raise ApiError(409, 'Install this personal skill before changing its settings.', 'Conflict')
     await db.commit()
@@ -1511,9 +1438,7 @@ async def update_issue_defaults(payload: IssueDefaultsInput, user: Any = Depends
 async def update_personal_skill(skill_key: str, payload: PersonalSkillInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
     if not skill_key.startswith('custom.'):
         raise ApiError(404, 'Agent skill not found.', 'Not Found')
-    result = await db.execute(text('''UPDATE user_agent_skills
-            SET name = :name, description = :description, instructions = :instructions, updated_at = :now
-            WHERE user_id = :user_id AND skill_key = :skill_key AND skill_key LIKE 'custom.%' '''), {
+    result = await db.execute(UPDATE_PERSONAL_SKILL_UPDATE_USER_AGENT_SKILLS, {
         'name': payload.name.strip(), 'description': payload.description.strip() if payload.description else None,
         'instructions': payload.instructions.strip(), 'now': utcnow(), 'user_id': user['id'], 'skill_key': skill_key,
     })
@@ -1527,7 +1452,7 @@ async def update_personal_skill(skill_key: str, payload: PersonalSkillInput, use
 async def remove_skill(skill_key: str, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
     if skill_key not in PERSONAL_SKILL_DETAILS and not skill_key.startswith('custom.'):
         raise ApiError(404, 'Agent skill not found.', 'Not Found')
-    await db.execute(text('DELETE FROM user_agent_skills WHERE user_id = :user_id AND skill_key = :skill_key'), {'user_id': user['id'], 'skill_key': skill_key})
+    await db.execute(REMOVE_SKILL_DELETE_USER_AGENT_SKILLS, {'user_id': user['id'], 'skill_key': skill_key})
     await db.commit()
     if skill_key in PERSONAL_SKILL_DETAILS:
         return {'data': _skill_view(skill_key, False)}
@@ -1621,15 +1546,7 @@ PROJECT_SCHEDULE_PROMPT = (
 async def _project_facts(db: AsyncSession, workspace_id: str, project_id: str, user_id: str) -> dict[str, Any]:
     """Everything a draft is allowed to be built from, and nothing else."""
     result = await db.execute(
-        text(
-            """SELECT p.id, p.name, p.description, p.status, p.priority, p.health, p.team_id,
-                      p.start_date, p.target_date,
-                      t.name AS team_name, u.name AS lead_name
-               FROM projects p
-               LEFT JOIN teams t ON t.id = p.team_id
-               LEFT JOIN users u ON u.id = p.lead_id
-               WHERE p.id = :project_id AND p.workspace_id = :workspace_id AND p.archived_at IS NULL"""
-        ),
+        PROJECT_FACTS_SELECT_PROJECTS,
         {'project_id': project_id, 'workspace_id': workspace_id},
     )
     project = result.mappings().first()
@@ -1639,41 +1556,23 @@ async def _project_facts(db: AsyncSession, workspace_id: str, project_id: str, u
         await team_access(db, workspace_id, project['team_id'], user_id)
 
     statuses = await db.execute(
-        text(
-            """SELECT s.category, COUNT(*) AS total FROM issues i
-               JOIN issue_statuses s ON s.id = i.status_id
-               WHERE i.project_id = :project_id AND i.archived_at IS NULL
-               GROUP BY s.category"""
-        ),
+        PROJECT_FACTS_SELECT_ISSUES,
         {'project_id': project_id},
     )
     counts = {row['category']: row['total'] for row in statuses.mappings().all()}
 
     open_issues = await db.execute(
-        text(
-            """SELECT i.identifier, i.title, s.name AS status, i.due_date FROM issues i
-               JOIN issue_statuses s ON s.id = i.status_id
-               WHERE i.project_id = :project_id AND i.archived_at IS NULL
-                 AND s.category NOT IN ('COMPLETED', 'CANCELED')
-               ORDER BY i.due_date NULLS LAST, i.updated_at DESC LIMIT 12"""
-        ),
+        PROJECT_FACTS_SELECT_ISSUES_2,
         {'project_id': project_id},
     )
 
     milestones = await db.execute(
-        text(
-            """SELECT title, target_date, completed_at FROM project_milestones
-               WHERE project_id = :project_id ORDER BY target_date NULLS LAST LIMIT 8"""
-        ),
+        PROJECT_FACTS_SELECT_PROJECT_MILESTONES,
         {'project_id': project_id},
     )
 
     previous = await db.execute(
-        text(
-            """SELECT body, health, created_at FROM project_updates
-               WHERE project_id = :project_id AND kind = 'update'
-               ORDER BY created_at DESC LIMIT 3"""
-        ),
+        PROJECT_FACTS_UPDATE_PROJECT_UPDATES,
         {'project_id': project_id},
     )
 
@@ -1684,27 +1583,11 @@ async def _project_facts(db: AsyncSession, workspace_id: str, project_id: str, u
     today = datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).date()
     signal_params = {'project_id': project_id, 'today': today, 'stale_since': today - timedelta(days=14), 'week_ago': today - timedelta(days=7)}
     signals = (await db.execute(
-        text(
-            """SELECT
-                   COUNT(*) FILTER (WHERE s.category NOT IN ('COMPLETED', 'CANCELED') AND i.due_date::date < :today)::int AS overdue,
-                   COUNT(*) FILTER (WHERE s.category NOT IN ('COMPLETED', 'CANCELED') AND i.updated_at::date <= :stale_since)::int AS stale,
-                   COUNT(*) FILTER (WHERE s.category NOT IN ('COMPLETED', 'CANCELED') AND i.assignee_id IS NULL)::int AS unassigned,
-                   COUNT(*) FILTER (WHERE s.category = 'COMPLETED' AND i.completed_at::date >= :week_ago)::int AS completed_week
-               FROM issues i JOIN issue_statuses s ON s.id = i.status_id
-               WHERE i.project_id = :project_id AND i.archived_at IS NULL"""
-        ),
+        PROJECT_FACTS_SELECT_ISSUES_4,
         signal_params,
     )).mappings().one()
     overdue_issues = await db.execute(
-        text(
-            """SELECT i.identifier, i.title, u.name AS assignee, (:today - i.due_date::date)::int AS days_late
-               FROM issues i
-               JOIN issue_statuses s ON s.id = i.status_id
-               LEFT JOIN users u ON u.id = i.assignee_id
-               WHERE i.project_id = :project_id AND i.archived_at IS NULL
-                 AND s.category NOT IN ('COMPLETED', 'CANCELED') AND i.due_date::date < :today
-               ORDER BY i.due_date ASC, i.identifier ASC LIMIT 10"""
-        ),
+        PROJECT_FACTS_SELECT_ISSUES_3,
         signal_params,
     )
 
@@ -1804,11 +1687,7 @@ async def _project_schedule_facts(
 ) -> dict[str, Any]:
     """Load only open project work because completed work must never be rescheduled."""
     result = await db.execute(
-        text(
-            '''SELECT p.id, p.name, p.description, p.start_date, p.target_date, p.team_id
-               FROM projects p
-               WHERE p.id = :project_id AND p.workspace_id = :workspace_id AND p.archived_at IS NULL'''
-        ),
+        PROJECT_SCHEDULE_FACTS_SELECT_PROJECTS,
         {'project_id': project_id, 'workspace_id': workspace_id},
     )
     project = result.mappings().first()
@@ -1820,17 +1699,7 @@ async def _project_schedule_facts(
         raise ApiError(400, 'Set the project target date before asking AI to schedule its issues.', 'Bad Request')
 
     issues = await db.execute(
-        text(
-            '''SELECT i.id, i.parent_issue_id, i.identifier, i.title, i.description,
-                      i.estimated_effort, i.start_date, i.target_date, i.due_date,
-                      s.name AS status_name
-               FROM issues i
-               JOIN issue_statuses s ON s.id = i.status_id
-               WHERE i.project_id = :project_id AND i.workspace_id = :workspace_id
-                 AND i.archived_at IS NULL AND s.category NOT IN ('COMPLETED', 'CANCELED')
-               ORDER BY i.created_at ASC
-               LIMIT 101'''
-        ),
+        PROJECT_SCHEDULE_FACTS_SELECT_ISSUES,
         {'project_id': project_id, 'workspace_id': workspace_id},
     )
     rows = issues.mappings().all()
@@ -1974,11 +1843,7 @@ async def apply_project_schedule(
     now = utcnow()
     for schedule in payload.schedules:
         await db.execute(
-            text(
-                '''UPDATE issues SET start_date = :start_date, target_date = :target_date,
-                       due_date = :due_date, updated_at = :now
-                   WHERE id = :issue_id AND project_id = :project_id AND workspace_id = :workspace_id'''
-            ),
+            APPLY_PROJECT_SCHEDULE_UPDATE_ISSUES,
             {
                 'issue_id': schedule.issueId,
                 'project_id': project_id,
@@ -1990,11 +1855,7 @@ async def apply_project_schedule(
             },
         )
         await db.execute(
-            text(
-                '''INSERT INTO activities (id, workspace_id, issue_id, actor_id, type, data, created_at)
-                   VALUES (:id, :workspace_id, :issue_id, :actor_id, 'issue.updated',
-                           CAST(:data AS jsonb), :now)'''
-            ),
+            APPLY_PROJECT_SCHEDULE_INSERT_ACTIVITIES,
             {
                 'id': cuid(),
                 'workspace_id': payload.workspaceId,
@@ -2005,11 +1866,7 @@ async def apply_project_schedule(
             },
         )
     await db.execute(
-        text(
-            '''INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at)
-               VALUES (:id, :workspace_id, :actor_id, 'agent.project_schedule.applied', 'project', :project_id,
-                       CAST(:metadata AS jsonb), :now)'''
-        ),
+        APPLY_PROJECT_SCHEDULE_INSERT_AUDIT_LOGS,
         {
             'id': cuid(),
             'workspace_id': payload.workspaceId,
@@ -2026,20 +1883,18 @@ async def apply_project_schedule(
 @router.get('/conversations')
 async def list_conversations(workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
     await workspace_access(db, workspaceId, user['id'])
-    result = await db.execute(text('''SELECT id, title, created_at, updated_at FROM agent_conversations
-            WHERE workspace_id = :workspace_id AND user_id = :user_id ORDER BY updated_at DESC LIMIT 50'''), {'workspace_id': workspaceId, 'user_id': user['id']})
+    result = await db.execute(LIST_CONVERSATIONS_SELECT_AGENT_CONVERSATIONS, {'workspace_id': workspaceId, 'user_id': user['id']})
     return {'data': [{'id': row['id'], 'title': row['title'], 'createdAt': row['created_at'], 'updatedAt': row['updated_at']} for row in result.mappings().all()]}
 
 
 @router.get('/conversations/{conversation_id}')
 async def get_conversation(conversation_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
     await workspace_access(db, workspaceId, user['id'])
-    conversation = await db.execute(text('''SELECT id, title, created_at, updated_at FROM agent_conversations
-            WHERE id = :id AND workspace_id = :workspace_id AND user_id = :user_id'''), {'id': conversation_id, 'workspace_id': workspaceId, 'user_id': user['id']})
+    conversation = await db.execute(GET_CONVERSATION_SELECT_AGENT_CONVERSATIONS, {'id': conversation_id, 'workspace_id': workspaceId, 'user_id': user['id']})
     row = conversation.mappings().first()
     if not row:
         raise ApiError(404, 'Agent conversation not found.', 'Not Found')
-    messages = await db.execute(text('SELECT * FROM agent_messages WHERE conversation_id = :conversation_id ORDER BY created_at'), {'conversation_id': conversation_id})
+    messages = await db.execute(GET_CONVERSATION_SELECT_AGENT_MESSAGES, {'conversation_id': conversation_id})
     return {'data': {'id': row['id'], 'title': row['title'], 'createdAt': row['created_at'], 'updatedAt': row['updated_at'], 'messages': [_message_view(message) for message in messages.mappings().all()]}}
 
 
@@ -2237,20 +2092,7 @@ async def _portfolio_facts(db: AsyncSession, workspace_id: str, user_id: str) ->
     workload = await _workload_insight(db, workspace_id, user_id)
     stale = await _stale_issue_insight(db, workspace_id, user_id)
     overdue_rows = await db.execute(
-        text('''SELECT issue.identifier, issue.title, project.identifier AS project, assignee.name AS assignee,
-                       status.name AS status, issue.priority, (:today - issue.due_date::date)::int AS days_late
-                FROM issues issue
-                JOIN issue_statuses status ON status.id = issue.status_id
-                LEFT JOIN projects project ON project.id = issue.project_id
-                LEFT JOIN users assignee ON assignee.id = issue.assignee_id
-                WHERE issue.workspace_id = :workspace_id
-                  AND issue.archived_at IS NULL
-                  AND issue.due_date::date < :today
-                  AND status.category NOT IN ('COMPLETED', 'CANCELED')
-                  AND EXISTS (SELECT 1 FROM team_members member
-                              WHERE member.team_id = issue.team_id AND member.user_id = :user_id)
-                ORDER BY issue.due_date ASC, issue.identifier ASC
-                LIMIT 30'''),
+        PORTFOLIO_FACTS_SELECT_ISSUES,
         {'workspace_id': workspace_id, 'user_id': user_id, 'today': today},
     )
     return {
@@ -2276,19 +2118,7 @@ async def _mentioned_issues(db: AsyncSession, workspace_id: str, user_id: str, m
     if not identifiers:
         return []
     rows = await db.execute(
-        text('''SELECT issue.identifier, issue.title, status.name AS status, issue.priority,
-                       assignee.name AS assignee, project.identifier AS project, issue.start_date,
-                       issue.target_date, issue.due_date, issue.updated_at,
-                       LEFT(issue.description, :description_chars) AS description
-                FROM issues issue
-                JOIN issue_statuses status ON status.id = issue.status_id
-                LEFT JOIN projects project ON project.id = issue.project_id
-                LEFT JOIN users assignee ON assignee.id = issue.assignee_id
-                WHERE issue.workspace_id = :workspace_id AND issue.identifier = ANY(:identifiers)
-                  AND issue.archived_at IS NULL
-                  AND EXISTS (SELECT 1 FROM team_members member
-                              WHERE member.team_id = issue.team_id AND member.user_id = :user_id)
-                ORDER BY issue.identifier'''),
+        MENTIONED_ISSUES_SELECT_ISSUES,
         {
             'workspace_id': workspace_id, 'identifiers': identifiers, 'user_id': user_id,
             'description_chars': MENTIONED_ISSUE_DESCRIPTION_CHARS,
@@ -2328,8 +2158,7 @@ async def _analyst_turn(
     history: list[dict[str, str]] = []
     if not is_new_conversation:
         recent = await db.execute(
-            text('''SELECT role, content FROM agent_messages WHERE conversation_id = :conversation_id
-                    ORDER BY created_at DESC, id DESC LIMIT :limit'''),
+            ANALYST_TURN_SELECT_AGENT_MESSAGES,
             {'conversation_id': conversation_id, 'limit': ANALYST_HISTORY_LIMIT},
         )
         history = [{'role': row['role'].lower(), 'content': row['content']} for row in reversed(recent.mappings().all())]
@@ -2380,7 +2209,7 @@ async def _process_message(
     if files:
         await progress({'id': 'source.read', 'label': 'Source files read', 'state': 'completed', 'orb': 'searching'})
     if conversation_id:
-        conversation = await db.execute(text('SELECT id, title FROM agent_conversations WHERE id = :id AND workspace_id = :workspace_id AND user_id = :user_id'), {'id': conversation_id, 'workspace_id': workspace_id, 'user_id': user['id']})
+        conversation = await db.execute(PROCESS_MESSAGE_SELECT_AGENT_CONVERSATIONS, {'id': conversation_id, 'workspace_id': workspace_id, 'user_id': user['id']})
         conversation_row: Any = conversation.mappings().first()
         if not conversation_row:
             raise ApiError(404, 'Agent conversation not found.', 'Not Found')
@@ -2515,30 +2344,7 @@ async def _process_message(
     # A turn becomes durable only after its provider response validates. This
     # prevents a failed request from becoming hidden context on a later retry.
     await progress({'id': 'conversation.context', 'label': 'Loading planning context', 'state': 'running', 'orb': 'searching'})
-    history_rows = await db.execute(text('''WITH recent_messages AS (
-                SELECT id, role, content, proposal, created_at,
-                       LEAD(role) OVER (
-                           ORDER BY created_at ASC,
-                                    CASE role WHEN 'USER' THEN 0 ELSE 1 END,
-                                    id ASC
-                       ) AS next_role,
-                       LEAD(proposal) OVER (
-                           ORDER BY created_at ASC,
-                                    CASE role WHEN 'USER' THEN 0 ELSE 1 END,
-                                    id ASC
-                       ) AS next_proposal
-                FROM agent_messages
-                WHERE conversation_id = :conversation_id
-                  AND created_at > COALESCE((
-                      SELECT MAX(applied_at) FROM agent_messages
-                      WHERE conversation_id = :conversation_id AND applied_at IS NOT NULL
-                  ), to_timestamp(0))
-            )
-            SELECT role, content, proposal FROM recent_messages
-            WHERE (role = 'ASSISTANT' AND proposal IS NOT NULL)
-               OR (role = 'USER' AND next_role = 'ASSISTANT' AND next_proposal IS NOT NULL)
-            ORDER BY created_at DESC, CASE role WHEN 'USER' THEN 1 ELSE 0 END, id DESC
-            LIMIT 12'''), {'conversation_id': conversation_id})
+    history_rows = await db.execute(PROCESS_MESSAGE_SELECT_AGENT_MESSAGES, {'conversation_id': conversation_id})
     history = [
         {
             'role': row['role'].lower(),
@@ -2631,10 +2437,7 @@ async def stream_message(request: Request, workspaceId: str = Form(), message: s
 @router.post('/messages/{message_id}/accept')
 async def accept_proposal(message_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
     await workspace_access(db, workspaceId, user['id'])
-    result = await db.execute(text('''SELECT message.* FROM agent_messages message
-            JOIN agent_conversations conversation ON conversation.id = message.conversation_id
-            WHERE message.id = :message_id AND conversation.workspace_id = :workspace_id AND conversation.user_id = :user_id
-            AND message.role = 'ASSISTANT' FOR UPDATE'''), {'message_id': message_id, 'workspace_id': workspaceId, 'user_id': user['id']})
+    result = await db.execute(ACCEPT_PROPOSAL_SELECT_AGENT_MESSAGES, {'message_id': message_id, 'workspace_id': workspaceId, 'user_id': user['id']})
     message = result.mappings().first()
     if not message or not message['proposal']:
         raise ApiError(404, 'Agent proposal not found.', 'Not Found')
@@ -2644,7 +2447,7 @@ async def accept_proposal(message_id: str, workspaceId: str = Query(min_length=1
     catalog = await _workspace_catalog(db, workspaceId)
     _validate_proposal(proposal, catalog)
     progress = message['applied_result'] or {'projects': {}, 'issues': {}}
-    await db.execute(text('UPDATE agent_messages SET accepted_at = COALESCE(accepted_at, :now) WHERE id = :id'), {'id': message_id, 'now': utcnow()})
+    await db.execute(ACCEPT_PROPOSAL_UPDATE_AGENT_MESSAGES, {'id': message_id, 'now': utcnow()})
     await db.commit()
     created_project_ids: dict[str, str] = dict(progress.get('projects') or {})
     issue_ids: dict[str, str] = dict(progress.get('issues') or {})
@@ -2658,7 +2461,7 @@ async def accept_proposal(message_id: str, workspaceId: str = Query(min_length=1
             await update_project(project_id, UpdateProjectInput(startDate=draft.startDate, targetDate=draft.targetDate), workspaceId, user, db)
         created_project_ids[draft.identifier] = project_id
         progress['projects'] = created_project_ids
-        await db.execute(text('UPDATE agent_messages SET applied_result = CAST(:result AS jsonb) WHERE id = :id'), {'id': message_id, 'result': json.dumps(progress)})
+        await db.execute(ACCEPT_PROPOSAL_UPDATE_AGENT_MESSAGES_3, {'id': message_id, 'result': json.dumps(progress)})
         await db.commit()
     project_ids = {**existing_projects, **created_project_ids}
     for issue_draft in proposal.issues:
@@ -2667,12 +2470,11 @@ async def accept_proposal(message_id: str, workspaceId: str = Query(min_length=1
         created = await create_issue(CreateIssueInput(workspaceId=workspaceId, teamId=issue_draft.teamId, title=issue_draft.title, description=issue_draft.description, projectId=project_ids.get(issue_draft.projectIdentifier) if issue_draft.projectIdentifier else None, priority=issue_draft.priority, dueDate=issue_draft.dueDate), user, db)
         issue_ids[issue_draft.key] = created['data']['id']
         progress['issues'] = issue_ids
-        await db.execute(text('UPDATE agent_messages SET applied_result = CAST(:result AS jsonb) WHERE id = :id'), {'id': message_id, 'result': json.dumps(progress)})
+        await db.execute(ACCEPT_PROPOSAL_UPDATE_AGENT_MESSAGES_4, {'id': message_id, 'result': json.dumps(progress)})
         await db.commit()
     applied_result = {'projects': created_project_ids, 'issues': issue_ids}
-    await db.execute(text('UPDATE agent_messages SET applied_at = :now, applied_result = CAST(:result AS jsonb) WHERE id = :id'), {'id': message_id, 'now': utcnow(), 'result': json.dumps(applied_result)})
-    await db.execute(text('''INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at)
-            VALUES (:id, :workspace_id, :actor_id, 'agent.proposal.accepted', 'agent_message', :entity_id, CAST(:metadata AS jsonb), :now)'''), {'id': cuid(), 'workspace_id': workspaceId, 'actor_id': user['id'], 'entity_id': message_id, 'metadata': json.dumps({'projects': len(proposal.projects), 'issues': len(proposal.issues)}), 'now': utcnow()})
+    await db.execute(ACCEPT_PROPOSAL_UPDATE_AGENT_MESSAGES_2, {'id': message_id, 'now': utcnow(), 'result': json.dumps(applied_result)})
+    await db.execute(ACCEPT_PROPOSAL_INSERT_AUDIT_LOGS, {'id': cuid(), 'workspace_id': workspaceId, 'actor_id': user['id'], 'entity_id': message_id, 'metadata': json.dumps({'projects': len(proposal.projects), 'issues': len(proposal.issues)}), 'now': utcnow()})
     await db.commit()
     return {'data': applied_result}
 
@@ -2690,13 +2492,7 @@ async def apply_assignment(payload: AssignmentApplyInput, user: Any = Depends(cu
     """Apply one drafted assignment row. Stale rows are rejected, never overwritten."""
     await workspace_access(db, payload.workspaceId, user['id'])
     issue = await db.execute(
-        text('''SELECT issue.id, issue.identifier, issue.assignee_id, assignee.name AS assignee_name
-                FROM issues issue
-                JOIN issue_statuses status ON status.id = issue.status_id
-                LEFT JOIN users assignee ON assignee.id = issue.assignee_id
-                WHERE issue.id = :issue_id AND issue.workspace_id = :workspace_id
-                  AND issue.archived_at IS NULL
-                  AND status.category NOT IN ('COMPLETED', 'CANCELED')'''),
+        APPLY_ASSIGNMENT_SELECT_ISSUES,
         {'issue_id': payload.issueId, 'workspace_id': payload.workspaceId},
     )
     row = issue.mappings().first()
@@ -2709,8 +2505,7 @@ async def apply_assignment(payload: AssignmentApplyInput, user: Any = Depends(cu
             'Conflict',
         )
     member = await db.execute(
-        text("""SELECT 1 FROM workspace_members
-                WHERE workspace_id = :workspace_id AND user_id = :user_id AND status = 'ACTIVE'"""),
+        APPLY_ASSIGNMENT_SELECT_WORKSPACE_MEMBERS,
         {'workspace_id': payload.workspaceId, 'user_id': payload.assigneeId},
     )
     if member.scalar_one_or_none() is None:
@@ -2718,13 +2513,11 @@ async def apply_assignment(payload: AssignmentApplyInput, user: Any = Depends(cu
     if not row['assignee_id']:
         now = utcnow()
         await db.execute(
-            text('UPDATE issues SET assignee_id = :assignee_id, updated_at = :now WHERE id = :id'),
+            APPLY_ASSIGNMENT_UPDATE_ISSUES,
             {'assignee_id': payload.assigneeId, 'now': now, 'id': payload.issueId},
         )
         await db.execute(
-            text('''INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at)
-                    VALUES (:id, :workspace_id, :actor_id, 'agent.assignment.applied', 'issue', :entity_id,
-                            CAST(:metadata AS jsonb), :now)'''),
+            APPLY_ASSIGNMENT_INSERT_AUDIT_LOGS,
             {
                 'id': cuid(), 'workspace_id': payload.workspaceId, 'actor_id': user['id'],
                 'entity_id': payload.issueId,
