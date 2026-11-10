@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import utcnow
 from ...core.errors import ApiError
-from ...domains.agent import configured_provider
+from ..agent.api import configured_provider
 from ..ai.calls import call_provider
 from .feeds import plain_text
 

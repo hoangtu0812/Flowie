@@ -24,10 +24,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.errors import ApiError
-from ...domains.agent import (
-    _fence_untrusted,
-    configured_provider,
-)
+from ..agent.api import configured_provider, fence_untrusted
 from ..ai.calls import call_provider
 from ..identity.password_reset import limit_request
 from ..work_items.issue_search import (
@@ -282,14 +279,14 @@ async def assistant_status(db: AsyncSession, workspace_id: str) -> dict[str, Any
 
 
 def _attribute(value: str) -> str:
-    return _fence_untrusted(value).replace('"', '&quot;')
+    return fence_untrusted(value).replace('"', '&quot;')
 
 
 def _system_prompt(sources: list[dict[str, Any]], applications: list[dict[str, str]]) -> str:
     blocks = '\n'.join(
         f'<untrusted-source id="{source["id"]}" document="{_attribute(source["title"])}" '
         f'release="{source["release"]}" heading="{_attribute(source["heading"])}">\n'
-        f'{_fence_untrusted(source["excerpt"])}\n</untrusted-source>'
+        f'{fence_untrusted(source["excerpt"])}\n</untrusted-source>'
         for source in sources
     )
     return f'''You are Flowie's Service Desk assistant. You answer questions about the applications listed below using only the numbered sources.

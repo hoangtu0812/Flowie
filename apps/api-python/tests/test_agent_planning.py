@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from pydantic import ValidationError
 
 from app.core.errors import ApiError
-from app.domains.agent import (
+from app.modules.agent.api import (
     ANALYST_ANSWER_PROMPT,
     COMPOSE_COMMENT_PROMPT,
     COMPOSE_UPDATE_PROMPT,
