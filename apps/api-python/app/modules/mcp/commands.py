@@ -1,318 +1,120 @@
-from __future__ import annotations
+"""Write SQL statements of this package, kept in one place for schema review.
 
-from sqlalchemy import text
+VI: Các câu SQL ghi của package này, gom một chỗ để rà khi schema đổi.
+"""
 
-from ...core.errors import ApiError
-from ...core.identifiers import cuid
-from ..work_items import comments, documents, issues
-from ..work_items.contracts import (
-    CommentInput,
-    CreateCommentInput,
-    CreateDocumentInput,
-    CreateIssueInput,
-    UpdateDocumentInput,
-    UpdateIssueInput,
+from sqlalchemy import TextClause, text
+
+MUTATE_LOCK = text("SELECT pg_advisory_xact_lock(hashtextextended(:key,0))")
+
+
+MUTATE_LOCK_2 = text("SELECT pg_advisory_xact_lock(hashtextextended(:key,0))")
+
+
+MUTATE_LOCK_3 = text("SELECT set_config('flowie.mcp_write','true',true)")
+
+
+MUTATE_INSERT_MCP_REQUESTS = text("""INSERT INTO mcp_requests (connection_id,tool,key,request_hash,result)
+            VALUES (:connection,:tool,:key,:hash,CAST(:result AS jsonb))""")
+
+
+AUDIT_INSERT_AUDIT_LOGS = text("""INSERT INTO audit_logs (id,workspace_id,actor_id,action,entity_type,entity_id,metadata,created_at)
+            VALUES (:id,:workspace,:actor,:action,'mcp-tool',:entity,CAST(:metadata AS jsonb),:now)""")
+
+
+ADD_LINK_INSERT_DOCUMENT_LINKS = text("""INSERT INTO document_links (id,document_id,workspace_id,project_id,issue_id)
+            VALUES (:id,:document,:workspace,:project,:issue) ON CONFLICT DO NOTHING""")
+
+
+AUTHENTICATE_UPDATE_MCP_CONNECTIONS = text("UPDATE mcp_connections SET last_used_at=:now WHERE id=:id")
+
+
+CREATE_INSERT_MCP_CONNECTIONS = text("""
+        INSERT INTO mcp_connections (id,workspace_id,user_id,name,prefix,token_hash,scopes,team_ids,project_ids,expires_at,created_at)
+        VALUES (:id,:workspace,:user,:name,:prefix,:hash,:scopes,:teams,:projects,:expires,:now) RETURNING *
+    """)
+
+
+CREATE_INSERT_AUDIT_LOGS = text("""INSERT INTO audit_logs (id,workspace_id,actor_id,action,entity_type,entity_id,metadata,created_at)
+        VALUES (:id,:workspace,:user,'mcp.connection.created','mcp-connection',:connection,'{}'::jsonb,:now)""")
+
+
+UPDATE_INSERT_AUDIT_LOGS = text("""INSERT INTO audit_logs (id,workspace_id,actor_id,action,entity_type,entity_id,metadata,created_at)
+        VALUES (:id,:workspace,:user,'mcp.connection.updated','mcp-connection',:connection,CAST(:metadata AS jsonb),:now)""")
+
+
+REVOKE_UPDATE_MCP_CONNECTIONS = text("""UPDATE mcp_connections SET revoked_at=:now
+        WHERE id=:id AND workspace_id=:workspace AND (:manager OR user_id=:user) RETURNING id""")
+
+
+REVOKE_INSERT_AUDIT_LOGS = text("""INSERT INTO audit_logs (id,workspace_id,actor_id,action,entity_type,entity_id,metadata,created_at)
+        VALUES (:id,:workspace,:user,'mcp.connection.revoked','mcp-connection',:connection,'{}'::jsonb,:now)""")
+
+
+UPDATE_UPDATE_MCP_CONNECTIONS = text("""UPDATE mcp_connections SET name=:name,scopes=:scopes,team_ids=:teams,
+        project_ids=:projects WHERE id=:id RETURNING *""")
+
+
+UPSERT_FEATURE_DOC_INSERT_DOCUMENT_LINKS = text(
+    """INSERT INTO document_links (id,document_id,workspace_id,project_id,issue_id)
+            VALUES (:id,:document,:workspace,NULL,:issue) ON CONFLICT DO NOTHING"""
 )
-from .feature_docs import require_feature_project, upsert_feature_doc
-from .policy import AccessPolicy
-from .uploads import upload_link
 
 
-class CommandService:
-    def __init__(self, db, principal, settings=None):
-        self.db, self.principal, self.settings = db, principal, settings
-        self.policy = AccessPolicy(db, principal)
-        self.target: dict | None = None
-        self.parent_id: str | None = None
-        self.status_id: str | None = None
+SAVE_UPDATE_WORKSPACES = text("UPDATE workspaces SET mcp_instructions=:value WHERE id=:id")
 
-    @property
-    def subject(self) -> dict:
-        """The record prepare() resolved; execute() only runs after it.
 
-        VI: Bản ghi mà prepare() đã tìm ra; execute() chỉ chạy sau bước đó.
-        """
-        if self.target is None:
-            raise RuntimeError("prepare() must run before execute().")
-        return self.target
+CLEANUP_DELETE_MCP_REQUESTS = text("""DELETE FROM mcp_requests WHERE ctid IN (
+            SELECT r.ctid FROM mcp_requests r JOIN mcp_connections c ON c.id=r.connection_id
+            WHERE c.expires_at<:cutoff OR c.revoked_at<:cutoff LIMIT 1000)""")
 
-    async def prepare(self, name: str, payload) -> None:
-        if name == "create_attachment_upload":
-            self.target = await self.policy.issue(payload.issueId)
-        elif name in {"update_issue", "transition_issue", "add_comment", "start_issue", "finish_issue"}:
-            self.target = await self.policy.issue(payload.issueId, lock=True)
-            if name == "update_issue" and "projectId" in payload.model_fields_set:
-                await self.policy.destination(payload.projectId, self.target["team_id"])
-            # The parent must be inside this connection's scope; team, archive and cycle rules
-            # run in issues.update_issue so MCP and the web app share them.
-            # VI: Issue cha phải nằm trong scope của kết nối; quy tắc team, archive và chu trình
-            # VI: chạy trong issues.update_issue để MCP và web dùng chung.
-            if name == "update_issue" and payload.parentIssueId:
-                self.parent_id = (await self.policy.issue(payload.parentIssueId))["id"]
-            if name in {"transition_issue", "start_issue", "finish_issue"}:
-                self.status_id = payload.statusId or await self.status_by_name(payload.status)
-        elif name == "update_comment":
-            self.target = await self.policy.comment(payload.commentId, lock=True)
-            if self.target["author_id"] != self.principal.user["id"]:
-                raise ApiError(403, "Only the comment author can edit it.", "Forbidden")
-        elif name in {"update_document", "link_document", "restore_document"}:
-            self.target = await self.policy.document(payload.documentId, lock=True)
-            if name == "link_document":
-                await self.link_target(payload)
-        elif name == "upsert_feature_doc":
-            self.target = await require_feature_project(self.policy, payload.issueId)
-        elif name == "create_issue":
-            await self.policy.destination(payload.projectId, payload.teamId)
-            if payload.parentIssueId:
-                await self.policy.issue(payload.parentIssueId)
-            status = (
-                await self.db.execute(
-                    text("""SELECT category FROM issue_statuses WHERE id=:id
-                AND workspace_id=:workspace AND (team_id IS NULL OR team_id=:team)"""),
-                    {
-                        "id": payload.statusId,
-                        "workspace": self.principal.workspace_id,
-                        "team": payload.teamId,
-                    },
-                )
-            ).scalar_one_or_none()
-            if status in {"COMPLETED", "CANCELED"}:
-                self.principal.require("issues:transition")
-        elif name == "create_document":
-            team_id, project_id = payload.teamId, payload.projectId
-            if payload.issueId:
-                issue = await self.policy.issue(payload.issueId)
-                project_id = issue["project_id"]
-                team_id = team_id or issue["team_id"]
-                if team_id != issue["team_id"]:
-                    raise ApiError(
-                        400,
-                        "Document and issue must belong to the same team.",
-                        "Bad Request",
-                    )
-            if project_id:
-                project = await self.policy.project(project_id)
-                team_id = team_id or project["team_id"]
-            await self.policy.destination(project_id, team_id)
-            self.target = {"team_id": team_id}
 
-    async def status_by_name(self, name: str) -> str:
-        """Id of the issue team's status called `name`, ignoring case and outer spaces.
-        VI: Id trạng thái tên `name` của team chứa issue, không phân biệt hoa thường và khoảng trắng hai đầu.
-        """
-        rows = (
-            await self.db.execute(
-                text("""SELECT id,name FROM issue_statuses WHERE workspace_id=:workspace
-                AND (team_id IS NULL OR team_id=:team) ORDER BY position,name"""),
-                {"workspace": self.principal.workspace_id, "team": self.subject["team_id"]},
-            )
-        ).all()
-        wanted = name.strip().casefold()
-        matches = [row.id for row in rows if row.name.strip().casefold() == wanted]
-        if len(matches) != 1:
-            names = ", ".join(dict.fromkeys(row.name for row in rows))
-            raise ApiError(400, f"Unknown status \"{name}\". Use one of: {names}.", "Bad Request")
-        return matches[0]
+CLEANUP_DELETE_NOTIFICATION_OUTBOX = text("""DELETE FROM notification_outbox WHERE id IN (
+            SELECT id FROM notification_outbox WHERE delivered_at<:cutoff ORDER BY delivered_at LIMIT 1000)""")
 
-    async def link_target(self, payload) -> tuple[str | None, str | None]:
-        issue_id, project_id = None, payload.projectId
-        if payload.issueId:
-            issue = await self.policy.issue(payload.issueId)
-            issue_id = issue["id"]
-            target_team = issue["team_id"]
-        else:
-            project = await self.policy.project(project_id)
-            target_team = project["team_id"]
-        document_team = self.target["team_id"] if self.target else None
-        if document_team and document_team != target_team:
-            raise ApiError(
-                400, "A team document can only link to that team.", "Bad Request"
-            )
-        return issue_id, project_id
 
-    def check_version(self, payload) -> None:
-        if (
-            hasattr(payload, "expectedVersion")
-            and self.subject["version"] != payload.expectedVersion
-        ):
-            raise ApiError(
-                409, "The record changed. Read it again before updating.", "Conflict"
-            )
+CLEANUP_DELETE_AI_TOOL_WINDOWS = text(
+    "DELETE FROM ai_tool_windows WHERE ctid IN (SELECT ctid FROM ai_tool_windows WHERE window_start<:cutoff LIMIT 1000)"
+)
 
-    async def execute(self, name: str, payload) -> dict:
-        self.check_version(payload)
-        actor, workspace = self.principal.user, self.principal.workspace_id
-        values = payload.model_dump(
-            exclude_unset=True,
-            exclude={
-                "idempotencyKey",
-                "expectedVersion",
-                "issueId",
-                "documentId",
-                "commentId",
-            },
-        )
-        if name == "create_issue":
-            values["parentIssueId"] = (
-                (await self.policy.issue(payload.parentIssueId))["id"]
-                if payload.parentIssueId
-                else None
-            )
-            return (
-                await issues.create_issue(
-                    CreateIssueInput(workspaceId=workspace, **values), actor, self.db
-                )
-            )["data"]
-        if name in {"start_issue", "finish_issue"}:
-            fields = (
-                ("startDate", "targetDate", "dueDate", "estimatedEffort")
-                if name == "start_issue"
-                else ("actualEffort",)
-            )
-            changes = {key: getattr(payload, key) for key in fields if key in payload.model_fields_set}
-            result = (
-                await issues.update_issue(
-                    self.subject["id"],
-                    UpdateIssueInput(**changes, statusId=self.status_id),
-                    workspace,
-                    actor,
-                    self.db,
-                )
-            )["data"]
-            comment = (
-                await comments.create_comment(
-                    CreateCommentInput(
-                        workspaceId=workspace,
-                        issueId=self.subject["id"],
-                        content=payload.plan if name == "start_issue" else payload.result,
-                    ),
-                    actor,
-                    self.db,
-                )
-            )["data"]
-            return {**result, "commentId": comment["id"]}
-        if name in {"update_issue", "transition_issue"}:
-            if name == "transition_issue":
-                values = {"statusId": self.status_id}
-            elif not values:
-                raise ApiError(
-                    400, "At least one update field is required.", "Bad Request"
-                )
-            elif values.get("parentIssueId"):
-                values["parentIssueId"] = self.parent_id
-            result = (
-                await issues.update_issue(
-                    self.subject["id"],
-                    UpdateIssueInput(**values),
-                    workspace,
-                    actor,
-                    self.db,
-                )
-            )["data"]
-            if name == "transition_issue":
-                await comments.create_comment(
-                    CreateCommentInput(
-                        workspaceId=workspace,
-                        issueId=self.subject["id"],
-                        content=payload.reason,
-                    ),
-                    actor,
-                    self.db,
-                )
-            return result
-        if name == "add_comment":
-            return (
-                await comments.create_comment(
-                    CreateCommentInput(
-                        workspaceId=workspace,
-                        issueId=self.subject["id"],
-                        content=payload.content, parentCommentId=payload.parentCommentId, mentionIds=payload.mentionIds,
-                    ),
-                    actor,
-                    self.db,
-                )
-            )["data"]
-        if name == "update_comment":
-            return (
-                await comments.update_comment(
-                    payload.commentId,
-                    CommentInput(content=payload.content, expectedVersion=payload.expectedVersion),
-                    workspace,
-                    actor,
-                    self.db,
-                )
-            )["data"]
-        if name == "create_document":
-            values.pop("projectId", None)
-            values["teamId"] = self.subject["team_id"]
-            result = (
-                await documents.create_document(
-                    CreateDocumentInput(workspaceId=workspace, **values), actor, self.db
-                )
-            )["data"]
-            self.target = {"team_id": result["teamId"]}
-            if payload.projectId or payload.issueId:
-                await self.add_link(result["id"], payload)
-            return result
-        if name in {"update_document", "restore_document"}:
-            if values.get("edits"):
-                from .edits import apply_edits
 
-                values["content"] = apply_edits(self.subject["content"], payload.edits)
-            values.pop("edits", None)
-            if name == "restore_document":
-                revision = (
-                    (
-                        await self.db.execute(
-                            text(
-                                "SELECT title,content FROM document_revisions WHERE document_id=:id AND version=:version"
-                            ),
-                            {
-                                "id": payload.documentId,
-                                "version": payload.revisionVersion,
-                            },
-                        )
-                    )
-                    .mappings()
-                    .first()
-                )
-                if not revision:
-                    raise ApiError(404, "Revision not found.", "Not Found")
-                values = dict(revision)
-            if not values or any(value is None for value in values.values()):
-                raise ApiError(
-                    400,
-                    "Provide a non-null title, content, docType or status.",
-                    "Bad Request",
-                )
-            return (
-                await documents.update_document(
-                    payload.documentId,
-                    UpdateDocumentInput(**values),
-                    workspace,
-                    actor,
-                    self.db,
-                )
-            )["data"]
-        if name == "upsert_feature_doc":
-            return await upsert_feature_doc(self.db, self.principal, self.subject, payload)
-        if name == "create_attachment_upload":
-            return upload_link(self.settings, self.principal, self.subject, payload.filename)
-        if name == "link_document":
-            await self.add_link(payload.documentId, payload)
-            return {"documentId": payload.documentId, "linked": True}
-        raise ApiError(404, "Tool not found.", "Not Found")
+CLEANUP_UPDATE_BULK_OPERATIONS = text("UPDATE bulk_operations SET state='EXPIRED' WHERE id IN (SELECT id FROM bulk_operations WHERE state='PREVIEW' AND expires_at<:now LIMIT 1000)")
 
-    async def add_link(self, document_id: str, payload) -> None:
-        issue_id, project_id = await self.link_target(payload)
-        await self.db.execute(
-            text("""INSERT INTO document_links (id,document_id,workspace_id,project_id,issue_id)
-            VALUES (:id,:document,:workspace,:project,:issue) ON CONFLICT DO NOTHING"""),
-            {
-                "id": cuid(),
-                "document": document_id,
-                "workspace": self.principal.workspace_id,
-                "project": project_id,
-                "issue": issue_id,
-            },
-        )
+
+CLEANUP_DELETE_BULK_OPERATIONS = text("DELETE FROM bulk_operations WHERE id IN (SELECT id FROM bulk_operations WHERE state IN ('DONE','CANCELLED','FAILED','EXPIRED') AND created_at<:cutoff ORDER BY created_at LIMIT 1000)")
+
+
+CLEANUP_DELETE_ACCOUNT_SECURITY_EVENTS = text('DELETE FROM account_security_events WHERE id IN (SELECT id FROM account_security_events WHERE created_at<:cutoff ORDER BY created_at LIMIT 1000)')
+
+
+CLEANUP_DELETE_SESSIONS = text('DELETE FROM sessions WHERE id IN (SELECT id FROM sessions WHERE revoked_at<:cutoff OR expires_at<:cutoff ORDER BY created_at LIMIT 1000)')
+
+
+CLEANUP_DELETE_MFA_CHALLENGES = text('DELETE FROM mfa_challenges WHERE id IN (SELECT id FROM mfa_challenges WHERE expires_at<:cutoff ORDER BY expires_at LIMIT 1000)')
+
+
+CLEANUP_DELETE_ACCOUNT_MFA = text('DELETE FROM account_mfa WHERE user_id IN (SELECT user_id FROM account_mfa WHERE enabled_at IS NULL AND pending_until<:cutoff LIMIT 1000)')
+
+
+def cleanup_delete_sql(table, clock) -> TextClause:
+    return text(f'DELETE FROM {table} WHERE id IN (SELECT id FROM {table} WHERE {clock}<:cutoff ORDER BY {clock} LIMIT 1000)')
+
+
+UPDATE_LIMITS_INSERT_AI_WORKSPACE_LIMITS = text("""INSERT INTO ai_workspace_limits(workspace_id,total_per_minute,per_tool,updated_at) VALUES (:workspace,:total,CAST(:tool AS jsonb),:now)
+        ON CONFLICT(workspace_id) DO UPDATE SET total_per_minute=:total,per_tool=CAST(:tool AS jsonb),updated_at=:now""")
+
+
+CONSUME_QUOTA_INSERT_AI_TOOL_WINDOWS = text("""INSERT INTO ai_tool_windows(workspace_id,tool,window_start,used) VALUES (:workspace,:tool,:window,1)
+                ON CONFLICT(workspace_id,tool,window_start) DO UPDATE SET used=ai_tool_windows.used+1 WHERE ai_tool_windows.used<:maximum RETURNING used""")
+
+
+CALL_UPDATE_MCP_CONNECTIONS = text("""UPDATE mcp_connections SET
+                    rate_count=CASE WHEN rate_window=date_trunc('minute',CAST(:now AS timestamp)) THEN rate_count+1 ELSE 1 END,
+                    rate_window=date_trunc('minute',CAST(:now AS timestamp)) WHERE id=:id RETURNING rate_count""")
+
+
+UPLOAD_ATTACHMENT_LOCK = text("SELECT pg_advisory_xact_lock(hashtextextended(:key,0))")
+
+
+UPLOAD_ATTACHMENT_INSERT_MCP_REQUESTS = text("""INSERT INTO mcp_requests (connection_id,tool,key,request_hash,result)
+            VALUES (:connection,:tool,:key,:hash,CAST(:result AS jsonb))""")

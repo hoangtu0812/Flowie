@@ -1,18 +1,21 @@
 import json
 
-from sqlalchemy import text
-
 from ...core.clock import utcnow
 from ...core.errors import ApiError
+from .commands import (
+    CONSUME_QUOTA_INSERT_AI_TOOL_WINDOWS,
+    UPDATE_LIMITS_INSERT_AI_WORKSPACE_LIMITS,
+)
+from .queries import (
+    LIMITS_SELECT_AI_WORKSPACE_LIMITS,
+)
 
 
 async def limits(db, workspace):
     row = (
         (
             await db.execute(
-                text(
-                    "SELECT total_per_minute,per_tool FROM ai_workspace_limits WHERE workspace_id=:workspace"
-                ),
+                LIMITS_SELECT_AI_WORKSPACE_LIMITS,
                 {"workspace": workspace},
             )
         )
@@ -35,8 +38,7 @@ async def consume_quota(factory, workspace, tool):
         ]:
             used = (
                 await db.execute(
-                    text("""INSERT INTO ai_tool_windows(workspace_id,tool,window_start,used) VALUES (:workspace,:tool,:window,1)
-                ON CONFLICT(workspace_id,tool,window_start) DO UPDATE SET used=ai_tool_windows.used+1 WHERE ai_tool_windows.used<:maximum RETURNING used"""),
+                    CONSUME_QUOTA_INSERT_AI_TOOL_WINDOWS,
                     {
                         "workspace": workspace,
                         "tool": name,
@@ -56,8 +58,7 @@ async def consume_quota(factory, workspace, tool):
 
 async def update_limits(db, workspace, total, per_tool):
     await db.execute(
-        text("""INSERT INTO ai_workspace_limits(workspace_id,total_per_minute,per_tool,updated_at) VALUES (:workspace,:total,CAST(:tool AS jsonb),:now)
-        ON CONFLICT(workspace_id) DO UPDATE SET total_per_minute=:total,per_tool=CAST(:tool AS jsonb),updated_at=:now"""),
+        UPDATE_LIMITS_INSERT_AI_WORKSPACE_LIMITS,
         {
             "workspace": workspace,
             "total": total,

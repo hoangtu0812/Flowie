@@ -12,11 +12,11 @@ from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.core.identifiers import cuid
 from app.modules.identity.auth import create_workspace_bootstrap
-from app.modules.sla.commands import apply_current_policy
+from app.modules.sla.actions import apply_current_policy
 from app.modules.sla.contracts import IssueSlaCommand, PolicyValues, UpdatePolicy
 from app.modules.sla.cycles import transition
 from app.modules.sla.policies import create_policy, update_policy
-from app.modules.sla.queries import issue_sla, sla_report
+from app.modules.sla.reports import issue_sla, sla_report
 from app.modules.sla.synchronization import latest_cycle, reapply_policy, sync_issue
 from app.modules.work_items.contracts import CreateIssueInput, UpdateIssueInput
 from app.modules.work_items.issues import create_issue, update_issue

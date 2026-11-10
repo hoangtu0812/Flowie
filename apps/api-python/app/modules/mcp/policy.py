@@ -1,11 +1,17 @@
 from __future__ import annotations
 
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.errors import ApiError
 from ..access.project_scope import project_read_scope
 from .domain import Principal
+from .queries import (
+    comment_select_comments_sql,
+    document_select_documents_sql,
+    issue_select_issues_sql,
+    project_select_projects_sql,
+    team_select_teams_sql,
+)
 
 
 class AccessPolicy:
@@ -77,12 +83,7 @@ class AccessPolicy:
     async def team(self, team_id: str) -> None:
         row = (
             await self.db.execute(
-                text(f"""SELECT t.id FROM teams t WHERE t.id=:id
-            AND t.workspace_id=:workspace AND t.archived_at IS NULL
-            AND {self.team_clause("t.id")}
-            AND (:all_projects OR EXISTS (SELECT 1 FROM projects p WHERE p.workspace_id=:workspace
-                AND p.archived_at IS NULL AND (p.team_id=t.id OR p.team_id IS NULL)
-                AND {self.project_clause("p.id")}))"""),
+                team_select_teams_sql(self),
                 {**self.params, "id": team_id},
             )
         ).first()
@@ -93,8 +94,7 @@ class AccessPolicy:
         row = (
             (
                 await self.db.execute(
-                    text(f"""SELECT p.* FROM projects p
-            WHERE p.id=:id AND {self.project_read_clause()}"""),
+                    project_select_projects_sql(self),
                     {**self.params, "id": project_id},
                 )
             )
@@ -109,9 +109,7 @@ class AccessPolicy:
         row = (
             (
                 await self.db.execute(
-                    text(f"""SELECT i.* FROM issues i
-            WHERE (i.id=:id OR i.identifier=:id) AND {self.issue_clause()}
-            {"FOR UPDATE OF i" if lock else ""}"""),
+                    issue_select_issues_sql(self, lock),
                     {**self.params, "id": identifier},
                 )
             )
@@ -126,8 +124,7 @@ class AccessPolicy:
         row = (
             (
                 await self.db.execute(
-                    text(f"""SELECT d.* FROM documents d
-            WHERE d.id=:id AND {self.document_clause()} {"FOR UPDATE OF d" if lock else ""}"""),
+                    document_select_documents_sql(self, lock),
                     {**self.params, "id": document_id},
                 )
             )
@@ -142,9 +139,7 @@ class AccessPolicy:
         row = (
             (
                 await self.db.execute(
-                    text(f"""SELECT c.* FROM comments c JOIN issues i ON i.id=c.issue_id
-            WHERE c.id=:id AND c.deleted_at IS NULL AND {self.issue_clause()}
-            {"FOR UPDATE OF c" if lock else ""}"""),
+                    comment_select_comments_sql(self, lock),
                     {**self.params, "id": comment_id},
                 )
             )

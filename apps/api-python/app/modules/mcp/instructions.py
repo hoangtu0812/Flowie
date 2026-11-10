@@ -1,9 +1,13 @@
 from __future__ import annotations
 
-from sqlalchemy import text
-
 from ..access.membership import manager, workspace_role
 from ..audit.write import record_change
+from .commands import (
+    SAVE_UPDATE_WORKSPACES,
+)
+from .queries import (
+    READ_SELECT_WORKSPACES_2,
+)
 
 # Always sent first and never editable, so a workspace's custom workflow cannot drop the
 # prompt-injection guard that tells agents to treat Flowie content as data.
@@ -51,7 +55,7 @@ async def read(db, workspace_id: str, user: dict) -> dict:
     await workspace_role(db, workspace_id, user["id"])
     stored = (
         await db.execute(
-            text("SELECT mcp_instructions FROM workspaces WHERE id=:id"),
+            READ_SELECT_WORKSPACES_2,
             {"id": workspace_id},
         )
     ).scalar_one_or_none()
@@ -68,7 +72,7 @@ async def save(db, workspace_id: str, user: dict, workflow: str | None) -> dict:
     if stored == DEFAULT_WORKFLOW:
         stored = ""
     await db.execute(
-        text("UPDATE workspaces SET mcp_instructions=:value WHERE id=:id"),
+        SAVE_UPDATE_WORKSPACES,
         {"id": workspace_id, "value": stored or None},
     )
     await record_change(

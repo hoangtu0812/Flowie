@@ -8,18 +8,30 @@ from time import monotonic
 
 from fastapi.encoders import jsonable_encoder
 from pydantic import ValidationError
-from sqlalchemy import text
 
 from ...core.clock import utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import cuid
 from ..teams.insights_api import hcm_today
-from .commands import CommandService
+from .command_service import CommandService
+from .commands import (
+    AUDIT_INSERT_AUDIT_LOGS,
+    MUTATE_INSERT_MCP_REQUESTS,
+    MUTATE_LOCK,
+    MUTATE_LOCK_2,
+    MUTATE_LOCK_3,
+)
 from .compact import compact_comment, compact_issue
 from .connections import validate_current
 from .log_redaction import failure_details, redact_arguments
 from .planning import planning_warnings
-from .queries import QueryService
+from .queries import (
+    MUTATE_SELECT_MCP_REQUESTS,
+    MUTATE_SELECT_MCP_REQUESTS_2,
+    READ_ONLY_SELECT_WORKSPACE_MEMBERS,
+    READ_SELECT_WORKSPACES,
+)
+from .query_service import QueryService
 from .quotas import consume_quota
 from .registry import TOOLS
 
@@ -39,7 +51,7 @@ class ToolApplication:
         async with self.factory() as db:
             role = (
                 await db.execute(
-                    text("SELECT role FROM workspace_members WHERE workspace_id = :workspace AND user_id = :user AND status = 'ACTIVE'"),
+                    READ_ONLY_SELECT_WORKSPACE_MEMBERS,
                     {"workspace": principal.workspace_id, "user": principal.user["id"]},
                 )
             ).scalar_one_or_none()
@@ -152,7 +164,7 @@ class ToolApplication:
         if tool.handler == "workspaces":
             rows = (
                 await db.execute(
-                    text("SELECT id,name,slug FROM workspaces WHERE id=:id"),
+                    READ_SELECT_WORKSPACES,
                     {"id": principal.workspace_id},
                 )
             ).mappings()
@@ -163,14 +175,14 @@ class ToolApplication:
 
     async def mutate(self, db, principal, tool, payload, correlation, started=None):
         await db.execute(
-            text("SELECT pg_advisory_xact_lock(hashtextextended(:key,0))"),
+            MUTATE_LOCK,
             {"key": f"requests:{principal.connection_id}"},
         )
         service = CommandService(db, principal, self.settings)
         await service.prepare(tool.name, payload)
         key = f"{principal.connection_id}:{tool.name}:{payload.idempotencyKey}"
         await db.execute(
-            text("SELECT pg_advisory_xact_lock(hashtextextended(:key,0))"), {"key": key}
+            MUTATE_LOCK_2, {"key": key}
         )
         params = {
             "connection": principal.connection_id,
@@ -185,8 +197,7 @@ class ToolApplication:
         previous = (
             (
                 await db.execute(
-                    text("""SELECT request_hash,result FROM mcp_requests
-            WHERE connection_id=:connection AND tool=:tool AND key=:key"""),
+                    MUTATE_SELECT_MCP_REQUESTS_2,
                     params,
                 )
             )
@@ -212,7 +223,7 @@ class ToolApplication:
             return previous["result"]
         used = (
             await db.execute(
-                text("SELECT COUNT(*) FROM mcp_requests WHERE connection_id=:id"),
+                MUTATE_SELECT_MCP_REQUESTS,
                 {"id": principal.connection_id},
             )
         ).scalar_one()
@@ -222,7 +233,7 @@ class ToolApplication:
                 "This connection reached its mutation-key budget. Ask an administrator to review the budget.",
                 "Too Many Requests",
             )
-        await db.execute(text("SELECT set_config('flowie.mcp_write','true',true)"))
+        await db.execute(MUTATE_LOCK_3)
         data = jsonable_encoder(await service.execute(tool.name, payload))
         if tool.name in {"create_issue", "update_issue", "transition_issue", "start_issue", "finish_issue"}:
             data.pop("parentIssueId", None)
@@ -251,8 +262,7 @@ class ToolApplication:
             details={"resultBytes": result_bytes(result)},
         )
         await db.execute(
-            text("""INSERT INTO mcp_requests (connection_id,tool,key,request_hash,result)
-            VALUES (:connection,:tool,:key,:hash,CAST(:result AS jsonb))"""),
+            MUTATE_INSERT_MCP_REQUESTS,
             {**params, "hash": fingerprint, "result": json.dumps(result)},
         )
         return result
@@ -269,8 +279,7 @@ class ToolApplication:
         details=None,
     ):
         await db.execute(
-            text("""INSERT INTO audit_logs (id,workspace_id,actor_id,action,entity_type,entity_id,metadata,created_at)
-            VALUES (:id,:workspace,:actor,:action,'mcp-tool',:entity,CAST(:metadata AS jsonb),:now)"""),
+            AUDIT_INSERT_AUDIT_LOGS,
             {
                 "id": cuid(),
                 "workspace": principal.workspace_id,

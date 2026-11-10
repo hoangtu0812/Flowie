@@ -7,8 +7,8 @@ from ...db.session import get_session
 from ..identity.auth import current_user
 from ..identity.password_reset import limit_request
 from ..work_items.query_contract import IssueSelectionQuery
+from .actions import apply_current_policy, retry_job
 from .calendar import add_working_seconds
-from .commands import apply_current_policy, retry_job
 from .contracts import (
     CalendarPreview,
     CreatePolicy,
@@ -26,7 +26,7 @@ from .policies import (
     policy_history,
     update_policy,
 )
-from .queries import issue_sla, sla_report
+from .reports import issue_sla, sla_report
 
 router = UtcAPIRouter(prefix="/api/v1/slas", tags=["slas"])
 

@@ -16,7 +16,6 @@ from zoneinfo import ZoneInfo
 
 import httpx
 from fastapi import Depends, Query
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import utcnow
@@ -24,6 +23,23 @@ from ...core.errors import ApiError
 from ...core.utc_responses import UtcAPIRouter as APIRouter
 from ...db.session import get_session
 from ..identity.auth import current_user
+from .commands import (
+    SEND_DIGEST_FOR_WORKSPACE_UPDATE_DISCORD_WEBHOOKS,
+)
+from .queries import (
+    APP_LINKS_SELECT_WORKSPACES,
+    ISSUE_LABELS_SELECT_ISSUE_LABELS,
+    MANAGER_ACCESS_SELECT_WORKSPACE_MEMBERS_2,
+    MEMBER_ACCESS_SELECT_WORKSPACE_MEMBERS_2,
+    MEMBER_TOP_LABELS_SELECT_ISSUES,
+    OPEN_TEAM_ISSUES_SELECT_ISSUES,
+    RECENT_COMPLETIONS_SELECT_ISSUES,
+    REQUIRE_TEAM_SELECT_TEAMS_2,
+    SEND_DIGEST_FOR_WORKSPACE_SELECT_DISCORD_WEBHOOKS,
+    TEAM_MEMBERS_SELECT_TEAM_MEMBERS,
+    VELOCITIES_SELECT_ISSUES,
+    WORKSPACE_OPEN_ISSUES_SELECT_ISSUES,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +72,7 @@ async def _app_links(
     """
     base = (getenv("APP_URL") or getenv("NEXT_PUBLIC_APP_URL") or "").rstrip("/")
     result = await db.execute(
-        text("SELECT id FROM workspaces WHERE id = :workspace_id"),
+        APP_LINKS_SELECT_WORKSPACES,
         {"workspace_id": workspace_id},
     )
     return (base or None, result.scalar_one_or_none())
@@ -153,10 +169,7 @@ def digest_cutoff_utc(now: datetime | None = None) -> datetime:
 
 async def _member_access(db: AsyncSession, workspace_id: str, user_id: str) -> None:
     result = await db.execute(
-        text(
-            """SELECT 1 FROM workspace_members
-               WHERE workspace_id = :workspace_id AND user_id = :user_id AND status = 'ACTIVE' """
-        ),
+        MEMBER_ACCESS_SELECT_WORKSPACE_MEMBERS_2,
         {"workspace_id": workspace_id, "user_id": user_id},
     )
     if result.scalar_one_or_none() is None:
@@ -165,9 +178,7 @@ async def _member_access(db: AsyncSession, workspace_id: str, user_id: str) -> N
 
 async def _manager_access(db: AsyncSession, workspace_id: str, user_id: str) -> None:
     result = await db.execute(
-        text("""SELECT 1 FROM workspace_members
-               WHERE workspace_id = :workspace_id AND user_id = :user_id
-                 AND status = 'ACTIVE' AND role IN ('OWNER', 'ADMIN')"""),
+        MANAGER_ACCESS_SELECT_WORKSPACE_MEMBERS_2,
         {"workspace_id": workspace_id, "user_id": user_id},
     )
     if result.scalar_one_or_none() is None:
@@ -176,10 +187,7 @@ async def _manager_access(db: AsyncSession, workspace_id: str, user_id: str) -> 
 
 async def _require_team(db: AsyncSession, team_id: str, workspace_id: str) -> None:
     result = await db.execute(
-        text(
-            """SELECT 1 FROM teams
-               WHERE id = :team_id AND workspace_id = :workspace_id AND archived_at IS NULL"""
-        ),
+        REQUIRE_TEAM_SELECT_TEAMS_2,
         {"team_id": team_id, "workspace_id": workspace_id},
     )
     if result.scalar_one_or_none() is None:
@@ -188,9 +196,7 @@ async def _require_team(db: AsyncSession, team_id: str, workspace_id: str) -> No
 
 async def _team_members(db: AsyncSession, team_id: str) -> list[dict[str, Any]]:
     result = await db.execute(
-        text("""SELECT tm.user_id, tm.role, u.name, u.avatar_url
-               FROM team_members tm JOIN users u ON u.id = tm.user_id
-               WHERE tm.team_id = :team_id ORDER BY u.name ASC"""),
+        TEAM_MEMBERS_SELECT_TEAM_MEMBERS,
         {"team_id": team_id},
     )
     return [dict(row) for row in result.mappings().all()]
@@ -198,11 +204,7 @@ async def _team_members(db: AsyncSession, team_id: str) -> list[dict[str, Any]]:
 
 async def _open_team_issues(db: AsyncSession, team_id: str) -> list[dict[str, Any]]:
     result = await db.execute(
-        text("""SELECT i.id, i.identifier, i.title, i.priority, i.estimated_effort,
-                      i.assignee_id, i.due_date, i.created_at
-               FROM issues i JOIN issue_statuses st ON st.id = i.status_id
-               WHERE i.team_id = :team_id AND i.archived_at IS NULL
-                 AND st.category IN ('TRIAGE', 'BACKLOG', 'UNSTARTED', 'STARTED')"""),
+        OPEN_TEAM_ISSUES_SELECT_ISSUES,
         {"team_id": team_id},
     )
     return [dict(row) for row in result.mappings().all()]
@@ -212,11 +214,7 @@ async def _velocities(
     db: AsyncSession, team_id: str, since: datetime
 ) -> dict[str, float]:
     result = await db.execute(
-        text("""SELECT i.assignee_id, COALESCE(SUM(i.actual_effort), 0) AS done
-               FROM issues i JOIN issue_statuses st ON st.id = i.status_id
-               WHERE i.team_id = :team_id AND i.assignee_id IS NOT NULL
-                 AND st.category = 'COMPLETED' AND i.completed_at >= :since
-               GROUP BY i.assignee_id"""),
+        VELOCITIES_SELECT_ISSUES,
         {"team_id": team_id, "since": since},
     )
     return {
@@ -229,17 +227,7 @@ async def _member_top_labels(
     db: AsyncSession, team_id: str, since: datetime
 ) -> dict[str, list[dict[str, str]]]:
     result = await db.execute(
-        text(
-            """SELECT i.assignee_id, l.id AS label_id, l.name AS label_name, COUNT(*) AS completions
-               FROM issues i
-               JOIN issue_statuses st ON st.id = i.status_id
-               JOIN issue_labels il ON il.issue_id = i.id
-               JOIN labels l ON l.id = il.label_id
-               WHERE i.team_id = :team_id AND i.assignee_id IS NOT NULL
-                 AND st.category = 'COMPLETED' AND i.completed_at >= :since
-               GROUP BY i.assignee_id, l.id, l.name
-               ORDER BY completions DESC"""
-        ),
+        MEMBER_TOP_LABELS_SELECT_ISSUES,
         {"team_id": team_id, "since": since},
     )
     top: dict[str, list[dict[str, str]]] = {}
@@ -256,9 +244,7 @@ async def _issue_labels(
     if not issue_ids:
         return {}
     result = await db.execute(
-        text("""SELECT il.issue_id, l.id AS label_id, l.name AS label_name
-               FROM issue_labels il JOIN labels l ON l.id = il.label_id
-               WHERE il.issue_id = ANY(:issue_ids)"""),
+        ISSUE_LABELS_SELECT_ISSUE_LABELS,
         {"issue_ids": issue_ids},
     )
     grouped: dict[str, list[dict[str, str]]] = {}
@@ -414,16 +400,7 @@ async def _workspace_open_issues(
     db: AsyncSession, workspace_id: str
 ) -> list[dict[str, Any]]:
     result = await db.execute(
-        text(
-            """SELECT i.id, i.identifier, i.title, i.priority, i.estimated_effort, i.due_date,
-                      i.project_id, p.name AS project_name, i.assignee_id, u.name AS assignee_name
-               FROM issues i
-               JOIN issue_statuses st ON st.id = i.status_id
-               LEFT JOIN projects p ON p.id = i.project_id AND p.archived_at IS NULL
-               LEFT JOIN users u ON u.id = i.assignee_id
-               WHERE i.workspace_id = :workspace_id AND i.archived_at IS NULL
-                 AND st.category IN ('TRIAGE', 'BACKLOG', 'UNSTARTED', 'STARTED')"""
-        ),
+        WORKSPACE_OPEN_ISSUES_SELECT_ISSUES,
         {"workspace_id": workspace_id},
     )
     return [dict(row) for row in result.mappings().all()]
@@ -433,13 +410,7 @@ async def _recent_completions(
     db: AsyncSession, workspace_id: str, since: datetime
 ) -> dict[str, int]:
     result = await db.execute(
-        text(
-            """SELECT COALESCE(i.project_id, 'no-project') AS project_id, COUNT(*) AS done
-               FROM issues i JOIN issue_statuses st ON st.id = i.status_id
-               WHERE i.workspace_id = :workspace_id AND st.category = 'COMPLETED'
-                 AND i.completed_at >= :since
-               GROUP BY COALESCE(i.project_id, 'no-project')"""
-        ),
+        RECENT_COMPLETIONS_SELECT_ISSUES,
         {"workspace_id": workspace_id, "since": since},
     )
     return {row["project_id"]: row["done"] for row in result.mappings().all()}
@@ -579,10 +550,7 @@ async def send_digest_for_workspace(
     db: AsyncSession, workspace_id: str, today: str
 ) -> bool:
     webhook = await db.execute(
-        text(
-            """SELECT webhook_url FROM discord_webhooks
-               WHERE workspace_id = :workspace_id AND enabled = TRUE AND daily_digest_enabled = TRUE LIMIT 1"""
-        ),
+        SEND_DIGEST_FOR_WORKSPACE_SELECT_DISCORD_WEBHOOKS,
         {"workspace_id": workspace_id},
     )
     url = webhook.scalar_one_or_none()
@@ -606,9 +574,7 @@ async def send_digest_for_workspace(
         logger.warning("Daily digest unreachable for %s: %s", workspace_id, error)
         return False
     await db.execute(
-        text(
-            "UPDATE discord_webhooks SET daily_digest_sent_at = :now WHERE workspace_id = :workspace_id"
-        ),
+        SEND_DIGEST_FOR_WORKSPACE_UPDATE_DISCORD_WEBHOOKS,
         {"now": utcnow(), "workspace_id": workspace_id},
     )
     await db.commit()

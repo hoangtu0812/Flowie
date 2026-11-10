@@ -18,7 +18,6 @@ from typing import Any
 import httpx
 from fastapi import Depends, Query
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import utcnow
@@ -27,7 +26,25 @@ from ...core.identifiers import cuid
 from ...core.utc_responses import UtcAPIRouter as APIRouter
 from ...db.session import get_session
 from ..identity.auth import current_user
+from .commands import (
+    RUN_TEAM_DISPATCHER_INSERT_AUDIT_LOGS,
+    RUN_TEAM_DISPATCHER_INSERT_NOTIFICATIONS,
+    RUN_TEAM_DISPATCHER_INSERT_NOTIFICATIONS_2,
+    RUN_TEAM_DISPATCHER_INSERT_TEAM_DISPATCHER_SETTINGS,
+    RUN_TEAM_DISPATCHER_UPDATE_ISSUES,
+    SAVE_DISPATCHER_SETTINGS_INSERT_TEAM_DISPATCHER_SETTINGS,
+)
 from .insights_api import HCM, _app_links, assignment_suggestions, hcm_today, issue_link
+from .queries import (
+    ALREADY_NUDGED_SELECT_NOTIFICATIONS,
+    GET_SETTINGS_SELECT_TEAM_DISPATCHER_SETTINGS,
+    MANAGER_ACCESS_SELECT_WORKSPACE_MEMBERS,
+    MEMBER_ACCESS_SELECT_WORKSPACE_MEMBERS,
+    OVERDUE_ASSIGNED_SELECT_ISSUES,
+    POST_DISCORD_REPORT_SELECT_DISCORD_WEBHOOKS,
+    REQUIRE_TEAM_SELECT_TEAMS,
+    USED_BUDGET_SELECT_AUDIT_LOGS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -124,10 +141,7 @@ def dispatcher_report_lines(
 
 async def _member_access(db: AsyncSession, workspace_id: str, user_id: str) -> None:
     result = await db.execute(
-        text(
-            """SELECT 1 FROM workspace_members
-               WHERE workspace_id = :workspace_id AND user_id = :user_id AND status = 'ACTIVE'"""
-        ),
+        MEMBER_ACCESS_SELECT_WORKSPACE_MEMBERS,
         {"workspace_id": workspace_id, "user_id": user_id},
     )
     if result.scalar_one_or_none() is None:
@@ -136,9 +150,7 @@ async def _member_access(db: AsyncSession, workspace_id: str, user_id: str) -> N
 
 async def _manager_access(db: AsyncSession, workspace_id: str, user_id: str) -> None:
     result = await db.execute(
-        text("""SELECT 1 FROM workspace_members
-               WHERE workspace_id = :workspace_id AND user_id = :user_id
-                 AND status = 'ACTIVE' AND role IN ('OWNER', 'ADMIN')"""),
+        MANAGER_ACCESS_SELECT_WORKSPACE_MEMBERS,
         {"workspace_id": workspace_id, "user_id": user_id},
     )
     if result.scalar_one_or_none() is None:
@@ -149,10 +161,7 @@ async def _require_team(
     db: AsyncSession, team_id: str, workspace_id: str
 ) -> dict[str, Any]:
     result = await db.execute(
-        text(
-            """SELECT id, workspace_id, name FROM teams
-               WHERE id = :team_id AND workspace_id = :workspace_id AND archived_at IS NULL"""
-        ),
+        REQUIRE_TEAM_SELECT_TEAMS,
         {"team_id": team_id, "workspace_id": workspace_id},
     )
     row = result.mappings().first()
@@ -187,7 +196,7 @@ def _settings_view(row: Any | None, team_id: str) -> dict[str, Any]:
 
 async def get_settings(db: AsyncSession, team_id: str) -> dict[str, Any]:
     result = await db.execute(
-        text("SELECT * FROM team_dispatcher_settings WHERE team_id = :team_id"),
+        GET_SETTINGS_SELECT_TEAM_DISPATCHER_SETTINGS,
         {"team_id": team_id},
     )
     return _settings_view(result.mappings().first(), team_id)
@@ -195,9 +204,7 @@ async def get_settings(db: AsyncSession, team_id: str) -> dict[str, Any]:
 
 async def _used_budget(db: AsyncSession, team_id: str, cutoff: datetime) -> int:
     result = await db.execute(
-        text("""SELECT COUNT(*)::int AS used FROM audit_logs
-               WHERE action = :action AND created_at >= :cutoff
-                 AND metadata->>'teamId' = :team_id"""),
+        USED_BUDGET_SELECT_AUDIT_LOGS,
         {"action": ASSIGN_AUDIT_ACTION, "cutoff": cutoff, "team_id": team_id},
     )
     return result.mappings().one()["used"]
@@ -207,17 +214,7 @@ async def _overdue_assigned(
     db: AsyncSession, team_id: str, today: str
 ) -> list[dict[str, Any]]:
     result = await db.execute(
-        text(
-            """SELECT i.id, i.identifier, i.title, i.due_date, i.assignee_id, u.name AS assignee_name
-               FROM issues i
-               JOIN issue_statuses st ON st.id = i.status_id
-               LEFT JOIN users u ON u.id = i.assignee_id
-               WHERE i.team_id = :team_id AND i.archived_at IS NULL
-                 AND i.assignee_id IS NOT NULL
-                 AND i.due_date::date < :today
-                 AND st.category NOT IN ('COMPLETED', 'CANCELED')
-               ORDER BY i.due_date ASC LIMIT :limit"""
-        ),
+        OVERDUE_ASSIGNED_SELECT_ISSUES,
         # The column is DATE: bind a date object, not the ISO string used for
         # Python-side comparisons elsewhere, or asyncpg rejects the parameter.
         {"team_id": team_id, "today": as_db_date(today), "limit": MAX_NUDGES_PER_RUN},
@@ -231,10 +228,7 @@ async def _already_nudged(
     if not issue_ids:
         return set()
     result = await db.execute(
-        text(
-            """SELECT entity_id FROM notifications
-               WHERE type = :type AND created_at >= :cutoff AND entity_id = ANY(:issue_ids)"""
-        ),
+        ALREADY_NUDGED_SELECT_NOTIFICATIONS,
         {"type": NUDGE_NOTIFICATION_TYPE, "cutoff": cutoff, "issue_ids": issue_ids},
     )
     return {row["entity_id"] for row in result.mappings().all()}
@@ -244,8 +238,7 @@ async def _post_discord_report(
     db: AsyncSession, workspace_id: str, result: dict[str, Any]
 ) -> bool:
     webhook = await db.execute(
-        text("""SELECT webhook_url FROM discord_webhooks
-               WHERE workspace_id = :workspace_id AND enabled = TRUE LIMIT 1"""),
+        POST_DISCORD_REPORT_SELECT_DISCORD_WEBHOOKS,
         {"workspace_id": workspace_id},
     )
     url = webhook.scalar_one_or_none()
@@ -320,13 +313,7 @@ async def run_team_dispatcher(
                 result["wouldApply"].append(entry)
                 continue
             claimed = await db.execute(
-                text("""UPDATE issues SET assignee_id = :assignee_id, updated_at = :now
-                       WHERE id = :issue_id AND assignee_id IS NULL AND archived_at IS NULL
-                         AND EXISTS (
-                             SELECT 1 FROM issue_statuses st
-                             WHERE st.id = issues.status_id
-                               AND st.category NOT IN ('COMPLETED', 'CANCELED'))
-                       RETURNING id"""),
+                RUN_TEAM_DISPATCHER_UPDATE_ISSUES,
                 {
                     "assignee_id": item["suggestedUserId"],
                     "now": now,
@@ -336,10 +323,7 @@ async def run_team_dispatcher(
             if claimed.mappings().first() is None:
                 continue
             await db.execute(
-                text("""INSERT INTO audit_logs
-                       (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at)
-                       VALUES (:id, :workspace_id, NULL, :action, 'issue', :entity_id,
-                               CAST(:metadata AS jsonb), :now)"""),
+                RUN_TEAM_DISPATCHER_INSERT_AUDIT_LOGS,
                 {
                     "id": cuid(),
                     "workspace_id": workspace_id,
@@ -352,10 +336,7 @@ async def run_team_dispatcher(
                 },
             )
             await db.execute(
-                text("""INSERT INTO notifications
-                       (id, workspace_id, user_id, type, entity_type, entity_id, data, created_at)
-                       VALUES (:id, :workspace_id, :user_id, :type, 'issue', :entity_id,
-                               CAST(:data AS jsonb), :now)"""),
+                RUN_TEAM_DISPATCHER_INSERT_NOTIFICATIONS,
                 {
                     "id": cuid(),
                     "workspace_id": workspace_id,
@@ -394,10 +375,7 @@ async def run_team_dispatcher(
                 result["wouldNudge"].append(entry)
                 continue
             await db.execute(
-                text("""INSERT INTO notifications
-                       (id, workspace_id, user_id, type, entity_type, entity_id, data, created_at)
-                       VALUES (:id, :workspace_id, :user_id, :type, 'issue', :entity_id,
-                               CAST(:data AS jsonb), :now)"""),
+                RUN_TEAM_DISPATCHER_INSERT_NOTIFICATIONS_2,
                 {
                     "id": cuid(),
                     "workspace_id": workspace_id,
@@ -419,15 +397,7 @@ async def run_team_dispatcher(
     reported = await _post_discord_report(db, workspace_id, result)
     result["reported"] = reported
     await db.execute(
-        text(
-            """INSERT INTO team_dispatcher_settings
-               (team_id, enabled, dry_run, max_actions_per_day, assign_unassigned,
-                nudge_overdue, last_run_at, last_run_result, created_at, updated_at)
-               VALUES (:team_id, :enabled, :dry_run, :max_actions, :assign, :nudge,
-                       :now, CAST(:result AS jsonb), :now, :now)
-               ON CONFLICT (team_id) DO UPDATE SET
-                 last_run_at = :now, last_run_result = CAST(:result AS jsonb), updated_at = :now"""
-        ),
+        RUN_TEAM_DISPATCHER_INSERT_TEAM_DISPATCHER_SETTINGS,
         {
             "team_id": team_id,
             "enabled": settings["enabled"],
@@ -476,14 +446,7 @@ async def save_dispatcher_settings(
     await _require_team(db, team_id, workspaceId)
     now = utcnow()
     result = await db.execute(
-        text("""INSERT INTO team_dispatcher_settings
-               (team_id, enabled, dry_run, max_actions_per_day, assign_unassigned,
-                nudge_overdue, created_at, updated_at)
-               VALUES (:team_id, :enabled, :dry_run, :max_actions, :assign, :nudge, :now, :now)
-               ON CONFLICT (team_id) DO UPDATE SET
-                 enabled = :enabled, dry_run = :dry_run, max_actions_per_day = :max_actions,
-                 assign_unassigned = :assign, nudge_overdue = :nudge, updated_at = :now
-               RETURNING *"""),
+        SAVE_DISPATCHER_SETTINGS_INSERT_TEAM_DISPATCHER_SETTINGS,
         {
             "team_id": team_id,
             "enabled": payload.enabled,

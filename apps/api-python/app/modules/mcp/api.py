@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Literal
 
 from fastapi import Depends, Query, Request
-from sqlalchemy import text
 
 from ...core.clock import utcnow
 from ...core.pagination import CursorCodec
@@ -15,6 +14,15 @@ from . import connections, instructions
 from .contracts import ConnectionInput, ConnectionUpdateInput, InstructionsInput
 from .domain import ALL_SCOPES, Principal
 from .policy import AccessPolicy
+from .queries import (
+    RESOURCES_SELECT_LABELS,
+    connection_audit_select_audit_logs_sql,
+    connection_audit_summary_connections_sql,
+    connection_audit_summary_tools_sql,
+    connection_audit_summary_totals_sql,
+    resources_select_projects_sql,
+    resources_select_teams_sql,
+)
 
 router = APIRouter(prefix="/api/v1/mcp", tags=["mcp-connections"])
 
@@ -29,16 +37,13 @@ async def resources(
     policy = AccessPolicy(db, Principal("", workspaceId, user, frozenset(), (), ()))
     teams = (
         await db.execute(
-            text(f"""SELECT t.id,t.name FROM teams t WHERE t.workspace_id=:workspace
-        AND t.archived_at IS NULL AND {policy.team_clause("t.id")} ORDER BY t.name,t.id LIMIT 201"""),
+            resources_select_teams_sql(policy),
             policy.params,
         )
     ).mappings()
     projects = (
         await db.execute(
-            text(f"""SELECT p.id,p.name,p.team_id AS "teamId" FROM projects p
-        WHERE p.workspace_id=:workspace AND p.archived_at IS NULL AND {policy.team_clause("p.team_id", shared=True)}
-        ORDER BY p.name,p.id LIMIT 201"""),
+            resources_select_projects_sql(policy),
             policy.params,
         )
     ).mappings()
@@ -48,9 +53,7 @@ async def resources(
     )
     labels = (
         await db.execute(
-            text(
-                "SELECT id,name FROM labels WHERE workspace_id=:workspace ORDER BY name,id LIMIT 201"
-            ),
+            RESOURCES_SELECT_LABELS,
             policy.params,
         )
     ).mappings()
@@ -220,17 +223,7 @@ async def connection_audit(
         dict(row)
         for row in (
             await db.execute(
-                text(f"""SELECT a.id,a.action,a.entity_id AS "entityId",a.metadata,a.created_at AS "createdAt",
-        {AUDIT_CONNECTION} AS "connectionId",c.name AS "connectionName",u.name AS "actorName"
-        FROM audit_logs a LEFT JOIN mcp_connections c ON c.id={AUDIT_CONNECTION} AND c.workspace_id=a.workspace_id
-        LEFT JOIN users u ON u.id=a.actor_id
-        WHERE {AUDIT_SCOPE}
-        AND (CAST(:connection AS text) IS NULL OR {AUDIT_CONNECTION}=:connection)
-        AND (CAST(:tool AS text) IS NULL OR a.metadata->>'tool'=:tool)
-        AND (CAST(:outcome AS text) IS NULL
-            OR (:outcome='succeeded' AND a.action LIKE '%.succeeded')
-            OR (:outcome='failed' AND (a.action LIKE '%.failed' OR a.action LIKE '%.denied')))
-        {page} ORDER BY a.created_at DESC,a.id DESC LIMIT :limit"""),
+                connection_audit_select_audit_logs_sql(AUDIT_CONNECTION, AUDIT_SCOPE, page),
                 params,
             )
         ).mappings()
@@ -265,21 +258,14 @@ async def connection_audit_summary(
     scope = f"FROM audit_logs a WHERE {AUDIT_SCOPE} AND a.entity_type='mcp-tool'"
 
     async def rows(sql):
-        return [dict(row) for row in (await db.execute(text(sql), params)).mappings()]
+        return [dict(row) for row in (await db.execute(sql, params)).mappings()]
 
-    totals = (await rows(f"SELECT {counts},{p95} {scope}"))[0]
+    totals = (await rows(connection_audit_summary_totals_sql(counts, p95, scope)))[0]
     tools = await rows(
-        f"""SELECT a.metadata->>'tool' AS tool,{counts},{p95},
-        round(avg((a.metadata->>'resultBytes')::int))::int AS "avgResultBytes" {scope}
-        GROUP BY a.metadata->>'tool' ORDER BY count(*) DESC,1 LIMIT 100"""
+        connection_audit_summary_tools_sql(counts, p95, scope)
     )
     by_connection = await rows(
-        f"""SELECT s.*,c.name AS "connectionName",u.name AS "ownerName" FROM (
-        SELECT a.metadata->>'connectionId' AS "connectionId",max(a.actor_id) AS actor,{counts},
-        max(a.created_at) AS "lastCallAt" {scope} GROUP BY a.metadata->>'connectionId') s
-        LEFT JOIN mcp_connections c ON c.id=s."connectionId" AND c.workspace_id=:workspace
-        LEFT JOIN users u ON u.id=COALESCE(c.user_id,s.actor)
-        ORDER BY s.calls DESC,s."connectionId" LIMIT 100"""
+        connection_audit_summary_connections_sql(counts, scope)
     )
     for row in by_connection:
         row.pop("actor", None)
