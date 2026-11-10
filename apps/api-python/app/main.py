@@ -40,7 +40,6 @@ from .domains.team_insights import digest_router as digest_router
 from .domains.team_insights import router as team_insights_router
 from .domains.teams import router as teams_router
 from .domains.users import router as users_router
-from .domains.workspaces import router as workspaces_router
 from .jobs.digest import digest_loop
 from .jobs.dispatcher import dispatcher_loop
 from .jobs.reminders import reminder_loop
@@ -65,6 +64,7 @@ from .modules.work_items.activity_api import public_router as activities_router
 from .modules.work_items.activity_api import router as native_activities_router
 from .modules.work_items.approvals_api import router as approvals_router
 from .modules.work_items.manual_order import router as manual_order_router
+from .modules.workspaces.api import router as workspaces_router
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:

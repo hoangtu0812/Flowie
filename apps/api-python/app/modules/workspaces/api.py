@@ -11,19 +11,19 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.errors import ApiError
-from ..core.slugs import RESERVED_WORKSPACE_SLUGS, url_slug
-from ..core.utc_responses import UtcAPIRouter as APIRouter
-from ..db.session import get_session
-from ..modules.access.read_only import ADMIN_READ_ROLES
-from ..services.auth_policy import microsoft_sign_in_enabled
-from .auth import (
-    _cuid,
-    _normalized_email,
-    _utcnow,
+from ...core.clock import utcnow
+from ...core.errors import ApiError
+from ...core.identifiers import cuid
+from ...core.slugs import RESERVED_WORKSPACE_SLUGS, url_slug
+from ...core.utc_responses import UtcAPIRouter as APIRouter
+from ...db.session import get_session
+from ...domains.auth import (
     create_workspace_bootstrap,
     current_user,
+    normalized_email,
 )
+from ...services.auth_policy import microsoft_sign_in_enabled
+from ..access.read_only import ADMIN_READ_ROLES
 
 router = APIRouter(prefix='/api/v1/workspaces', tags=['workspaces'])
 
@@ -195,7 +195,7 @@ def _user(row: Any) -> dict[str, Any]:
         'lastSeenAt': row['user_last_seen_at'],
         'isOnline': bool(
             row['user_last_seen_at']
-            and row['user_last_seen_at'] >= _utcnow() - timedelta(minutes=2)
+            and row['user_last_seen_at'] >= utcnow() - timedelta(minutes=2)
         ),
     }
 
@@ -352,7 +352,7 @@ async def _write_display_preferences(
     audit_action: str,
 ) -> dict[str, Any]:
     await _authorize_manager(db, workspace_id, user_id)
-    now = _utcnow()
+    now = utcnow()
     result = await db.execute(
         text(
             f'''
@@ -379,7 +379,7 @@ async def _write_display_preferences(
             '''
         ),
         {
-            'id': _cuid(),
+            'id': cuid(),
             'workspace_id': workspace_id,
             'actor_id': user_id,
             'action': audit_action,
@@ -516,7 +516,7 @@ async def create_workspace(
             user_id=user['id'],
             organization_name=name,
             workspace_name=name,
-            now=_utcnow(),
+            now=utcnow(),
         )
         await db.commit()
     except IntegrityError as error:
@@ -554,7 +554,7 @@ async def delete_workspace(
         text('''UPDATE user_ui_preferences
             SET preferences = preferences - 'defaultWorkspaceId', version = version + 1, updated_at = :now
             WHERE preferences ->> 'defaultWorkspaceId' = :workspace'''),
-        {'workspace': workspace_id, 'now': _utcnow()},
+        {'workspace': workspace_id, 'now': utcnow()},
     )
     await db.execute(text('DELETE FROM workspaces WHERE id = :workspace'), {'workspace': workspace_id})
     await db.commit()
@@ -602,7 +602,7 @@ async def update_workspace(
         try:
             await db.execute(
                 text(f'UPDATE workspaces SET {sets}, updated_at = :now WHERE id = :workspace_id'),
-                {**changes, 'workspace_id': workspace_id, 'now': _utcnow()},
+                {**changes, 'workspace_id': workspace_id, 'now': utcnow()},
             )
         except IntegrityError as error:
             await db.rollback()
@@ -624,13 +624,13 @@ async def update_workspace(
                 '''
             ),
             {
-                'id': _cuid(),
+                'id': cuid(),
                 'workspace_id': workspace_id,
                 'actor_id': user['id'],
                 'action': f'workspace.{column}.updated',
                 'entity_id': workspace_id,
                 'metadata': json.dumps({column: value, 'previous': current[column]}),
-                'now': _utcnow(),
+                'now': utcnow(),
             },
         )
     await db.commit()
@@ -805,7 +805,7 @@ async def invite(
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
     await _authorize_manager(db, workspace_id, user['id'])
-    email = _normalized_email(payload.email)
+    email = normalized_email(payload.email)
     role = _role(payload.role, invite=True)
     result = await db.execute(text("SELECT id FROM users WHERE lower(email) = :email AND status = 'ACTIVE' LIMIT 2"), {'email': email})
     matches = result.scalars().all()
@@ -819,11 +819,11 @@ async def invite(
     existing = await _member_row(db, workspace_id, invited_id)
     if existing and existing['member_status'] == 'ACTIVE':
         raise ApiError(409, 'This person is already a workspace member.', 'Conflict')
-    now = _utcnow()
+    now = utcnow()
     if existing:
         await db.execute(text("UPDATE workspace_members SET status = 'INVITED', role = :role, invited_by = :invited_by, joined_at = NULL, updated_at = :now WHERE id = :id"), {'id': existing['member_id'], 'role': role, 'invited_by': user['id'], 'now': now})
     else:
-        await db.execute(text("INSERT INTO workspace_members (id, workspace_id, user_id, status, role, invited_by, created_at, updated_at) VALUES (:id, :workspace_id, :user_id, 'INVITED', :role, :invited_by, :now, :now)"), {'id': _cuid(), 'workspace_id': workspace_id, 'user_id': invited_id, 'role': role, 'invited_by': user['id'], 'now': now})
+        await db.execute(text("INSERT INTO workspace_members (id, workspace_id, user_id, status, role, invited_by, created_at, updated_at) VALUES (:id, :workspace_id, :user_id, 'INVITED', :role, :invited_by, :now, :now)"), {'id': cuid(), 'workspace_id': workspace_id, 'user_id': invited_id, 'role': role, 'invited_by': user['id'], 'now': now})
     await db.commit()
     invited = await _member_row(db, workspace_id, invited_id)
     return {'data': _member(invited)}
@@ -839,7 +839,7 @@ async def accept_invitation(
     workspace_id = result.scalar_one_or_none()
     if not workspace_id:
         raise ApiError(404, 'Invitation not found.', 'Not Found')
-    await db.execute(text("UPDATE workspace_members SET status = 'ACTIVE', joined_at = :now, updated_at = :now WHERE id = :id"), {'id': member_id, 'now': _utcnow()})
+    await db.execute(text("UPDATE workspace_members SET status = 'ACTIVE', joined_at = :now, updated_at = :now WHERE id = :id"), {'id': member_id, 'now': utcnow()})
     await db.commit()
     member = await _member_row(db, workspace_id, user['id'])
     record = _member(member, include_user=False)
@@ -916,7 +916,7 @@ async def update_auto_join(
     settings = request.app.state.settings
     if payload.enabled and not microsoft_sign_in_enabled(settings):
         raise ApiError(409, 'Microsoft sign-in is not configured.', 'Conflict')
-    now = _utcnow()
+    now = utcnow()
     await db.execute(
         text('UPDATE workspaces SET auto_join_tenant_id = :tenant_id, updated_at = :now WHERE id = :workspace_id'),
         {'tenant_id': settings.azure_ad_tenant_id if payload.enabled else None, 'now': now, 'workspace_id': workspace_id},
@@ -926,7 +926,7 @@ async def update_auto_join(
             '''INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at)
                VALUES (:id, :workspace_id, :actor_id, 'workspace.auto_join.changed', 'workspace', :workspace_id, CAST(:metadata AS jsonb), :now)'''
         ),
-        {'id': _cuid(), 'workspace_id': workspace_id, 'actor_id': user['id'], 'metadata': json.dumps({'enabled': payload.enabled}), 'now': now},
+        {'id': cuid(), 'workspace_id': workspace_id, 'actor_id': user['id'], 'metadata': json.dumps({'enabled': payload.enabled}), 'now': now},
     )
     await db.commit()
     return {'data': {'enabled': payload.enabled}}
@@ -941,8 +941,8 @@ async def leave(
     membership = await _authorize_member(db, workspace_id, user['id'])
     if membership['member_role'] == 'OWNER':
         raise ApiError(403, 'Transfer workspace ownership before leaving.', 'Forbidden')
-    now = _utcnow()
-    await db.execute(text("INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at) VALUES (:id, :workspace_id, :actor_id, 'workspace.member.left', 'workspace-member', :entity_id, CAST('{}' AS jsonb), :now)"), {'id': _cuid(), 'workspace_id': workspace_id, 'actor_id': user['id'], 'entity_id': membership['member_id'], 'now': now})
+    now = utcnow()
+    await db.execute(text("INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at) VALUES (:id, :workspace_id, :actor_id, 'workspace.member.left', 'workspace-member', :entity_id, CAST('{}' AS jsonb), :now)"), {'id': cuid(), 'workspace_id': workspace_id, 'actor_id': user['id'], 'entity_id': membership['member_id'], 'now': now})
     await db.execute(text('DELETE FROM team_members WHERE user_id = :user_id AND team_id IN (SELECT id FROM teams WHERE workspace_id = :workspace_id)'), {'user_id': user['id'], 'workspace_id': workspace_id})
     await _block_auto_join(db, workspace_id, user['id'])
     await db.execute(text('DELETE FROM workspace_members WHERE id = :id'), {'id': membership['member_id']})
@@ -966,7 +966,7 @@ async def update_member(
     role = _role(payload.role, invite=False)
     if member['user_id'] == user['id'] or member['role'] == 'OWNER' or role == 'OWNER':
         raise ApiError(403, 'Workspace ownership cannot be changed here.', 'Forbidden')
-    await db.execute(text('UPDATE workspace_members SET role = :role, updated_at = :now WHERE id = :id'), {'id': member_id, 'role': role, 'now': _utcnow()})
+    await db.execute(text('UPDATE workspace_members SET role = :role, updated_at = :now WHERE id = :id'), {'id': member_id, 'role': role, 'now': utcnow()})
     await db.commit()
     updated = await _member_row(db, workspace_id, member['user_id'])
     return {'data': _member(updated)}

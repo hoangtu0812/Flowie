@@ -12,8 +12,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.core.config import Settings, _async_database_url
 from app.db.session import get_session
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
-from app.domains.workspaces import UpdateWorkspaceInput
 from app.main import create_app
+from app.modules.workspaces.api import UpdateWorkspaceInput
 
 
 def test_workspace_name_contract_preserves_partial_updates_and_unicode_limit():
