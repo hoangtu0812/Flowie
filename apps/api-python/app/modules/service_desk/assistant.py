@@ -20,7 +20,6 @@ from collections import Counter
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.errors import ApiError
@@ -30,6 +29,11 @@ from ..identity.password_reset import limit_request
 from ..work_items.issue_search import (
     NORMALIZED,
     VIETNAMESE,
+)
+from .queries import (
+    ASSISTANT_STATUS_SELECT_WORKSPACE_AGENT_PROVIDERS,
+    knowledge_applications_select_sql,
+    knowledge_sources_select_teams_sql,
 )
 
 # Common Vietnamese and English question words. They match almost every document, so keeping
@@ -180,7 +184,7 @@ async def knowledge_applications(db: AsyncSession, workspace_id: str) -> list[di
     VI: là thành viên workspace còn ACTIVE.
     """
     rows = await db.execute(
-        text(f'SELECT DISTINCT s.project_id, s.project_name FROM ({SCOPE}) s ORDER BY s.project_name, s.project_id'),
+        knowledge_applications_select_sql(SCOPE),
         {'workspace': workspace_id},
     )
     return [{'projectId': row['project_id'], 'name': row['project_name']} for row in rows.mappings()]
@@ -210,22 +214,7 @@ async def knowledge_sources(db: AsyncSession, workspace_id: str, user_id: str, q
     # VI: liệu GUIDE/FDS/BRD đã duyệt; thêm hàm bỏ dấu IMMUTABLE và GIN index trên document_releases khi
     # VI: truy vấn này chậm.
     rows = await db.execute(
-        text(f"""
-            SELECT m.document_id, m.release, m.title, m.content, m.project_id, m.project_name,
-                   ts_rank_cd(m.vector, m.query) AS rank,
-                   (m.team_id IS NULL OR EXISTS (
-                       SELECT 1 FROM teams dt JOIN team_members tm ON tm.team_id = dt.id
-                       WHERE dt.id = m.team_id AND dt.archived_at IS NULL AND tm.user_id = :user
-                   )) AS can_open
-            FROM (
-                SELECT s.*, to_tsvector('simple', translate(lower(s.title || ' ' || s.content), :accents, :normalized)) AS vector,
-                       to_tsquery('simple', :query) AS query
-                FROM ({SCOPE}) s
-            ) m
-            WHERE m.vector @@ m.query
-            ORDER BY rank DESC, m.document_id
-            LIMIT :limit
-        """),
+        knowledge_sources_select_teams_sql(SCOPE),
         {
             'workspace': workspace_id,
             'user': user_id,
@@ -270,7 +259,7 @@ async def assistant_status(db: AsyncSession, workspace_id: str) -> dict[str, Any
     """
     configured = (
         await db.execute(
-            text('SELECT EXISTS (SELECT 1 FROM workspace_agent_providers WHERE workspace_id = :workspace AND enabled)'),
+            ASSISTANT_STATUS_SELECT_WORKSPACE_AGENT_PROVIDERS,
             {'workspace': workspace_id},
         )
     ).scalar_one()

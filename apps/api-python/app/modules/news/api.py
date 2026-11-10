@@ -4,7 +4,6 @@ from typing import Any
 
 from fastapi import Depends, Query, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import utcnow
@@ -16,7 +15,18 @@ from ...services.microsoft_teams import valid_teams_webhook
 from ..identity.auth import current_user
 from ..identity.password_reset import limit_request
 from ..integrations.api import send_teams_test
+from .commands import (
+    CREATE_CATEGORY_INSERT_NEWS_CATEGORIES,
+    CREATE_SOURCE_INSERT_NEWS_SOURCES,
+    DELETE_CATEGORY_DELETE_NEWS_CATEGORIES,
+    DELETE_SOURCE_DELETE_NEWS_SOURCES,
+    UPDATE_CATEGORY_UPDATE_NEWS_CATEGORIES,
+    UPDATE_SOURCE_UPDATE_NEWS_SOURCES,
+)
 from .feeds import feed_url
+from .queries import (
+    TEST_CATEGORY_WEBHOOK_SELECT_NEWS_CATEGORIES,
+)
 from .service import news_page, refresh_workspace, require_manager
 
 router = UtcAPIRouter(prefix='/api/v1/news', tags=['news'])
@@ -84,11 +94,7 @@ async def create_category(
     await require_manager(db, workspaceId, user['id'])
     row = (
         await db.execute(
-            text(
-                '''INSERT INTO news_categories (id, workspace_id, name, webhook_url, created_at, updated_at)
-                   VALUES (:id, :workspace_id, :name, :webhook_url, :now, :now)
-                   ON CONFLICT (workspace_id, name) DO NOTHING RETURNING id'''
-            ),
+            CREATE_CATEGORY_INSERT_NEWS_CATEGORIES,
             {
                 'id': cuid(), 'workspace_id': workspaceId, 'name': _name(payload.name),
                 'webhook_url': _webhook(payload.webhookUrl), 'now': utcnow(),
@@ -112,10 +118,7 @@ async def update_category(
     await require_manager(db, workspaceId, user['id'])
     row = (
         await db.execute(
-            text(
-                '''UPDATE news_categories SET webhook_url = :webhook_url, updated_at = :now
-                   WHERE id = :id AND workspace_id = :workspace_id RETURNING id'''
-            ),
+            UPDATE_CATEGORY_UPDATE_NEWS_CATEGORIES,
             {'webhook_url': _webhook(payload.webhookUrl), 'now': utcnow(), 'id': category_id, 'workspace_id': workspaceId},
         )
     ).first()
@@ -134,7 +137,7 @@ async def delete_category(
     await require_manager(db, workspaceId, user['id'])
     row = (
         await db.execute(
-            text('DELETE FROM news_categories WHERE id = :id AND workspace_id = :workspace_id RETURNING id'),
+            DELETE_CATEGORY_DELETE_NEWS_CATEGORIES,
             {'id': category_id, 'workspace_id': workspaceId},
         )
     ).first()
@@ -157,7 +160,7 @@ async def test_category_webhook(
     await require_manager(db, workspaceId, user['id'])
     row = (
         await db.execute(
-            text('SELECT webhook_url FROM news_categories WHERE id = :id AND workspace_id = :workspace_id'),
+            TEST_CATEGORY_WEBHOOK_SELECT_NEWS_CATEGORIES,
             {'id': category_id, 'workspace_id': workspaceId},
         )
     ).first()
@@ -180,11 +183,7 @@ async def create_source(
     await require_manager(db, workspaceId, user['id'])
     row = (
         await db.execute(
-            text(
-                '''INSERT INTO news_sources (id, workspace_id, category_id, name, feed_url, enabled, created_at)
-                   SELECT :id, workspace_id, id, :name, :feed_url, TRUE, :now FROM news_categories
-                   WHERE id = :category_id AND workspace_id = :workspace_id RETURNING id'''
-            ),
+            CREATE_SOURCE_INSERT_NEWS_SOURCES,
             {
                 'id': cuid(), 'name': _name(payload.name), 'feed_url': feed_url(payload.feedUrl),
                 'now': utcnow(), 'category_id': payload.categoryId, 'workspace_id': workspaceId,
@@ -207,7 +206,7 @@ async def update_source(
     await require_manager(db, workspaceId, user['id'])
     row = (
         await db.execute(
-            text('UPDATE news_sources SET enabled = :enabled WHERE id = :id AND workspace_id = :workspace_id RETURNING id'),
+            UPDATE_SOURCE_UPDATE_NEWS_SOURCES,
             {'enabled': payload.enabled, 'id': source_id, 'workspace_id': workspaceId},
         )
     ).first()
@@ -226,7 +225,7 @@ async def delete_source(
     await require_manager(db, workspaceId, user['id'])
     row = (
         await db.execute(
-            text('DELETE FROM news_sources WHERE id = :id AND workspace_id = :workspace_id RETURNING id'),
+            DELETE_SOURCE_DELETE_NEWS_SOURCES,
             {'id': source_id, 'workspace_id': workspaceId},
         )
     ).first()

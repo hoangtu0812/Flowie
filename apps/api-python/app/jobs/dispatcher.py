@@ -4,7 +4,6 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ..modules.operations.heartbeats import progress
@@ -13,6 +12,9 @@ from ..modules.teams.dispatcher_api import (
     hcm_today,
     run_team_dispatcher,
     seconds_until_next_dispatch,
+)
+from .queries import (
+    RUN_DUE_DISPATCHERS_SELECT_TEAM_DISPATCHER_SETTINGS,
 )
 
 logger = logging.getLogger(__name__)
@@ -24,9 +26,7 @@ async def run_due_dispatchers(
     """Run the dispatcher once for every opted-in team. One team's failure never blocks the rest."""
     async with factory() as db:
         teams = await db.execute(
-            text("""SELECT s.team_id, t.workspace_id FROM team_dispatcher_settings s
-                   JOIN teams t ON t.id = s.team_id
-                   WHERE s.enabled = TRUE AND t.archived_at IS NULL""")
+            RUN_DUE_DISPATCHERS_SELECT_TEAM_DISPATCHER_SETTINGS
         )
         targets = [dict(row) for row in teams.mappings().all()]
     today = hcm_today()

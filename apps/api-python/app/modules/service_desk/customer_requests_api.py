@@ -5,7 +5,6 @@ from typing import Any, Literal
 
 from fastapi import Depends, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import utcnow
@@ -15,6 +14,19 @@ from ...core.utc_responses import UtcAPIRouter as APIRouter
 from ...db.session import get_session
 from ..access.projects import workspace_access
 from ..identity.auth import current_user
+from .commands import (
+    ARCHIVE_CUSTOMER_REQUEST_UPDATE_CUSTOMER_REQUESTS,
+    AUDIT_INSERT_AUDIT_LOGS_2,
+    CREATE_CUSTOMER_REQUEST_INSERT_CUSTOMER_REQUESTS,
+    update_customer_request_update_customer_requests_sql,
+)
+from .queries import (
+    LIST_CUSTOMER_REQUESTS_SELECT_CUSTOMER_REQUESTS,
+    REFERENCES_SELECT_ISSUES,
+    REFERENCES_SELECT_PROJECTS_2,
+    REQUEST_SELECT_CUSTOMER_REQUESTS,
+    ROLE_SELECT_WORKSPACE_MEMBERS_2,
+)
 
 router = APIRouter(prefix='/api/v1/customer-requests', tags=['customer-requests'])
 RequestSource = Literal['manual', 'interview', 'support', 'sales', 'other']
@@ -47,7 +59,7 @@ class UpdateCustomerRequestInput(BaseModel):
 
 async def _role(db: AsyncSession, workspace_id: str, user_id: str) -> str:
     result = await db.execute(
-        text('SELECT role FROM workspace_members WHERE workspace_id = :workspace_id AND user_id = :user_id AND status = \'ACTIVE\''),
+        ROLE_SELECT_WORKSPACE_MEMBERS_2,
         {'workspace_id': workspace_id, 'user_id': user_id},
     )
     role = result.scalar_one_or_none()
@@ -58,29 +70,21 @@ async def _role(db: AsyncSession, workspace_id: str, user_id: str) -> str:
 
 async def _references(db: AsyncSession, workspace_id: str, project_id: str | None, issue_id: str | None) -> None:
     if project_id:
-        result = await db.execute(text('SELECT 1 FROM projects WHERE id = :id AND workspace_id = :workspace_id AND archived_at IS NULL'), {'id': project_id, 'workspace_id': workspace_id})
+        result = await db.execute(REFERENCES_SELECT_PROJECTS_2, {'id': project_id, 'workspace_id': workspace_id})
         if result.scalar_one_or_none() is None:
             raise ApiError(404, 'Project not found in this workspace.', 'Not Found')
     if issue_id:
-        result = await db.execute(text('SELECT 1 FROM issues WHERE id = :id AND workspace_id = :workspace_id AND archived_at IS NULL'), {'id': issue_id, 'workspace_id': workspace_id})
+        result = await db.execute(REFERENCES_SELECT_ISSUES, {'id': issue_id, 'workspace_id': workspace_id})
         if result.scalar_one_or_none() is None:
             raise ApiError(404, 'Issue not found in this workspace.', 'Not Found')
 
 
 async def _audit(db: AsyncSession, workspace_id: str, actor_id: str, action: str, request_id: str, metadata: dict[str, Any]) -> None:
-    await db.execute(text('''INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at)
-                             VALUES (:id, :workspace_id, :actor_id, :action, 'customer-request', :entity_id, CAST(:metadata AS jsonb), :now)'''), {'id': cuid(), 'workspace_id': workspace_id, 'actor_id': actor_id, 'action': action, 'entity_id': request_id, 'metadata': json.dumps(metadata), 'now': utcnow()})
+    await db.execute(AUDIT_INSERT_AUDIT_LOGS_2, {'id': cuid(), 'workspace_id': workspace_id, 'actor_id': actor_id, 'action': action, 'entity_id': request_id, 'metadata': json.dumps(metadata), 'now': utcnow()})
 
 
 async def _request(db: AsyncSession, request_id: str, workspace_id: str) -> dict[str, Any]:
-    result = await db.execute(text('''SELECT request.*, creator.id AS creator_id, creator.name AS creator_name, creator.avatar_url AS creator_avatar_url,
-                                      project.id AS project_id_value, project.name AS project_name, project.identifier AS project_identifier,
-                                      issue.id AS issue_id_value, issue.identifier AS issue_identifier, issue.title AS issue_title
-                               FROM customer_requests request
-                               JOIN users creator ON creator.id = request.created_by
-                               LEFT JOIN projects project ON project.id = request.project_id
-                               LEFT JOIN issues issue ON issue.id = request.issue_id
-                               WHERE request.id = :request_id AND request.workspace_id = :workspace_id AND request.archived_at IS NULL'''), {'request_id': request_id, 'workspace_id': workspace_id})
+    result = await db.execute(REQUEST_SELECT_CUSTOMER_REQUESTS, {'request_id': request_id, 'workspace_id': workspace_id})
     row = result.mappings().first()
     if not row:
         raise ApiError(404, 'Customer request not found.', 'Not Found')
@@ -101,7 +105,7 @@ async def _can_manage(db: AsyncSession, request: dict[str, Any], workspace_id: s
 @router.get('')
 async def list_customer_requests(workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
     await workspace_access(db, workspaceId, user['id'])
-    result = await db.execute(text('SELECT id FROM customer_requests WHERE workspace_id = :workspace_id AND archived_at IS NULL ORDER BY updated_at DESC'), {'workspace_id': workspaceId})
+    result = await db.execute(LIST_CUSTOMER_REQUESTS_SELECT_CUSTOMER_REQUESTS, {'workspace_id': workspaceId})
     return {'data': [await _request(db, row['id'], workspaceId) for row in result.mappings().all()]}
 
 
@@ -110,8 +114,7 @@ async def create_customer_request(payload: CreateCustomerRequestInput, user: Any
     await workspace_access(db, payload.workspaceId, user['id'])
     await _references(db, payload.workspaceId, payload.projectId, payload.issueId)
     request_id, now = cuid(), utcnow()
-    await db.execute(text('''INSERT INTO customer_requests (id, workspace_id, title, description, customer, source, status, priority, project_id, issue_id, created_by, created_at, updated_at)
-                             VALUES (:id, :workspace_id, :title, :description, :customer, :source, :status, :priority, :project_id, :issue_id, :created_by, :now, :now)'''), {'id': request_id, 'workspace_id': payload.workspaceId, 'title': payload.title.strip(), 'description': payload.description.strip() if payload.description else None, 'customer': payload.customer.strip(), 'source': payload.source, 'status': payload.status, 'priority': payload.priority, 'project_id': payload.projectId, 'issue_id': payload.issueId, 'created_by': user['id'], 'now': now})
+    await db.execute(CREATE_CUSTOMER_REQUEST_INSERT_CUSTOMER_REQUESTS, {'id': request_id, 'workspace_id': payload.workspaceId, 'title': payload.title.strip(), 'description': payload.description.strip() if payload.description else None, 'customer': payload.customer.strip(), 'source': payload.source, 'status': payload.status, 'priority': payload.priority, 'project_id': payload.projectId, 'issue_id': payload.issueId, 'created_by': user['id'], 'now': now})
     await _audit(db, payload.workspaceId, user['id'], 'customer-request.created', request_id, {'title': payload.title.strip(), 'customer': payload.customer.strip()})
     await db.commit()
     return {'data': await _request(db, request_id, payload.workspaceId)}
@@ -134,7 +137,7 @@ async def update_customer_request(request_id: str, payload: UpdateCustomerReques
         params[field] = value
         sets.append(f'{column} = :{field}')
     if sets:
-        await db.execute(text(f"UPDATE customer_requests SET {', '.join(sets)}, updated_at = :now WHERE id = :request_id"), params)
+        await db.execute(update_customer_request_update_customer_requests_sql(sets), params)
         await _audit(db, workspaceId, user['id'], 'customer-request.updated', request_id, values)
         await db.commit()
     return {'data': await _request(db, request_id, workspaceId)}
@@ -145,7 +148,7 @@ async def archive_customer_request(request_id: str, workspaceId: str = Query(min
     current = await _request(db, request_id, workspaceId)
     await _can_manage(db, current, workspaceId, user['id'])
     now = utcnow()
-    await db.execute(text('UPDATE customer_requests SET archived_at = :now, updated_at = :now WHERE id = :request_id'), {'request_id': request_id, 'now': now})
+    await db.execute(ARCHIVE_CUSTOMER_REQUEST_UPDATE_CUSTOMER_REQUESTS, {'request_id': request_id, 'now': now})
     await _audit(db, workspaceId, user['id'], 'customer-request.archived', request_id, {'title': current['title'], 'customer': current['customer']})
     await db.commit()
     return {'data': {'id': request_id, 'archivedAt': now}}

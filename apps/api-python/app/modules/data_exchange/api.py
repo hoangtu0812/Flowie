@@ -1,7 +1,6 @@
 from typing import Annotated, Literal
 
 from fastapi import Depends, Query, Request
-from sqlalchemy import text
 
 from ...core.downloads import private_download
 from ...core.utc_responses import UtcAPIRouter
@@ -15,6 +14,10 @@ from .contracts import CsvInput, DocumentExport, ImportPreview, IssueExport
 from .csv_input import parse_csv
 from .exports import export_documents, export_issues
 from .import_service import import_command, import_preview, import_result
+from .queries import (
+    DOCUMENT_OPTIONS_SELECT_DOCUMENTS,
+    HISTORY_SELECT_ISSUE_IMPORT_BATCHES,
+)
 
 router = UtcAPIRouter(prefix="/api/v1/data-exchange", tags=["data-exchange"])
 
@@ -30,9 +33,7 @@ async def document_options(
     rows = (
         (
             await db.execute(
-                text("""SELECT d.id,d.title FROM documents d WHERE d.workspace_id=:workspace AND d.archived_at IS NULL AND d.id>:after
-        AND (d.team_id IS NULL OR EXISTS(SELECT 1 FROM teams t JOIN team_members tm ON tm.team_id=t.id
-        WHERE t.id=d.team_id AND t.archived_at IS NULL AND tm.user_id=:actor)) ORDER BY d.id LIMIT 101"""),
+                DOCUMENT_OPTIONS_SELECT_DOCUMENTS,
                 {"workspace": workspaceId, "actor": user["id"], "after": after},
             )
         )
@@ -87,10 +88,7 @@ async def history(
     rows = (
         (
             await db.execute(
-                text("""SELECT b.id,b.state,b.created_at AS "createdAt",b.source_key AS "sourceKey" FROM issue_import_batches b
-        JOIN team_members tm ON tm.team_id=b.team_id AND tm.user_id=:actor
-        JOIN teams t ON t.id=b.team_id AND t.archived_at IS NULL
-        WHERE b.workspace_id=:workspace AND b.actor_id=:actor ORDER BY b.created_at DESC,b.id DESC LIMIT 20"""),
+                HISTORY_SELECT_ISSUE_IMPORT_BATCHES,
                 {"actor": user["id"], "workspace": workspaceId},
             )
         )

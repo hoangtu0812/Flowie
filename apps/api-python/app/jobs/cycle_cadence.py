@@ -19,12 +19,25 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
-from sqlalchemy import CursorResult, text
+from sqlalchemy import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ..core.clock import utcnow
 from ..core.identifiers import cuid
 from ..core.utc_responses import utc_response_value
+from .commands import (
+    APPLY_TEAM_CADENCE_LOCK,
+    APPLY_TEAM_CADENCE_UPDATE_CYCLES,
+    APPLY_TEAM_CADENCE_UPDATE_CYCLES_2,
+    CREATE_GENERATED_CYCLE_INSERT_AUDIT_LOGS,
+    CREATE_GENERATED_CYCLE_INSERT_CYCLES,
+)
+from .queries import (
+    APPLY_TEAM_CADENCE_SELECT_CYCLES,
+    APPLY_TEAM_CADENCE_SELECT_CYCLES_2,
+    CREATE_GENERATED_CYCLE_SELECT_CYCLES,
+    RUN_CYCLE_CADENCE_SELECT_TEAMS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -69,8 +82,7 @@ async def _create_generated_cycle(db: AsyncSession, team: dict[str, Any], names:
     VI: thứ hai phủ cùng những ngày ấy.
     """
     existing = await db.execute(
-        text('SELECT id FROM cycles WHERE team_id = :team_id AND start_date = :start_date'
-             ' AND end_date = :end_date LIMIT 1'),
+        CREATE_GENERATED_CYCLE_SELECT_CYCLES,
         {'team_id': team['id'], 'start_date': start_date, 'end_date': end_date},
     )
     if existing.first() is not None:
@@ -81,19 +93,13 @@ async def _create_generated_cycle(db: AsyncSession, team: dict[str, Any], names:
     now = utcnow()
     cycle_id = cuid()
     await db.execute(
-        text('''INSERT INTO cycles (id, workspace_id, team_id, name, status, start_date, end_date,
-                                    created_at, updated_at)
-                VALUES (:id, :workspace_id, :team_id, :name, :status, :start_date, :end_date,
-                        :now, :now)'''),
+        CREATE_GENERATED_CYCLE_INSERT_CYCLES,
         {'id': cycle_id, 'workspace_id': team['workspace_id'], 'team_id': team['id'],
          'name': _next_cycle_name(names), 'status': status,
          'start_date': start_date, 'end_date': end_date, 'now': now},
     )
     await db.execute(
-        text('''INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id,
-                                        metadata, created_at)
-                VALUES (:id, :workspace_id, NULL, 'cycle.auto_generated', 'cycle', :entity_id,
-                        CAST(:metadata AS jsonb), :now)'''),
+        CREATE_GENERATED_CYCLE_INSERT_AUDIT_LOGS,
         {'id': cuid(), 'workspace_id': team['workspace_id'], 'entity_id': cycle_id,
          # The span lands in a jsonb column that no response serialiser touches
          # again, so the offset has to be attached here. The worker this
@@ -125,12 +131,11 @@ async def _apply_team_cadence(db: AsyncSession, team: dict[str, Any], today: dat
         # VI: cùng thấy "trống" và cùng chèn. Khoá theo từng team và giữ tới lúc
         # VI: commit, nên lượt sau phải chờ rồi đọc được các cycle lượt trước đã tạo.
         await db.execute(
-            text('SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))'),
+            APPLY_TEAM_CADENCE_LOCK,
             {'key': f"cycle-cadence:{team['id']}"},
         )
     cycles = (await db.execute(
-        text('''SELECT id, name, status, start_date, end_date FROM cycles
-                WHERE team_id = :team_id ORDER BY start_date ASC, created_at ASC'''),
+        APPLY_TEAM_CADENCE_SELECT_CYCLES_2,
         {'team_id': team['id']},
     )).mappings().all()
     names = {cycle['name'] for cycle in cycles}
@@ -139,16 +144,13 @@ async def _apply_team_cadence(db: AsyncSession, team: dict[str, Any], today: dat
     completed = 0
     if writes_enabled:
         result = await db.execute(
-            text('''UPDATE cycles SET status = 'COMPLETED', updated_at = :now
-                    WHERE team_id = :team_id AND status IN ('ACTIVE', 'UPCOMING')
-                      AND end_date < :today'''),
+            APPLY_TEAM_CADENCE_UPDATE_CYCLES,
             {'team_id': team['id'], 'today': today, 'now': utcnow()},
         )
         completed = cast(CursorResult[Any], result).rowcount or 0
     else:
         completed = (await db.execute(
-            text('''SELECT count(*) FROM cycles WHERE team_id = :team_id
-                    AND status IN ('ACTIVE', 'UPCOMING') AND end_date < :today'''),
+            APPLY_TEAM_CADENCE_SELECT_CYCLES,
             {'team_id': team['id'], 'today': today},
         )).scalar_one()
 
@@ -166,8 +168,7 @@ async def _apply_team_cadence(db: AsyncSession, team: dict[str, Any], today: dat
     if covering_cycle is not None and covering_cycle['status'] == 'UPCOMING':
         if writes_enabled:
             result = await db.execute(
-                text("UPDATE cycles SET status = 'ACTIVE', updated_at = :now"
-                     " WHERE id = :id AND status = 'UPCOMING'"),
+                APPLY_TEAM_CADENCE_UPDATE_CYCLES_2,
                 {'id': covering_cycle['id'], 'now': utcnow()},
             )
             activated = cast(CursorResult[Any], result).rowcount or 0
@@ -221,8 +222,7 @@ async def run_cycle_cadence(factory: async_sessionmaker[AsyncSession], now: date
     result = {'teams': 0, 'created': 0, 'activated': 0, 'completed': 0}
     async with factory() as db:
         teams = (await db.execute(
-            text('''SELECT id, workspace_id, cycle_cadence_weeks FROM teams
-                    WHERE archived_at IS NULL AND cycle_cadence_weeks IS NOT NULL''')
+            RUN_CYCLE_CADENCE_SELECT_TEAMS
         )).mappings().all()
         result['teams'] = len(teams)
         for team in teams:

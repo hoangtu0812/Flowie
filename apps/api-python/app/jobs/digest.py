@@ -13,22 +13,18 @@ from ..modules.teams.insights_api import (
     seconds_until_next_digest,
     send_digest_for_workspace,
 )
+from .queries import (
+    DELIVER_DUE_DIGESTS_SELECT_WORKSPACES,
+)
 
 logger = logging.getLogger(__name__)
 
 
 async def deliver_due_digests(factory: async_sessionmaker[AsyncSession]) -> int:
     """Send today's digest to opted-in workspaces that were not served yet today."""
-    from sqlalchemy import text
-
     async with factory() as db:
         workspaces = await db.execute(
-            text(
-                """SELECT w.id FROM workspaces w
-                   JOIN discord_webhooks dw ON dw.workspace_id = w.id
-                   WHERE dw.enabled = TRUE AND dw.daily_digest_enabled = TRUE
-                     AND (dw.daily_digest_sent_at IS NULL OR dw.daily_digest_sent_at < :cutoff)"""
-            ),
+            DELIVER_DUE_DIGESTS_SELECT_WORKSPACES,
             {"cutoff": digest_cutoff_utc()},
         )
         ids = [row["id"] for row in workspaces.mappings().all()]

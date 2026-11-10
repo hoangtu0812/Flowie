@@ -2,7 +2,6 @@ from datetime import timedelta
 
 from fastapi import Depends, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import text
 
 from ...core.clock import utcnow
 from ...core.errors import ApiError
@@ -13,6 +12,14 @@ from ..access.membership import workspace_role
 from ..identity.auth import current_user
 from ..identity.reset_delivery import delivery_enabled
 from .access import notification_scope
+from .commands import (
+    UPDATE_CHANNELS_INSERT_NOTIFICATION_PREFERENCES,
+    snooze_update_notifications_sql,
+)
+from .queries import (
+    CHANNELS_SELECT_NOTIFICATION_PREFERENCES,
+    delivery_status_select_notification_email_deliveries_sql,
+)
 
 router = UtcAPIRouter(prefix="/api/v1/notifications", tags=["notification-delivery"])
 
@@ -45,9 +52,7 @@ async def channels(
     row = (
         (
             await db.execute(
-                text(
-                    "SELECT email_enabled,desktop_enabled,teams_enabled,ticket_email_enabled FROM notification_preferences WHERE workspace_id=:workspace AND user_id=:user"
-                ),
+                CHANNELS_SELECT_NOTIFICATION_PREFERENCES,
                 {"workspace": workspaceId, "user": user["id"]},
             )
         )
@@ -84,10 +89,7 @@ async def update_channels(
             409, "Verify your email address before enabling notifications.", "Conflict"
         )
     await db.execute(
-        text("""INSERT INTO notification_preferences(workspace_id,user_id,email_enabled,desktop_enabled,teams_enabled,ticket_email_enabled,created_at,updated_at)
-        VALUES (:workspace,:user,:email,:desktop,COALESCE(CAST(:teams AS boolean),true),COALESCE(CAST(:tickets AS boolean),true),:now,:now) ON CONFLICT(workspace_id,user_id) DO UPDATE SET email_enabled=EXCLUDED.email_enabled,
-        desktop_enabled=EXCLUDED.desktop_enabled,teams_enabled=COALESCE(CAST(:teams AS boolean),notification_preferences.teams_enabled),
-        ticket_email_enabled=COALESCE(CAST(:tickets AS boolean),notification_preferences.ticket_email_enabled),updated_at=:now"""),
+        UPDATE_CHANNELS_INSERT_NOTIFICATION_PREFERENCES,
         {
             "workspace": workspaceId,
             "user": user["id"],
@@ -114,9 +116,7 @@ async def snooze(
     until = utcnow() + timedelta(minutes=payload.minutes) if payload.minutes else None
     found = (
         await db.execute(
-            text(
-                f"UPDATE notifications n SET snoozed_until=:until WHERE id=:id AND workspace_id=:workspace AND user_id=:user AND {notification_scope(actor=':user')} RETURNING id"
-            ),
+            snooze_update_notifications_sql(notification_scope),
             {
                 "until": until,
                 "id": notification_id,
@@ -140,9 +140,7 @@ async def delivery_status(
     await workspace_role(db, workspaceId, user["id"])
     rows = (
         await db.execute(
-            text(f"""SELECT n.id AS "notificationId",e.attempts,e.delivered_at AS "deliveredAt",e.failed_at AS "failedAt",
-        e.last_error_code AS "lastErrorCode",e.available_at AS "retryAt" FROM notification_email_deliveries e JOIN notifications n ON n.id=e.notification_id
-        WHERE n.workspace_id=:workspace AND n.user_id=:user AND {notification_scope(actor=':user')} ORDER BY n.created_at DESC LIMIT 50"""),
+            delivery_status_select_notification_email_deliveries_sql(notification_scope),
             {"workspace": workspaceId, "user": user["id"]},
         )
     ).mappings()

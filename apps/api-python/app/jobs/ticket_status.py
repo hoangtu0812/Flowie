@@ -4,13 +4,18 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ..modules.notifications.outbox import stage_notifications
 from ..modules.operations.heartbeats import progress
 from ..modules.service_desk.api import reopen_pending, ticket_identifier, ticket_status
 from ..services.notification_events import create_notification_batch
+from .commands import (
+    NOTIFY_TICKET_STATUS_CHANGES_UPDATE_ASKS,
+)
+from .queries import (
+    NOTIFY_TICKET_STATUS_CHANGES_SELECT_ASKS,
+)
 
 logger = logging.getLogger(__name__)
 SYSTEM_ACTOR = {'id': 'system', 'name': 'Flowie'}
@@ -31,14 +36,7 @@ async def notify_ticket_status_changes(factory: async_sessionmaker[AsyncSession]
     """
     async with factory() as db:
         result = await db.execute(
-            text(
-                '''SELECT ask.id, ask.number, ask.workspace_id, ask.title, ask.status, ask.created_by, ask.notified_ticket_status, ask.reopened_at,
-                          COALESCE(issue.completed_at, issue.canceled_at) AS closed_at, issue_status.category
-                   FROM asks ask
-                   LEFT JOIN issues issue ON issue.id = ask.converted_issue_id
-                   LEFT JOIN issue_statuses issue_status ON issue_status.id = issue.status_id
-                   WHERE ask.archived_at IS NULL'''
-            )
+            NOTIFY_TICKET_STATUS_CHANGES_SELECT_ASKS
         )
         notified = 0
         for row in result.mappings().all():
@@ -49,7 +47,7 @@ async def notify_ticket_status_changes(factory: async_sessionmaker[AsyncSession]
             # The conditional update is the claim: a second API process blocks here, then matches no row.
             # VI: Câu update có điều kiện là bước giành quyền: tiến trình API thứ hai chờ tại đây rồi không khớp dòng nào.
             claimed = await db.execute(
-                text('UPDATE asks SET notified_ticket_status = :current WHERE id = :id AND notified_ticket_status IS NOT DISTINCT FROM CAST(:seen AS text) RETURNING id'),
+                NOTIFY_TICKET_STATUS_CHANGES_UPDATE_ASKS,
                 {'current': current, 'id': row['id'], 'seen': seen},
             )
             if claimed.scalar_one_or_none() is None or seen is None:

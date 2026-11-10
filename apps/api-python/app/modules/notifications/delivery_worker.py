@@ -2,14 +2,20 @@ import asyncio
 from datetime import timedelta
 from email.message import EmailMessage
 
-from sqlalchemy import text
-
 from ...core.clock import utcnow
 from ...core.identifiers import cuid
 from ...services.notification_events import notification_hub
 from ...services.private_email import send_private_email
 from ..identity.reset_delivery import delivery_enabled
 from ..operations.heartbeats import progress
+from .commands import (
+    DELIVER_ONE_UPDATE_NOTIFICATION_EMAIL_DELIVERIES,
+    DELIVER_ONE_UPDATE_NOTIFICATION_EMAIL_DELIVERIES_2,
+    WAKE_SNOOZED_UPDATE_NOTIFICATIONS,
+)
+from .queries import (
+    DELIVER_ONE_SELECT_NOTIFICATIONS,
+)
 from .ticket_email import ticket_email, ticket_email_allowed
 
 
@@ -18,9 +24,7 @@ async def wake_snoozed(factory):
         rows = (
             (
                 await db.execute(
-                    text("""UPDATE notifications SET snoozed_until=NULL WHERE id IN (
-            SELECT id FROM notifications WHERE snoozed_until<=:now ORDER BY snoozed_until,id FOR UPDATE SKIP LOCKED LIMIT 100)
-            RETURNING id,workspace_id,user_id,read_at"""),
+                    WAKE_SNOOZED_UPDATE_NOTIFICATIONS,
                     {"now": utcnow()},
                 )
             )
@@ -49,13 +53,7 @@ async def deliver_one(factory, settings, send=send_private_email, notification_i
         row = (
             (
                 await db.execute(
-                    text("""UPDATE notification_email_deliveries SET attempts=attempts+1,lease_token=:token,lease_until=:lease
-            WHERE notification_id=(SELECT notification_id FROM notification_email_deliveries e WHERE delivered_at IS NULL AND failed_at IS NULL
-            AND available_at<=:now AND (lease_until IS NULL OR lease_until<:now)
-            AND (CAST(:target AS text) IS NULL OR notification_id=CAST(:target AS text))
-            AND EXISTS(SELECT 1 FROM notifications n WHERE n.id=e.notification_id AND (n.snoozed_until IS NULL OR n.snoozed_until<=:now))
-            ORDER BY available_at FOR UPDATE SKIP LOCKED LIMIT 1)
-            RETURNING notification_id,attempts"""),
+                    DELIVER_ONE_UPDATE_NOTIFICATION_EMAIL_DELIVERIES_2,
                     {
                         "now": now,
                         "lease": now + timedelta(minutes=2),
@@ -73,13 +71,7 @@ async def deliver_one(factory, settings, send=send_private_email, notification_i
         target = (
             (
                 await db.execute(
-                    text("""SELECT u.email,u.status,u.email_verified_at,w.id AS workspace_id,w.slug AS workspace_slug,p.email_enabled,
-            p.ticket_email_enabled,wm.status AS membership_status,n.user_id,n.entity_type,n.entity_id,n.data,n.created_at,
-            a.created_by AS ticket_owner,a.archived_at AS ticket_archived_at
-            FROM notifications n JOIN users u ON u.id=n.user_id JOIN workspaces w ON w.id=n.workspace_id
-            LEFT JOIN workspace_members wm ON wm.user_id=n.user_id AND wm.workspace_id=n.workspace_id
-            LEFT JOIN notification_preferences p ON p.user_id=n.user_id AND p.workspace_id=n.workspace_id
-            LEFT JOIN asks a ON n.entity_type='ticket' AND a.id=n.entity_id WHERE n.id=:id"""),
+                    DELIVER_ONE_SELECT_NOTIFICATIONS,
                     {"id": row["notification_id"]},
                 )
             )
@@ -120,8 +112,7 @@ async def deliver_one(factory, settings, send=send_private_email, notification_i
     async with factory() as db:
         now = utcnow()
         await db.execute(
-            text("""UPDATE notification_email_deliveries SET delivered_at=:delivered,failed_at=:failed,last_error_code=:error,
-            available_at=:retry,lease_until=NULL,lease_token=NULL WHERE notification_id=:id AND lease_token=:token"""),
+            DELIVER_ONE_UPDATE_NOTIFICATION_EMAIL_DELIVERIES,
             {
                 "id": row["notification_id"],
                 "token": token,

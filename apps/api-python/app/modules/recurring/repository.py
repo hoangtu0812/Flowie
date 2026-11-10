@@ -1,9 +1,16 @@
-from sqlalchemy import text
 
 from ...core.errors import ApiError
 from ...core.pagination import CursorCodec
 from ..access.project_scope import project_read_scope
 from ..access.projects import team_access, workspace_access
+from .queries import (
+    public_schedules_select_projects_sql,
+    run_history_select_sql,
+    run_history_select_team_members_sql,
+    schedule_row_select_recurring_schedules_sql,
+    schedules_select_sql,
+    schedules_select_sql_2,
+)
 
 
 def present(row):
@@ -39,10 +46,7 @@ async def public_schedules(db, workspace, user, rows):
         visible = set(
             (
                 await db.execute(
-                    text(
-                        "SELECT p.id FROM projects p WHERE p.id=ANY(CAST(:ids AS text[])) AND "
-                        + project_read_scope()
-                    ),
+                    public_schedules_select_projects_sql(project_read_scope),
                     {"ids": project_ids, "workspace": workspace, "user": user["id"]},
                 )
             )
@@ -70,10 +74,7 @@ async def schedule_row(db, workspace, user, identifier, *, lock=False):
     row = (
         (
             await db.execute(
-                text(
-                    "SELECT * FROM recurring_schedules WHERE id=:id AND workspace_id=:workspace"
-                    + (" FOR UPDATE" if lock else "")
-                ),
+                schedule_row_select_recurring_schedules_sql(lock),
                 {"id": identifier, "workspace": workspace},
             )
         )
@@ -94,7 +95,7 @@ async def schedules(db, workspace, user, secret, *, team=None, cursor=None, limi
     if team:
         scope += " AND r.team_id=:team"
         params["team"] = team
-    total = (await db.execute(text("SELECT COUNT(*) " + scope), params)).scalar_one()
+    total = (await db.execute(schedules_select_sql(scope), params)).scalar_one()
     codec = CursorCodec(
         secret,
         user["id"],
@@ -107,11 +108,7 @@ async def schedules(db, workspace, user, secret, *, team=None, cursor=None, limi
     rows = (
         (
             await db.execute(
-                text(
-                    "SELECT r.* "
-                    + scope
-                    + " ORDER BY r.created_at DESC,r.id DESC LIMIT :limit"
-                ),
+                schedules_select_sql_2(scope),
                 {**params, "limit": limit + 1},
             )
         )
@@ -136,7 +133,7 @@ async def run_history(db, workspace, user, secret, identifier, cursor=None, limi
     await schedule_row(db, workspace, user, identifier)
     params = {"schedule": identifier}
     scope = "FROM recurring_runs r LEFT JOIN issues i ON i.id=r.issue_id WHERE r.schedule_id=:schedule"
-    total = (await db.execute(text("SELECT COUNT(*) " + scope), params)).scalar_one()
+    total = (await db.execute(run_history_select_sql(scope), params)).scalar_one()
     codec = CursorCodec(
         secret,
         user["id"],
@@ -150,12 +147,7 @@ async def run_history(db, workspace, user, secret, identifier, cursor=None, limi
     rows = (
         (
             await db.execute(
-                text(
-                    """SELECT r.id,r.scheduled_for AS "scheduledFor",r.state,r.error_code AS "errorCode",r.created_at AS "createdAt",r.snapshot->>'version' AS "scheduleVersion",
-        CASE WHEN i.workspace_id=:workspace AND i.archived_at IS NULL AND (i.team_id IS NULL OR EXISTS(SELECT 1 FROM team_members tm JOIN teams t ON t.id=tm.team_id WHERE tm.team_id=i.team_id AND tm.user_id=:user AND t.archived_at IS NULL)) THEN i.identifier END AS identifier """
-                    + scope
-                    + " ORDER BY r.created_at DESC,r.id DESC LIMIT :limit"
-                ),
+                run_history_select_team_members_sql(scope),
                 {
                     **params,
                     "workspace": workspace,

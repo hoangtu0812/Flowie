@@ -1,8 +1,6 @@
 import json
 from hashlib import sha256
 
-from sqlalchemy import text
-
 from ...core.clock import utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import cuid
@@ -10,6 +8,20 @@ from ..access.projects import team_access, workspace_manager
 from ..audit.write import record_change
 from ..work_items.issue_rules import validate_references
 from .calendar import next_occurrence
+from .commands import (
+    CREATE_SCHEDULE_INSERT_RECURRING_SCHEDULES,
+    CREATE_SCHEDULE_LOCK,
+    SCHEDULE_COMMAND_INSERT_RECURRING_RUNS,
+    SCHEDULE_COMMAND_UPDATE_RECURRING_RUNS,
+    SCHEDULE_COMMAND_UPDATE_RECURRING_SCHEDULES,
+    UPDATE_SCHEDULE_UPDATE_RECURRING_SCHEDULES,
+)
+from .queries import (
+    CREATE_SCHEDULE_SELECT_RECURRING_SCHEDULES,
+    CREATE_SCHEDULE_SELECT_RECURRING_SCHEDULES_2,
+    SCHEDULE_COMMAND_SELECT_RECURRING_RUNS,
+    SCHEDULE_COMMAND_SELECT_RECURRING_RUNS_2,
+)
 from .repository import public_schedule, schedule_row
 
 
@@ -26,15 +38,13 @@ async def create_schedule(db, user, payload):
         json.dumps(payload.model_dump(mode="json"), sort_keys=True).encode()
     ).hexdigest()
     await db.execute(
-        text("SELECT pg_advisory_xact_lock(hashtextextended(:key,0))"),
+        CREATE_SCHEDULE_LOCK,
         {"key": f"recurring:{payload.workspaceId}"},
     )
     previous = (
         (
             await db.execute(
-                text(
-                    "SELECT * FROM recurring_schedules WHERE created_by=:actor AND request_key=:key"
-                ),
+                CREATE_SCHEDULE_SELECT_RECURRING_SCHEDULES_2,
                 {"actor": user["id"], "key": payload.requestKey},
             )
         )
@@ -49,9 +59,7 @@ async def create_schedule(db, user, payload):
         return await public_schedule(db, payload.workspaceId, user, previous)
     count = (
         await db.execute(
-            text(
-                "SELECT COUNT(*) FROM recurring_schedules WHERE workspace_id=:workspace"
-            ),
+            CREATE_SCHEDULE_SELECT_RECURRING_SCHEDULES,
             {"workspace": payload.workspaceId},
         )
     ).scalar_one()
@@ -64,8 +72,7 @@ async def create_schedule(db, user, payload):
     )
     identifier, now = cuid(), utcnow()
     await db.execute(
-        text("""INSERT INTO recurring_schedules(id,workspace_id,team_id,created_by,request_key,fingerprint,name,rule,template,due_after_minutes,next_run_at,created_at,updated_at)
-        VALUES (:id,:workspace,:team,:actor,:key,:fingerprint,:name,CAST(:rule AS jsonb),CAST(:template AS jsonb),:due,:next,:now,:now)"""),
+        CREATE_SCHEDULE_INSERT_RECURRING_SCHEDULES,
         {
             "id": identifier,
             "workspace": payload.workspaceId,
@@ -111,8 +118,7 @@ async def update_schedule(db, user, workspace, identifier, payload):
     template = await validate_template(db, workspace, row["team_id"], payload.template)
     now = utcnow()
     await db.execute(
-        text("""UPDATE recurring_schedules SET name=:name,rule=CAST(:rule AS jsonb),template=CAST(:template AS jsonb),due_after_minutes=:due,
-        next_run_at=:next,version=version+1,updated_at=:now WHERE id=:id"""),
+        UPDATE_SCHEDULE_UPDATE_RECURRING_SCHEDULES,
         {
             "id": identifier,
             "name": payload.name,
@@ -152,9 +158,7 @@ async def schedule_command(db, user, workspace, identifier, command, payload):
     if command == "run-now" and payload.requestKey:
         existing = (
             await db.execute(
-                text(
-                    "SELECT id FROM recurring_runs WHERE schedule_id=:id AND occurrence_key=:key"
-                ),
+                SCHEDULE_COMMAND_SELECT_RECURRING_RUNS,
                 {"id": identifier, "key": "manual:" + payload.requestKey},
             )
         ).first()
@@ -169,17 +173,14 @@ async def schedule_command(db, user, workspace, identifier, command, payload):
             raise ApiError(409, "Resume the schedule before running it.", "Conflict")
         count = (
             await db.execute(
-                text(
-                    "SELECT COUNT(*) FROM recurring_runs WHERE schedule_id=:id AND state='QUEUED'"
-                ),
+                SCHEDULE_COMMAND_SELECT_RECURRING_RUNS_2,
                 {"id": identifier},
             )
         ).scalar_one()
         if count >= 1:
             raise ApiError(409, "A manual run is already queued.", "Conflict")
         await db.execute(
-            text("""INSERT INTO recurring_runs(id,schedule_id,occurrence_key,scheduled_for,state,snapshot,created_at)
-            VALUES (:run,:id,:key,:now,'QUEUED',CAST(:snapshot AS jsonb),:now)"""),
+            SCHEDULE_COMMAND_INSERT_RECURRING_RUNS,
             {
                 "run": cuid(),
                 "id": identifier,
@@ -192,9 +193,7 @@ async def schedule_command(db, user, workspace, identifier, command, payload):
         from .contracts import ScheduleRule
 
         await db.execute(
-            text(
-                "UPDATE recurring_schedules SET active=:active,version=version+1,updated_at=:now,next_run_at=:next,consecutive_failures=0 WHERE id=:id"
-            ),
+            SCHEDULE_COMMAND_UPDATE_RECURRING_SCHEDULES,
             {
                 "id": identifier,
                 "active": command == "resume",
@@ -204,9 +203,7 @@ async def schedule_command(db, user, workspace, identifier, command, payload):
         )
         if command == "pause":
             await db.execute(
-                text(
-                    "UPDATE recurring_runs SET state='CANCELED' WHERE schedule_id=:id AND state='QUEUED'"
-                ),
+                SCHEDULE_COMMAND_UPDATE_RECURRING_RUNS,
                 {"id": identifier},
             )
     else:

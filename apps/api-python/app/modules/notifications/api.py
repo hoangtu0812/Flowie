@@ -5,7 +5,6 @@ from typing import Any
 
 from fastapi import Depends, Query, WebSocket
 from pydantic import BaseModel
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import utcnow
@@ -16,6 +15,20 @@ from ...db.session import get_session
 from ..access.projects import workspace_access
 from ..identity.auth import current_user
 from .access import notification_scope
+from .commands import (
+    DELETE_ALL_NOTIFICATIONS_DELETE_NOTIFICATIONS,
+    DELETE_COMPLETED_ISSUE_NOTIFICATIONS_DELETE_NOTIFICATIONS,
+    DELETE_READ_NOTIFICATIONS_DELETE_NOTIFICATIONS,
+    MARK_ALL_READ_UPDATE_NOTIFICATIONS,
+    MARK_READ_UPDATE_NOTIFICATIONS,
+    UPDATE_NOTIFICATION_PREFERENCES_INSERT_AUDIT_LOGS,
+    UPDATE_NOTIFICATION_PREFERENCES_INSERT_NOTIFICATION_PREFERENCES,
+)
+from .queries import (
+    NOTIFICATION_PREFERENCES_SELECT_NOTIFICATION_PREFERENCES,
+    list_notifications_select_notifications_sql,
+    notification_exists_select_notifications_sql,
+)
 
 router = APIRouter(prefix='/api/v1/notifications', tags=['notifications'])
 
@@ -45,14 +58,7 @@ async def list_notifications(
 ) -> dict[str, list[dict[str, Any]]]:
     await _access(db, workspaceId, user['id'])
     result = await db.execute(
-        text(
-            f'''SELECT id, workspace_id, user_id, type, entity_type, entity_id, data, read_at, created_at, snoozed_until
-               FROM notifications n
-               WHERE workspace_id = :workspace_id AND user_id = :user_id
-               AND {notification_scope(actor=':user_id')}
-               AND (:include_snoozed OR snoozed_until IS NULL OR snoozed_until<=:now)
-               ORDER BY created_at DESC'''
-        ),
+        list_notifications_select_notifications_sql(notification_scope),
         {'workspace_id': workspaceId, 'user_id': user['id'], 'include_snoozed':includeSnoozed, 'now':utcnow()},
     )
     return {'data': [
@@ -75,11 +81,7 @@ async def notification_preferences(
 
     await _access(db, workspaceId, user['id'])
     result = await db.execute(
-        text(
-            """SELECT team_issue_added, issue_completed, issue_added_to_triage
-               FROM notification_preferences
-               WHERE workspace_id = :workspace_id AND user_id = :user_id"""
-        ),
+        NOTIFICATION_PREFERENCES_SELECT_NOTIFICATION_PREFERENCES,
         {'workspace_id': workspaceId, 'user_id': user['id']},
     )
     row = result.mappings().first()
@@ -102,16 +104,7 @@ async def update_notification_preferences(
     await _access(db, workspaceId, user['id'])
     now = utcnow()
     await db.execute(
-        text(
-            """INSERT INTO notification_preferences
-               (workspace_id, user_id, team_issue_added, issue_completed, issue_added_to_triage, created_at, updated_at)
-               VALUES (:workspace_id, :user_id, :team_issue_added, :issue_completed, :issue_added_to_triage, :now, :now)
-               ON CONFLICT (workspace_id, user_id) DO UPDATE
-               SET team_issue_added = EXCLUDED.team_issue_added,
-                   issue_completed = EXCLUDED.issue_completed,
-                   issue_added_to_triage = EXCLUDED.issue_added_to_triage,
-                   updated_at = EXCLUDED.updated_at"""
-        ),
+        UPDATE_NOTIFICATION_PREFERENCES_INSERT_NOTIFICATION_PREFERENCES,
         {
             'workspace_id': workspaceId,
             'user_id': user['id'],
@@ -122,10 +115,7 @@ async def update_notification_preferences(
         },
     )
     await db.execute(
-        text(
-            """INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at)
-               VALUES (:id, :workspace_id, :actor_id, 'notification.preferences.updated', 'user', :actor_id, CAST(:metadata AS jsonb), :now)"""
-        ),
+        UPDATE_NOTIFICATION_PREFERENCES_INSERT_AUDIT_LOGS,
         {
             'id': cuid(),
             'workspace_id': workspaceId,
@@ -142,10 +132,7 @@ async def _notification_exists(
     db: AsyncSession, notification_id: str, workspace_id: str, user_id: str
 ) -> None:
     result = await db.execute(
-        text(
-            f'''SELECT 1 FROM notifications n
-                 WHERE id = :id AND workspace_id = :workspace_id AND user_id = :user_id AND {notification_scope(actor=':user_id')}'''
-        ),
+        notification_exists_select_notifications_sql(notification_scope),
         {'id': notification_id, 'workspace_id': workspace_id, 'user_id': user_id},
     )
     if result.scalar_one_or_none() is None:
@@ -160,10 +147,7 @@ async def mark_all_read(
 ) -> dict[str, bool]:
     await _access(db, workspaceId, user['id'])
     await db.execute(
-        text(
-            '''UPDATE notifications SET read_at = :now
-               WHERE workspace_id = :workspace_id AND user_id = :user_id AND read_at IS NULL'''
-        ),
+        MARK_ALL_READ_UPDATE_NOTIFICATIONS,
         {'now': utcnow(), 'workspace_id': workspaceId, 'user_id': user['id']},
     )
     await db.commit()
@@ -180,7 +164,7 @@ async def mark_read(
     await _access(db, workspaceId, user['id'])
     await _notification_exists(db, notification_id, workspaceId, user['id'])
     await db.execute(
-        text('UPDATE notifications SET read_at = :now WHERE id = :id'),
+        MARK_READ_UPDATE_NOTIFICATIONS,
         {'id': notification_id, 'now': utcnow()},
     )
     await db.commit()
@@ -195,7 +179,7 @@ async def delete_all_notifications(
 ) -> dict[str, bool]:
     await _access(db, workspaceId, user['id'])
     await db.execute(
-        text('DELETE FROM notifications WHERE workspace_id = :workspace_id AND user_id = :user_id'),
+        DELETE_ALL_NOTIFICATIONS_DELETE_NOTIFICATIONS,
         {'workspace_id': workspaceId, 'user_id': user['id']},
     )
     await db.commit()
@@ -210,10 +194,7 @@ async def delete_read_notifications(
 ) -> dict[str, bool]:
     await _access(db, workspaceId, user['id'])
     await db.execute(
-        text(
-            '''DELETE FROM notifications
-               WHERE workspace_id = :workspace_id AND user_id = :user_id AND read_at IS NOT NULL'''
-        ),
+        DELETE_READ_NOTIFICATIONS_DELETE_NOTIFICATIONS,
         {'workspace_id': workspaceId, 'user_id': user['id']},
     )
     await db.commit()
@@ -228,16 +209,7 @@ async def delete_completed_issue_notifications(
 ) -> dict[str, bool]:
     await _access(db, workspaceId, user['id'])
     await db.execute(
-        text(
-            '''DELETE FROM notifications notification
-               USING issues issue, issue_statuses status
-               WHERE notification.workspace_id = :workspace_id
-                 AND notification.user_id = :user_id
-                 AND notification.entity_type = 'issue'
-                 AND notification.entity_id = issue.id
-                 AND issue.status_id = status.id
-                 AND status.category IN ('COMPLETED', 'CANCELED')'''
-        ),
+        DELETE_COMPLETED_ISSUE_NOTIFICATIONS_DELETE_NOTIFICATIONS,
         {'workspace_id': workspaceId, 'user_id': user['id']},
     )
     await db.commit()
