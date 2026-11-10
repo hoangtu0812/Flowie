@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 
 from fastapi import Depends, Query
-from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 from ...core.errors import ApiError
@@ -15,7 +14,16 @@ from ..identity.auth import current_user
 from ..mcp.domain import Principal
 from ..mcp.policy import AccessPolicy
 from .audit import management_audit
+from .commands import (
+    CONFIGURE_REPOSITORY_INSERT_PROJECT_REPOSITORIES,
+    REMOVE_REPOSITORY_DELETE_PROJECT_REPOSITORIES,
+    UPDATE_REPOSITORY_UPDATE_PROJECT_REPOSITORIES,
+)
 from .contracts import RepositoryInput
+from .queries import (
+    REMOVE_REPOSITORY_SELECT_PROJECT_REPOSITORIES,
+    list_repositories_select_project_repositories_sql,
+)
 
 # Only the project repository settings remain here. Agent runs and label
 # automations were removed with the desktop companion (DTD-544); the URL prefix
@@ -43,10 +51,7 @@ async def configure_repository(
     await policy.project(payload.projectId)
     row = (
         await db.execute(
-            text("""INSERT INTO project_repositories (id,workspace_id,project_id,name,repository_url,base_branch,test_commands,instructions)
-        VALUES (:id,:workspace,:project,:name,:url,:branch,CAST(:commands AS jsonb),:instructions)
-        ON CONFLICT (project_id,repository_url) DO UPDATE SET name=EXCLUDED.name,base_branch=EXCLUDED.base_branch,
-            test_commands=EXCLUDED.test_commands,instructions=EXCLUDED.instructions RETURNING id"""),
+            CONFIGURE_REPOSITORY_INSERT_PROJECT_REPOSITORIES,
             {
                 "id": cuid(),
                 "workspace": workspaceId,
@@ -81,12 +86,7 @@ async def list_repositories(
         await policy.project(projectId)
     rows = (
         await db.execute(
-            text(f"""SELECT r.id,r.project_id AS "projectId",r.name,r.repository_url AS "repositoryUrl",
-        r.base_branch AS "baseBranch",r.test_commands AS "testCommands",r.instructions
-        FROM project_repositories r JOIN projects p ON p.id=r.project_id
-        WHERE r.workspace_id=:workspace AND (CAST(:project AS text) IS NULL OR r.project_id=:project)
-        AND p.archived_at IS NULL AND {policy.team_clause("p.team_id", shared=True)}
-        ORDER BY r.project_id,r.name,r.id LIMIT 500"""),
+            list_repositories_select_project_repositories_sql(policy),
             {**policy.params, "project": projectId},
         )
     ).mappings()
@@ -108,9 +108,7 @@ async def update_repository(
     try:
         row = (
             await db.execute(
-                text("""UPDATE project_repositories SET name=:name,repository_url=:url,base_branch=:branch,
-            test_commands=CAST(:commands AS jsonb),instructions=:instructions
-            WHERE id=:id AND workspace_id=:workspace AND project_id=:project RETURNING id"""),
+                UPDATE_REPOSITORY_UPDATE_PROJECT_REPOSITORIES,
                 {
                     "id": repository_id,
                     "workspace": workspaceId,
@@ -147,9 +145,7 @@ async def remove_repository(
     policy = await manager_policy(db, workspaceId, user)
     target = (
         await db.execute(
-            text(
-                "SELECT project_id FROM project_repositories WHERE id=:id AND workspace_id=:workspace"
-            ),
+            REMOVE_REPOSITORY_SELECT_PROJECT_REPOSITORIES,
             {"id": repository_id, "workspace": workspaceId},
         )
     ).first()
@@ -157,7 +153,7 @@ async def remove_repository(
         raise ApiError(404, "Repository not found.", "Not Found")
     await policy.project(target[0])
     await db.execute(
-        text("DELETE FROM project_repositories WHERE id=:id"), {"id": repository_id}
+        REMOVE_REPOSITORY_DELETE_PROJECT_REPOSITORIES, {"id": repository_id}
     )
     await management_audit(
         db, workspaceId, user["id"], "repository.removed", repository_id

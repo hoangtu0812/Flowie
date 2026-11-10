@@ -5,7 +5,6 @@ from typing import Any, Literal
 
 from fastapi import Depends, Query
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +16,23 @@ from ...db.session import get_session
 from ..access.projects import workspace_access
 from ..identity.auth import current_user
 from ..scm.contracts import read_only_capabilities
+from .commands import (
+    AUDIT_LINK_INSERT_AUDIT_LOGS,
+    LINK_ISSUE_INSERT_CODE_REVIEW_ISSUE_LINKS,
+    MARK_REVIEW_VIEWED_INSERT_CODE_REVIEW_VIEW_STATES,
+    UNLINK_ISSUE_DELETE_CODE_REVIEW_ISSUE_LINKS,
+)
+from .queries import (
+    GET_REVIEW_SELECT_CODE_REVIEW_REVIEWERS,
+    GET_REVIEW_SELECT_CODE_REVIEW_REVISIONS,
+    GET_REVIEW_SELECT_CODE_REVIEW_VIEW_STATES,
+    REVIEW_RELATIONS_SELECT_CODE_REVIEW_ISSUE_LINKS,
+    REVIEW_RELATIONS_SELECT_CODE_REVIEW_REVIEWERS,
+    accessible_review_select_code_reviews_sql,
+    link_issue_select_issues_sql,
+    list_reviews_select_code_review_reviewers_sql,
+    list_reviews_select_sql,
+)
 
 router = APIRouter(prefix='/api/v1/reviews', tags=['reviews'])
 ReviewView = Literal['assigned', 'created', 'all']
@@ -55,20 +71,7 @@ async def _accessible_review(
     user_id: str,
 ) -> Any:
     result = await db.execute(
-        text(
-            f'''SELECT review.*, repository.connection_id, repository.team_id,
-                       repository.full_name AS repository_name, repository.external_project_id,
-                       repository.external_repository_id, repository.name AS repository_short_name,
-                       repository.is_private, repository.default_branch,
-                       connection.provider, connection.display_name AS connection_name
-                FROM code_reviews review
-                JOIN scm_repositories repository ON repository.id = review.repository_id
-                JOIN scm_connections connection ON connection.id = repository.connection_id
-                {ACCESS_JOIN}
-                WHERE review.id = :review_id AND review.workspace_id = :workspace_id
-                  AND repository.enabled = true AND repository.archived_at IS NULL
-                  AND {ACCESS_WHERE}'''
-        ),
+        accessible_review_select_code_reviews_sql(ACCESS_JOIN, ACCESS_WHERE),
         {'review_id': review_id, 'workspace_id': workspace_id, 'user_id': user_id},
     )
     row = result.mappings().first()
@@ -85,13 +88,7 @@ async def _review_relations(
     if not review_ids:
         return {}, {}
     reviewer_result = await db.execute(
-        text(
-            '''SELECT code_review_id, external_user_id, display_name, reviewer_kind,
-                      is_required, decision, provider_decision, flowie_user_id
-               FROM code_review_reviewers
-               WHERE code_review_id = ANY(:review_ids)
-               ORDER BY is_required DESC, display_name ASC'''
-        ),
+        REVIEW_RELATIONS_SELECT_CODE_REVIEW_REVIEWERS,
         {'review_ids': review_ids},
     )
     reviewers: dict[str, list[dict[str, Any]]] = {review_id: [] for review_id in review_ids}
@@ -109,14 +106,7 @@ async def _review_relations(
             }
         )
     link_result = await db.execute(
-        text(
-            '''SELECT link.code_review_id, link.issue_id, link.source, link.created_at,
-                      issue.identifier, issue.title
-               FROM code_review_issue_links link
-               JOIN issues issue ON issue.id = link.issue_id
-               WHERE link.code_review_id = ANY(:review_ids)
-               ORDER BY link.created_at ASC'''
-        ),
+        REVIEW_RELATIONS_SELECT_CODE_REVIEW_ISSUE_LINKS,
         {'review_ids': review_ids},
     )
     links: dict[str, list[dict[str, Any]]] = {review_id: [] for review_id in review_ids}
@@ -260,28 +250,10 @@ async def list_reviews(
                  LEFT JOIN code_review_view_states view_state
                    ON view_state.code_review_id = review.id AND view_state.user_id = :user_id
                  WHERE {where}'''
-    total_result = await db.execute(text(f'SELECT COUNT(DISTINCT review.id) {select}'), parameters)
+    total_result = await db.execute(list_reviews_select_sql(select), parameters)
     total = int(total_result.scalar_one())
     result = await db.execute(
-        text(
-            f'''SELECT DISTINCT review.*, repository.connection_id,
-                       repository.full_name AS repository_name,
-                       connection.provider, connection.display_name AS connection_name,
-                       view_state.last_viewed_revision,
-                       EXISTS (
-                           SELECT 1 FROM code_review_reviewers mine
-                           WHERE mine.code_review_id = review.id AND mine.flowie_user_id = :user_id
-                       ) AS assigned_to_me,
-                       EXISTS (
-                           SELECT 1 FROM scm_user_identities identity
-                           WHERE identity.connection_id = repository.connection_id
-                             AND identity.user_id = :user_id
-                             AND identity.external_user_id = review.external_author_id
-                       ) AS created_by_me
-                {select}
-                ORDER BY review.external_updated_at DESC, review.id DESC
-                LIMIT :limit OFFSET :offset'''
-        ),
+        list_reviews_select_code_review_reviewers_sql(select),
         parameters,
     )
     rows = result.mappings().all()
@@ -304,24 +276,11 @@ async def get_review(
 ) -> dict[str, dict[str, Any]]:
     row = await _accessible_review(db, review_id, workspaceId, user['id'])
     state_result = await db.execute(
-        text(
-            '''SELECT last_viewed_revision FROM code_review_view_states
-               WHERE code_review_id = :review_id AND user_id = :user_id'''
-        ),
+        GET_REVIEW_SELECT_CODE_REVIEW_VIEW_STATES,
         {'review_id': review_id, 'user_id': user['id']},
     )
     assigned_result = await db.execute(
-        text(
-            '''SELECT EXISTS (
-                       SELECT 1 FROM code_review_reviewers
-                       WHERE code_review_id = :review_id AND flowie_user_id = :user_id
-                   ) AS assigned_to_me,
-                   EXISTS (
-                       SELECT 1 FROM scm_user_identities
-                       WHERE connection_id = :connection_id AND user_id = :user_id
-                         AND external_user_id = :external_author_id
-                   ) AS created_by_me'''
-        ),
+        GET_REVIEW_SELECT_CODE_REVIEW_REVIEWERS,
         {
             'review_id': review_id,
             'connection_id': row['connection_id'],
@@ -335,11 +294,7 @@ async def get_review(
     enriched.update(relation)
     reviewers, links = await _review_relations(db, [review_id], user['id'])
     revisions_result = await db.execute(
-        text(
-            '''SELECT external_revision_id, sequence, base_revision, head_revision, external_created_at
-               FROM code_review_revisions WHERE code_review_id = :review_id
-               ORDER BY sequence NULLS LAST, created_at ASC'''
-        ),
+        GET_REVIEW_SELECT_CODE_REVIEW_REVISIONS,
         {'review_id': review_id},
     )
     data = _review_view(enriched, reviewers.get(review_id, []), links.get(review_id, []))
@@ -366,15 +321,7 @@ async def mark_review_viewed(
     review = await _accessible_review(db, review_id, workspaceId, user['id'])
     now = utcnow()
     await db.execute(
-        text(
-            '''INSERT INTO code_review_view_states (
-                   code_review_id, user_id, last_viewed_revision, updated_at
-               ) VALUES (
-                   :review_id, :user_id, :revision, :now
-               ) ON CONFLICT (code_review_id, user_id) DO UPDATE SET
-                   last_viewed_revision = EXCLUDED.last_viewed_revision,
-                   updated_at = EXCLUDED.updated_at'''
-        ),
+        MARK_REVIEW_VIEWED_INSERT_CODE_REVIEW_VIEW_STATES,
         {
             'review_id': review_id,
             'user_id': user['id'],
@@ -395,14 +342,7 @@ async def _audit_link(
     issue_id: str,
 ) -> None:
     await db.execute(
-        text(
-            '''INSERT INTO audit_logs (
-                   id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at
-               ) VALUES (
-                   :id, :workspace_id, :actor_id, :action, 'review', :review_id,
-                   CAST(:metadata AS jsonb), :now
-               )'''
-        ),
+        AUDIT_LINK_INSERT_AUDIT_LOGS,
         {
             'id': cuid(),
             'workspace_id': workspace_id,
@@ -426,10 +366,7 @@ async def link_issue(
     review = await _accessible_review(db, review_id, workspaceId, user['id'])
     issue_filter = 'id = :issue_id' if payload.issueId else 'identifier = :issue_identifier'
     issue_result = await db.execute(
-        text(
-            f'''SELECT id, identifier, title, team_id FROM issues
-                WHERE {issue_filter} AND workspace_id = :workspace_id AND archived_at IS NULL'''
-        ),
+        link_issue_select_issues_sql(issue_filter),
         {
             'issue_id': payload.issueId,
             'issue_identifier': payload.issueIdentifier.strip().upper() if payload.issueIdentifier else None,
@@ -444,13 +381,7 @@ async def link_issue(
     linked_at = utcnow()
     try:
         await db.execute(
-            text(
-                '''INSERT INTO code_review_issue_links (
-                       workspace_id, code_review_id, issue_id, source, created_by_id, created_at
-                   ) VALUES (
-                       :workspace_id, :review_id, :issue_id, 'MANUAL', :created_by_id, :now
-                   )'''
-            ),
+            LINK_ISSUE_INSERT_CODE_REVIEW_ISSUE_LINKS,
             {
                 'workspace_id': workspaceId,
                 'review_id': review_id,
@@ -486,11 +417,7 @@ async def unlink_issue(
 ) -> dict[str, dict[str, Any]]:
     await _accessible_review(db, review_id, workspaceId, user['id'])
     result = await db.execute(
-        text(
-            '''DELETE FROM code_review_issue_links
-               WHERE workspace_id = :workspace_id AND code_review_id = :review_id AND issue_id = :issue_id
-               RETURNING issue_id'''
-        ),
+        UNLINK_ISSUE_DELETE_CODE_REVIEW_ISSUE_LINKS,
         {'workspace_id': workspaceId, 'review_id': review_id, 'issue_id': issue_id},
     )
     if result.scalar_one_or_none() is None:

@@ -1,13 +1,26 @@
 import json
 from datetime import UTC
 
-from sqlalchemy import text
-
 from ...core.clock import utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import cuid
 from ..access.projects import team_access, workspace_access
 from ..work_items.lifecycle import actor_context
+from .commands import (
+    ARCHIVE_PROJECT_INSERT_AUDIT_LOGS,
+    ARCHIVE_PROJECT_UPDATE_ISSUES,
+    ARCHIVE_PROJECT_UPDATE_PROJECTS,
+    RESTORE_INSERT_AUDIT_LOGS,
+    restore_update_sql,
+)
+from .queries import (
+    ARCHIVE_PROJECT_SELECT_ISSUES,
+    ARCHIVE_PROJECT_SELECT_PROJECTS,
+    RESTORE_PREVIEW_SELECT_ACTIVITIES,
+    restore_preview_select_issues_sql,
+    restore_preview_select_sql,
+    restore_preview_select_teams_sql,
+)
 from .repository import TABLES, record
 from .repository import scope as archive_scope
 
@@ -19,10 +32,7 @@ async def restore_preview(db, workspace, user, kind, identifier, *, lock=False):
         team = (
             (
                 await db.execute(
-                    text(
-                        "SELECT archived_at,deleted_at FROM teams WHERE id=:id AND workspace_id=:workspace"
-                        + (" FOR SHARE" if lock else "")
-                    ),
+                    restore_preview_select_teams_sql(lock),
                     {"id": row["team_id"], "workspace": workspace},
                 )
             )
@@ -40,10 +50,7 @@ async def restore_preview(db, workspace, user, kind, identifier, *, lock=False):
                 row[field]
                 and not (
                     await db.execute(
-                        text(
-                            f"SELECT 1 FROM {table} WHERE id=:id AND workspace_id=:workspace AND archived_at IS NULL"
-                            + (" FOR SHARE" if lock else "")
-                        ),
+                        restore_preview_select_sql(table, lock),
                         {"id": row[field], "workspace": workspace},
                     )
                 ).first()
@@ -51,9 +58,7 @@ async def restore_preview(db, workspace, user, kind, identifier, *, lock=False):
                 blockers.append(f"Restore the {label} first.")
         merged = (
             await db.execute(
-                text(
-                    "SELECT 1 FROM activities WHERE issue_id=:id AND type IN ('issue.merged','issue.converted_to_comment') LIMIT 1"
-                ),
+                RESTORE_PREVIEW_SELECT_ACTIVITIES,
                 {"id": identifier},
             )
         ).first()
@@ -65,9 +70,7 @@ async def restore_preview(db, workspace, user, kind, identifier, *, lock=False):
     if kind == "project":
         related = (
             await db.execute(
-                text(
-                    f"SELECT COUNT(*) FROM issues e WHERE {archive_scope('issue')} AND e.project_id=:id"
-                ),
+                restore_preview_select_issues_sql(archive_scope),
                 {"workspace": workspace, "user": user["id"], "id": identifier},
             )
         ).scalar_one()
@@ -107,17 +110,14 @@ async def restore(db, workspace, user, kind, identifier, expected):
     await actor_context(db, user["id"])
     actor_update = ",updated_by=:actor" if kind == "document" else ""
     await db.execute(
-        text(
-            f"UPDATE {table} SET archived_at=NULL,updated_at=:now {actor_update} WHERE id=:id AND workspace_id=:workspace"
-        ),
+        restore_update_sql(table, actor_update),
         {"now": now, "id": identifier, "workspace": workspace, "actor": user["id"]},
     )
     if kind == "issue":
         from ..sla.synchronization import sync_issue
         await sync_issue(db, identifier)
     await db.execute(
-        text("""INSERT INTO audit_logs(id,workspace_id,actor_id,action,entity_type,entity_id,metadata,created_at)
-        VALUES (:id,:workspace,:user,:action,:kind,:entity,CAST(:metadata AS jsonb),:now)"""),
+        RESTORE_INSERT_AUDIT_LOGS,
         {
             "id": cuid(),
             "workspace": workspace,
@@ -142,9 +142,7 @@ async def archive_project(db, workspace, user, identifier):
     project = (
         (
             await db.execute(
-                text(
-                    "SELECT * FROM projects WHERE id=:id AND workspace_id=:workspace AND archived_at IS NULL FOR UPDATE"
-                ),
+                ARCHIVE_PROJECT_SELECT_PROJECTS,
                 {"id": identifier, "workspace": workspace},
             )
         )
@@ -157,9 +155,7 @@ async def archive_project(db, workspace, user, identifier):
         await team_access(db, workspace, project["team_id"], user["id"])
     unavailable = (
         await db.execute(
-            text("""SELECT 1 FROM issues i WHERE i.project_id=:id AND i.workspace_id=:workspace AND i.archived_at IS NULL
-        AND i.team_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM team_members tm JOIN teams t ON t.id=tm.team_id
-        WHERE tm.team_id=i.team_id AND tm.user_id=:user AND t.archived_at IS NULL) LIMIT 1"""),
+            ARCHIVE_PROJECT_SELECT_ISSUES,
             {"id": identifier, "workspace": workspace, "user": user["id"]},
         )
     ).first()
@@ -172,20 +168,15 @@ async def archive_project(db, workspace, user, identifier):
     now = utcnow()
     await actor_context(db, user["id"])
     await db.execute(
-        text(
-            "UPDATE issues SET archived_at=:now,updated_at=:now WHERE project_id=:id AND workspace_id=:workspace AND archived_at IS NULL"
-        ),
+        ARCHIVE_PROJECT_UPDATE_ISSUES,
         {"id": identifier, "workspace": workspace, "now": now},
     )
     await db.execute(
-        text(
-            "UPDATE projects SET archived_at=:now,updated_at=:now WHERE id=:id AND workspace_id=:workspace"
-        ),
+        ARCHIVE_PROJECT_UPDATE_PROJECTS,
         {"id": identifier, "workspace": workspace, "now": now},
     )
     await db.execute(
-        text("""INSERT INTO audit_logs(id,workspace_id,actor_id,action,entity_type,entity_id,metadata,created_at)
-        VALUES (:audit,:workspace,:user,'project.archived','project',:id,'{"source":"web"}'::jsonb,:now)"""),
+        ARCHIVE_PROJECT_INSERT_AUDIT_LOGS,
         {
             "audit": cuid(),
             "workspace": workspace,

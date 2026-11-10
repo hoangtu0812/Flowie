@@ -1,8 +1,12 @@
-from sqlalchemy import text
 
 from ...core.errors import ApiError
 from ...core.pagination import CursorCodec
 from ..access.projects import workspace_access, workspace_manager
+from .queries import (
+    archive_page_select_sql,
+    archive_page_select_sql_2,
+    record_select_sql,
+)
 
 TABLES = {
     "issue": ("issues", "title"),
@@ -34,10 +38,7 @@ async def record(db, workspace, user, kind, identifier, *, lock=False):
     row = (
         (
             await db.execute(
-                text(
-                    f"SELECT e.* FROM {table} e WHERE {scope(kind)} AND e.id=:id"
-                    + (" FOR UPDATE OF e" if lock else "")
-                ),
+                record_select_sql(table, scope, kind, lock),
                 {"workspace": workspace, "user": user, "id": identifier},
             )
         )
@@ -59,7 +60,7 @@ async def archive_page(db, workspace, user, kind, secret, *, limit=50, cursor=No
     )
     total = (
         await db.execute(
-            text(f"SELECT COUNT(*) FROM {table} e WHERE {predicate}"), params
+            archive_page_select_sql(table, predicate), params
         )
     ).scalar_one()
     if cursor:
@@ -68,9 +69,7 @@ async def archive_page(db, workspace, user, kind, secret, *, limit=50, cursor=No
     rows = (
         (
             await db.execute(
-                text(
-                    f"SELECT e.id,e.{title} AS title,e.archived_at,e.updated_at FROM {table} e WHERE {predicate} ORDER BY e.archived_at DESC,e.id DESC LIMIT :limit"
-                ),
+                archive_page_select_sql_2(title, table, predicate),
                 params,
             )
         )

@@ -6,7 +6,6 @@ from typing import Any, Literal
 
 from fastapi import Depends, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import utcnow
@@ -18,6 +17,21 @@ from ...db.session import get_session
 from ..access.projects import team_access, workspace_access
 from ..identity.auth import current_user
 from ..work_items.issue_queries import issue_row
+from .commands import (
+    ADD_ISSUE_INSERT_ISSUE_CYCLES,
+    CREATE_CYCLE_INSERT_CYCLES,
+    DELETE_CYCLE_DELETE_CYCLES,
+    RECONCILE_SCHEDULE_STATUSES_UPDATE_CYCLES,
+    REMOVE_ISSUE_DELETE_ISSUE_CYCLES,
+    update_cycle_update_cycles_sql,
+)
+from .queries import (
+    CYCLE_ISSUES_SELECT_ISSUE_CYCLES,
+    CYCLE_SELECT_CYCLES,
+    CYCLE_SELECT_ISSUE_CYCLES,
+    RECONCILE_SCHEDULE_STATUSES_SELECT_CYCLES,
+    list_cycles_select_cycles_sql,
+)
 
 router = APIRouter(prefix='/api/v1/_native/cycles', tags=['native-cycles'])
 # The active/upcoming cycle views already consume this exact read shape. Keep
@@ -105,7 +119,7 @@ async def _cycle(
     db: AsyncSession, cycle_id: str, workspace_id: str, user_id: str
 ) -> dict[str, Any]:
     result = await db.execute(
-        text('SELECT * FROM cycles WHERE id = :cycle_id AND workspace_id = :workspace_id LIMIT 1'),
+        CYCLE_SELECT_CYCLES,
         {'cycle_id': cycle_id, 'workspace_id': workspace_id},
     )
     cycle = result.mappings().first()
@@ -113,14 +127,7 @@ async def _cycle(
         raise ApiError(404, 'Cycle not found.', 'Not Found')
     await team_access(db, workspace_id, cycle['team_id'], user_id)
     links = await db.execute(
-        text(
-            '''SELECT ic.issue_id, ic.created_at, i.updated_at, i.completed_at, s.category AS status_category
-               FROM issue_cycles ic
-               JOIN issues i ON i.id = ic.issue_id
-               JOIN issue_statuses s ON s.id = i.status_id
-               WHERE ic.cycle_id = :cycle_id AND i.archived_at IS NULL
-               ORDER BY ic.created_at'''
-        ),
+        CYCLE_SELECT_ISSUE_CYCLES,
         {'cycle_id': cycle_id},
     )
     link_rows = [dict(row) for row in links.mappings().all()]
@@ -166,12 +173,7 @@ async def _reconcile_schedule_statuses(
 ) -> None:
     """Persist date-driven state changes so filtered Cycle views remain consistent."""
     result = await db.execute(
-        text(
-            '''SELECT id, status, start_date, end_date
-               FROM cycles
-               WHERE workspace_id = :workspace_id AND team_id = :team_id
-                 AND status IN ('UPCOMING', 'ACTIVE')'''
-        ),
+        RECONCILE_SCHEDULE_STATUSES_SELECT_CYCLES,
         {'workspace_id': workspace_id, 'team_id': team_id},
     )
     updates = []
@@ -181,7 +183,7 @@ async def _reconcile_schedule_statuses(
             updates.append({'id': cycle['id'], 'status': resolved, 'updated_at': utcnow()})
     if updates:
         await db.execute(
-            text('UPDATE cycles SET status = :status, updated_at = :updated_at WHERE id = :id'),
+            RECONCILE_SCHEDULE_STATUSES_UPDATE_CYCLES,
             updates,
         )
         await db.commit()
@@ -199,16 +201,10 @@ async def list_cycles(
     await workspace_access(db, workspaceId, user['id'])
     await team_access(db, workspaceId, teamId, user['id'])
     await _reconcile_schedule_statuses(db, workspaceId, teamId)
-    query = '''SELECT id FROM cycles WHERE workspace_id = :workspace_id AND team_id = :team_id'''
     params: dict[str, Any] = {'workspace_id': workspaceId, 'team_id': teamId}
-    # PostgreSQL cannot infer the type of a nullable bind reused in an
-    # ``:status IS NULL OR ...`` predicate. Omit the predicate when no filter
-    # is requested; this is also the natural query for the Cycles timeline.
     if status is not None:
-        query += ' AND status = :status'
         params['status'] = status
-    query += ' ORDER BY start_date DESC NULLS LAST, created_at DESC'
-    result = await db.execute(text(query), params)
+    result = await db.execute(list_cycles_select_cycles_sql(status is not None), params)
     return {'data': [await _cycle(db, row['id'], workspaceId, user['id']) for row in result.mappings().all()]}
 
 
@@ -226,10 +222,7 @@ async def create_cycle(
     cycle_id, now = cuid(), utcnow()
     status = _scheduled_status(payload.status, start_date, end_date)
     await db.execute(
-        text(
-            '''INSERT INTO cycles (id, workspace_id, team_id, name, description, status, start_date, end_date, created_at, updated_at)
-               VALUES (:id, :workspace_id, :team_id, :name, :description, :status, :start_date, :end_date, :now, :now)'''
-        ),
+        CREATE_CYCLE_INSERT_CYCLES,
         {
             'id': cycle_id, 'workspace_id': payload.workspaceId, 'team_id': payload.teamId,
             'name': payload.name.strip(), 'description': payload.description, 'status': status,
@@ -276,7 +269,7 @@ async def update_cycle(
         params['status'] = resolved_status
         sets.append('status = :status')
     if sets:
-        await db.execute(text(f"UPDATE cycles SET {', '.join(sets)}, updated_at = :now WHERE id = :cycle_id"), params)
+        await db.execute(update_cycle_update_cycles_sql(sets), params)
         await db.commit()
     return {'data': await _cycle(db, cycle_id, workspaceId, user['id'])}
 
@@ -294,8 +287,7 @@ async def add_issue(
     if issue['teamId'] != cycle['teamId']:
         raise ApiError(404, 'Issue not found for this team.', 'Not Found')
     await db.execute(
-        text('''INSERT INTO issue_cycles (issue_id, cycle_id) VALUES (:issue_id, :cycle_id)
-                ON CONFLICT DO NOTHING'''),
+        ADD_ISSUE_INSERT_ISSUE_CYCLES,
         {'issue_id': payload.issueId, 'cycle_id': cycle_id},
     )
     await db.commit()
@@ -312,7 +304,7 @@ async def cycle_issues(
 ) -> dict[str, list[dict[str, Any]]]:
     await _cycle(db, cycle_id, workspaceId, user['id'])
     result = await db.execute(
-        text('''SELECT issue_id FROM issue_cycles WHERE cycle_id = :cycle_id ORDER BY created_at DESC'''),
+        CYCLE_ISSUES_SELECT_ISSUE_CYCLES,
         {'cycle_id': cycle_id},
     )
     return {'data': [await issue_row(db, row['issue_id'], workspaceId, user['id']) for row in result.mappings().all()]}
@@ -329,7 +321,7 @@ async def remove_issue(
 ) -> dict[str, dict[str, Any]]:
     await _cycle(db, cycle_id, workspaceId, user['id'])
     deleted = await db.execute(
-        text('DELETE FROM issue_cycles WHERE cycle_id = :cycle_id AND issue_id = :issue_id RETURNING issue_id'),
+        REMOVE_ISSUE_DELETE_ISSUE_CYCLES,
         {'cycle_id': cycle_id, 'issue_id': issue_id},
     )
     if not deleted.mappings().first():
@@ -346,6 +338,6 @@ async def delete_cycle(
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
     await _cycle(db, cycle_id, workspaceId, user['id'])
-    await db.execute(text('DELETE FROM cycles WHERE id = :cycle_id AND workspace_id = :workspace_id'), {'cycle_id': cycle_id, 'workspace_id': workspaceId})
+    await db.execute(DELETE_CYCLE_DELETE_CYCLES, {'cycle_id': cycle_id, 'workspace_id': workspaceId})
     await db.commit()
     return {'data': {'id': cycle_id, 'deleted': True}}

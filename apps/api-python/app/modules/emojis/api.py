@@ -7,7 +7,6 @@ from typing import Any
 
 from fastapi import Depends, File, Form, Query, Request, UploadFile
 from fastapi.responses import Response
-from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +18,17 @@ from ...db.session import get_session
 from ...storage.minio import MinioStorage
 from ..access.projects import workspace_access, workspace_manager
 from ..identity.auth import current_user
+from .commands import (
+    ARCHIVE_EMOJI_UPDATE_WORKSPACE_EMOJIS,
+    AUDIT_INSERT_AUDIT_LOGS,
+    UPLOAD_EMOJI_INSERT_WORKSPACE_EMOJIS,
+    UPLOAD_EMOJI_UPDATE_WORKSPACE_EMOJIS,
+)
+from .queries import (
+    EMOJI_SELECT_WORKSPACE_EMOJIS,
+    LIST_EMOJIS_SELECT_WORKSPACE_EMOJIS,
+    UPLOAD_EMOJI_SELECT_WORKSPACE_EMOJIS,
+)
 
 router = APIRouter(prefix='/api/v1/emojis', tags=['emojis'])
 MAX_EMOJI_BYTES = 512 * 1024
@@ -45,17 +55,7 @@ async def _emoji(
     db: AsyncSession, emoji_id: str, workspace_id: str, *, include_archived: bool = False
 ) -> dict[str, Any]:
     result = await db.execute(
-        text(
-            '''SELECT emoji.id, emoji.workspace_id, emoji.name, emoji.object_key, emoji.filename,
-                      emoji.mime_type, emoji.size, emoji.created_by, emoji.archived_at,
-                      emoji.created_at, emoji.updated_at,
-                      creator.id AS creator_id, creator.name AS creator_name,
-                      creator.avatar_url AS creator_avatar_url
-               FROM workspace_emojis emoji
-               JOIN users creator ON creator.id = emoji.created_by
-               WHERE emoji.id = :emoji_id AND emoji.workspace_id = :workspace_id
-                 AND (:include_archived OR emoji.archived_at IS NULL)'''
-        ),
+        EMOJI_SELECT_WORKSPACE_EMOJIS,
         {'emoji_id': emoji_id, 'workspace_id': workspace_id, 'include_archived': include_archived},
     )
     row = result.mappings().first()
@@ -78,11 +78,7 @@ async def _audit(
     emoji_id: str, metadata: dict[str, Any],
 ) -> None:
     await db.execute(
-        text(
-            '''INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at)
-               VALUES (:id, :workspace_id, :actor_id, :action, 'workspace-emoji', :entity_id,
-                       CAST(:metadata AS jsonb), :created_at)'''
-        ),
+        AUDIT_INSERT_AUDIT_LOGS,
         {
             'id': cuid(), 'workspace_id': workspace_id, 'actor_id': actor_id, 'action': action,
             'entity_id': emoji_id, 'metadata': json.dumps(metadata), 'created_at': utcnow(),
@@ -98,11 +94,7 @@ async def list_emojis(
 ) -> dict[str, list[dict[str, Any]]]:
     await workspace_access(db, workspaceId, user['id'])
     result = await db.execute(
-        text(
-            '''SELECT id FROM workspace_emojis
-               WHERE workspace_id = :workspace_id AND archived_at IS NULL
-               ORDER BY name ASC'''
-        ),
+        LIST_EMOJIS_SELECT_WORKSPACE_EMOJIS,
         {'workspace_id': workspaceId},
     )
     return {'data': [await _emoji(db, row['id'], workspaceId) for row in result.mappings().all()]}
@@ -135,7 +127,7 @@ async def upload_emoji(
     await MinioStorage(request.app.state.settings).put(object_key, body, mime_type)
     now = utcnow()
     existing = await db.execute(
-        text('SELECT id FROM workspace_emojis WHERE workspace_id = :workspace_id AND name = :name'),
+        UPLOAD_EMOJI_SELECT_WORKSPACE_EMOJIS,
         {'workspace_id': workspaceId, 'name': normalized_name},
     )
     existing_id = existing.scalar_one_or_none()
@@ -143,12 +135,7 @@ async def upload_emoji(
     try:
         if existing_id:
             await db.execute(
-                text(
-                    '''UPDATE workspace_emojis
-                       SET object_key = :object_key, filename = :filename, mime_type = :mime_type,
-                           size = :size, created_by = :created_by, archived_at = NULL, updated_at = :now
-                       WHERE id = :id'''
-                ),
+                UPLOAD_EMOJI_UPDATE_WORKSPACE_EMOJIS,
                 {
                     'id': emoji_id, 'object_key': object_key, 'filename': filename, 'mime_type': mime_type,
                     'size': len(body), 'created_by': user['id'], 'now': now,
@@ -156,12 +143,7 @@ async def upload_emoji(
             )
         else:
             await db.execute(
-                text(
-                    '''INSERT INTO workspace_emojis
-                       (id, workspace_id, name, object_key, filename, mime_type, size, created_by, created_at, updated_at)
-                       VALUES (:id, :workspace_id, :name, :object_key, :filename, :mime_type, :size,
-                               :created_by, :now, :now)'''
-                ),
+                UPLOAD_EMOJI_INSERT_WORKSPACE_EMOJIS,
                 {
                     'id': emoji_id, 'workspace_id': workspaceId, 'name': normalized_name,
                     'object_key': object_key, 'filename': filename, 'mime_type': mime_type, 'size': len(body),
@@ -203,7 +185,7 @@ async def archive_emoji(
     emoji = await _emoji(db, emoji_id, workspaceId)
     now = utcnow()
     await db.execute(
-        text('UPDATE workspace_emojis SET archived_at = :now, updated_at = :now WHERE id = :emoji_id'),
+        ARCHIVE_EMOJI_UPDATE_WORKSPACE_EMOJIS,
         {'emoji_id': emoji_id, 'now': now},
     )
     await _audit(db, workspaceId, user['id'], 'workspace-emoji.archived', emoji_id, {'name': emoji['name']})

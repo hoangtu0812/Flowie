@@ -5,7 +5,6 @@ from typing import Any, Literal
 
 from fastapi import Depends, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +16,21 @@ from ...core.utc_responses import UtcAPIRouter as APIRouter
 from ...db.session import get_session
 from ..access.projects import workspace_access, workspace_manager
 from ..identity.auth import current_user
+from .commands import (
+    ARCHIVE_RELEASE_UPDATE_RELEASES,
+    AUDIT_INSERT_AUDIT_LOGS,
+    CREATE_RELEASE_INSERT_RELEASE_PROJECTS,
+    CREATE_RELEASE_INSERT_RELEASES,
+    UPDATE_RELEASE_DELETE_RELEASE_PROJECTS,
+    UPDATE_RELEASE_INSERT_RELEASE_PROJECTS,
+    update_release_update_releases_sql,
+)
+from .queries import (
+    LIST_RELEASES_SELECT_RELEASES,
+    PROJECT_IDS_SELECT_PROJECTS,
+    RELEASE_SELECT_RELEASE_PROJECTS,
+    RELEASE_SELECT_RELEASES,
+)
 
 router = APIRouter(prefix='/api/v1/releases', tags=['releases'])
 ReleaseStatus = Literal['planned', 'in-progress', 'released', 'canceled']
@@ -50,11 +64,7 @@ async def _audit(
     metadata: dict[str, Any] | None = None,
 ) -> None:
     await db.execute(
-        text(
-            '''INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at)
-               VALUES (:id, :workspace_id, :actor_id, :action, 'release', :entity_id,
-                       CAST(:metadata AS jsonb), :created_at)'''
-        ),
+        AUDIT_INSERT_AUDIT_LOGS,
         {
             'id': cuid(), 'workspace_id': workspace_id, 'actor_id': actor_id,
             'action': action, 'entity_id': release_id,
@@ -67,31 +77,14 @@ async def _release(
     db: AsyncSession, release_id: str, workspace_id: str
 ) -> dict[str, Any]:
     result = await db.execute(
-        text(
-            '''SELECT release.id, release.workspace_id, release.name, release.version, release.description,
-                      release.status, release.target_date, release.released_at, release.created_by,
-                      release.created_at, release.updated_at,
-                      creator.id AS creator_id, creator.name AS creator_name, creator.avatar_url AS creator_avatar_url
-               FROM releases release
-               JOIN users creator ON creator.id = release.created_by
-               WHERE release.id = :release_id AND release.workspace_id = :workspace_id
-                 AND release.archived_at IS NULL'''
-        ),
+        RELEASE_SELECT_RELEASES,
         {'release_id': release_id, 'workspace_id': workspace_id},
     )
     row = result.mappings().first()
     if not row:
         raise ApiError(404, 'Release not found.', 'Not Found')
     links = await db.execute(
-        text(
-            '''SELECT link.release_id, link.project_id, link.created_at,
-                      project.id AS project_id_value, project.name AS project_name,
-                      project.identifier AS project_identifier
-               FROM release_projects link
-               JOIN projects project ON project.id = link.project_id
-               WHERE link.release_id = :release_id AND project.archived_at IS NULL
-               ORDER BY link.created_at ASC'''
-        ),
+        RELEASE_SELECT_RELEASE_PROJECTS,
         {'release_id': release_id},
     )
     return {
@@ -123,10 +116,7 @@ async def _project_ids(
     if not unique_ids:
         return []
     result = await db.execute(
-        text(
-            '''SELECT id FROM projects
-               WHERE workspace_id = :workspace_id AND archived_at IS NULL AND id = ANY(:project_ids)'''
-        ),
+        PROJECT_IDS_SELECT_PROJECTS,
         {'workspace_id': workspace_id, 'project_ids': unique_ids},
     )
     if len(result.mappings().all()) != len(unique_ids):
@@ -142,11 +132,7 @@ async def list_releases(
 ) -> dict[str, list[dict[str, Any]]]:
     await workspace_access(db, workspaceId, user['id'])
     result = await db.execute(
-        text(
-            '''SELECT id FROM releases
-               WHERE workspace_id = :workspace_id AND archived_at IS NULL
-               ORDER BY target_date DESC NULLS LAST, updated_at DESC'''
-        ),
+        LIST_RELEASES_SELECT_RELEASES,
         {'workspace_id': workspaceId},
     )
     return {'data': [await _release(db, row['id'], workspaceId) for row in result.mappings().all()]}
@@ -163,13 +149,7 @@ async def create_release(
     release_id, now = cuid(), utcnow()
     try:
         await db.execute(
-            text(
-                '''INSERT INTO releases
-                   (id, workspace_id, name, version, description, status, target_date, released_at,
-                    created_by, created_at, updated_at)
-                   VALUES (:id, :workspace_id, :name, :version, :description, :status, :target_date,
-                           :released_at, :created_by, :now, :now)'''
-            ),
+            CREATE_RELEASE_INSERT_RELEASES,
             {
                 'id': release_id, 'workspace_id': payload.workspaceId, 'name': payload.name.strip(),
                 'version': payload.version.strip(),
@@ -181,7 +161,7 @@ async def create_release(
         )
         for project_id in project_ids:
             await db.execute(
-                text('INSERT INTO release_projects (release_id, project_id, created_at) VALUES (:release_id, :project_id, :now)'),
+                CREATE_RELEASE_INSERT_RELEASE_PROJECTS,
                 {'release_id': release_id, 'project_id': project_id, 'now': now},
             )
         await _audit(db, payload.workspaceId, user['id'], 'release.created', release_id, {
@@ -232,14 +212,14 @@ async def update_release(
     try:
         if sets:
             await db.execute(
-                text(f"UPDATE releases SET {', '.join(sets)}, updated_at = :now WHERE id = :release_id"),
+                update_release_update_releases_sql(sets),
                 params,
             )
         if project_ids is not None:
-            await db.execute(text('DELETE FROM release_projects WHERE release_id = :release_id'), {'release_id': release_id})
+            await db.execute(UPDATE_RELEASE_DELETE_RELEASE_PROJECTS, {'release_id': release_id})
             for project_id in project_ids:
                 await db.execute(
-                    text('INSERT INTO release_projects (release_id, project_id, created_at) VALUES (:release_id, :project_id, :now)'),
+                    UPDATE_RELEASE_INSERT_RELEASE_PROJECTS,
                     {'release_id': release_id, 'project_id': project_id, 'now': utcnow()},
                 )
         if sets or project_ids is not None:
@@ -264,7 +244,7 @@ async def archive_release(
     release = await _release(db, release_id, workspaceId)
     now = utcnow()
     await db.execute(
-        text('UPDATE releases SET archived_at = :now, updated_at = :now WHERE id = :release_id'),
+        ARCHIVE_RELEASE_UPDATE_RELEASES,
         {'release_id': release_id, 'now': now},
     )
     await _audit(db, workspaceId, user['id'], 'release.archived', release_id, {

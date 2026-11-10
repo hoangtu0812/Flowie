@@ -1,16 +1,17 @@
 """Bounded dependency operations; a listening port alone is not readiness."""
 import asyncio
 
-from sqlalchemy import text
-
 from ..storage.minio import MinioStorage
+from .queries import (
+    DATABASE_READY_SELECT,
+)
 
 
 async def database_ready(factory):
     if factory is None:
         return False
     async with factory() as db:
-        return (await db.execute(text('SELECT 1'))).scalar_one()==1
+        return (await db.execute(DATABASE_READY_SELECT)).scalar_one()==1
 
 
 async def storage_ready(settings):

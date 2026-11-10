@@ -25,13 +25,17 @@ from __future__ import annotations
 from typing import Any
 
 import httpx
-from sqlalchemy import text
 
 from ...core.clock import utcnow
 from ...core.config import Settings
 from ...core.errors import ApiError
 from ...storage.minio import MinioStorage
+from .commands import (
+    PUBLISH_ATTACHMENTS_DUE_LOCK,
+    RECORD_INSERT_ATTACHMENT_PUBLICATIONS,
+)
 from .graph import GraphClient, SharePointError, safe_name
+from .queries import ATTACHMENT_DUE
 from .service import (
     BATCH,
     MAX_BACKOFF_MINUTES,
@@ -39,54 +43,6 @@ from .service import (
     connection_row,
     graph_client,
 )
-
-# Every attachment of a publishing project is numbered within its SharePoint folder (`copy`),
-# archived issues and deleted comments included, so a later file can never take the name of
-# one already uploaded. Only active ones that are not yet uploaded are due.
-# shortcut: the numbering scans all attachments of enabled workspaces each run; add a stored
-# copy number if that table grows past what a one-minute scan handles.
-# VI: Mọi attachment của dự án có phát hành được đánh số trong thư mục SharePoint của nó (`copy`),
-# VI: kể cả issue đã archive và comment đã xóa, để file sau không bao giờ lấy tên của file đã tải.
-# VI: Chỉ attachment còn hoạt động và chưa tải lên mới đến hạn.
-# VI: shortcut: việc đánh số quét mọi attachment của workspace đang bật mỗi lượt; lưu sẵn số thứ
-# VI: tự nếu bảng lớn tới mức một lượt mỗi phút không kịp.
-DUE_QUERY = """
-WITH targets AS (
-  SELECT a.id, a.workspace_id, a.entity_type, a.object_key, a.filename, a.mime_type, a.created_at,
-         p.id AS project_id, p.sharepoint_folder_url,
-         COALESCE(i.identifier, ci.identifier) AS issue_key, COALESCE(i.title, ci.title) AS issue_title,
-         COALESCE(df.id, ddf.id) AS folder_id,
-         CASE WHEN a.entity_type IN ('issue', 'comment') THEN i.archived_at IS NULL AND ci.archived_at IS NULL
-                AND cm.deleted_at IS NULL
-              WHEN a.entity_type = 'document' THEN dd.archived_at IS NULL
-              ELSE TRUE END AS active,
-         ROW_NUMBER() OVER (
-           PARTITION BY p.id, CASE WHEN a.entity_type IN ('issue', 'comment') THEN 'i:' || COALESCE(i.id, ci.id)
-                                   WHEN a.entity_type IN ('document', 'document-folder') THEN 'f:' || COALESCE(df.id, ddf.id)
-                                   ELSE 'p' END, lower(a.filename)
-           ORDER BY a.created_at, a.id) AS copy
-  FROM attachments a
-  JOIN sharepoint_connections c ON c.workspace_id = a.workspace_id AND c.enabled AND c.publish_attachments
-  LEFT JOIN issues i ON a.entity_type = 'issue' AND i.id = a.entity_id
-  LEFT JOIN comments cm ON a.entity_type = 'comment' AND cm.id = a.entity_id
-  LEFT JOIN issues ci ON ci.id = cm.issue_id
-  LEFT JOIN project_updates pu ON a.entity_type = 'project-update' AND pu.id = a.entity_id
-  LEFT JOIN document_folders df ON a.entity_type = 'document-folder' AND df.id = a.entity_id
-  LEFT JOIN documents dd ON a.entity_type = 'document' AND dd.id = a.entity_id
-  LEFT JOIN document_folders ddf ON ddf.id = dd.folder_id
-  JOIN projects p ON p.workspace_id = a.workspace_id AND p.archived_at IS NULL
-   AND p.sharepoint_folder_url IS NOT NULL
-   AND p.id = COALESCE(i.project_id, ci.project_id, pu.project_id, df.project_id, ddf.project_id,
-                       CASE WHEN a.entity_type = 'project' THEN a.entity_id END)
-)
-SELECT t.* FROM targets t
-LEFT JOIN attachment_publications pub ON pub.attachment_id = t.id
-WHERE t.active AND pub.published_at IS NULL
-  AND (pub.attempted_at IS NULL OR pub.attempted_at <
-       CAST(:now AS timestamp) - make_interval(mins => LEAST(CAST(:cap AS int), power(2, LEAST(pub.attempts, 6))::int)))
-ORDER BY t.created_at, t.id
-LIMIT :limit
-"""
 
 
 def numbered(filename: str, copy: int) -> str:
@@ -114,19 +70,7 @@ async def attachment_path(db, folder_path: str, attachment: Any) -> str:
 
 async def _record(db, attachment: Any, *, now, path=None, item=None, error=None) -> None:
     await db.execute(
-        text(
-            """INSERT INTO attachment_publications
-               (attachment_id, workspace_id, path, item_id, web_url, published_at, attempted_at, attempts, last_error)
-               VALUES (:attachment, :workspace, :path, :item, :url, :published, :now, :attempts, :error)
-               ON CONFLICT (attachment_id) DO UPDATE SET
-                 path = COALESCE(EXCLUDED.path, attachment_publications.path),
-                 item_id = COALESCE(EXCLUDED.item_id, attachment_publications.item_id),
-                 web_url = COALESCE(EXCLUDED.web_url, attachment_publications.web_url),
-                 published_at = COALESCE(EXCLUDED.published_at, attachment_publications.published_at),
-                 attempted_at = EXCLUDED.attempted_at,
-                 attempts = CASE WHEN EXCLUDED.last_error IS NULL THEN 0 ELSE attachment_publications.attempts + 1 END,
-                 last_error = EXCLUDED.last_error"""
-        ),
+        RECORD_INSERT_ATTACHMENT_PUBLICATIONS,
         {
             "attachment": attachment["id"], "workspace": attachment["workspace_id"], "path": path,
             "item": item and item.get("id"), "url": item and item.get("webUrl"),
@@ -150,13 +94,13 @@ async def publish_attachments_due(
     """
     async with factory() as db:
         locked = (
-            await db.execute(text("SELECT pg_try_advisory_xact_lock(hashtextextended('sharepoint-attachments', 0))"))
+            await db.execute(PUBLISH_ATTACHMENTS_DUE_LOCK)
         ).scalar_one()
         if not locked:
             return 0
         now = utcnow()
         due = (
-            await db.execute(text(DUE_QUERY), {"now": now, "cap": MAX_BACKOFF_MINUTES, "limit": BATCH})
+            await db.execute(ATTACHMENT_DUE, {"now": now, "cap": MAX_BACKOFF_MINUTES, "limit": BATCH})
         ).mappings().all()
         if not due:
             return 0

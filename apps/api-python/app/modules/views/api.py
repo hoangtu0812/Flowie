@@ -6,7 +6,6 @@ from typing import Any, Literal
 
 from fastapi import Depends, Query
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import utcnow
@@ -17,6 +16,17 @@ from ...db.session import get_session
 from ..access.projects import team_access, workspace_access
 from ..identity.auth import current_user
 from ..work_items.saved_view_config import issue_view_config
+from .commands import (
+    CREATE_VIEW_INSERT_SAVED_VIEWS,
+    DELETE_VIEW_DELETE_SAVED_VIEWS,
+    UPDATE_VIEW_UPDATE_SAVED_VIEWS,
+)
+from .queries import (
+    CONFIG_REFERENCES_SELECT_WORKSPACE_MEMBERS,
+    LIST_VIEWS_SELECT_SAVED_VIEWS,
+    VIEW_SELECT_SAVED_VIEWS,
+    config_references_select_sql,
+)
 
 router = APIRouter(prefix="/api/v1/views", tags=["views"])
 
@@ -93,9 +103,7 @@ async def _config_references(db: AsyncSession, config: dict, workspace: str) -> 
         # VI: Tên bảng chỉ lấy từ ánh xạ cố định phía trên; giá trị người dùng luôn là tham số bind.
         count = (
             await db.execute(
-                text(
-                    f"SELECT COUNT(*) FROM {table} WHERE workspace_id=:workspace AND id=ANY(CAST(:ids AS text[])){active}"
-                ),
+                config_references_select_sql(table, active),
                 {"workspace": workspace, "ids": list(ids)},
             )
         ).scalar_one()
@@ -108,9 +116,7 @@ async def _config_references(db: AsyncSession, config: dict, workspace: str) -> 
     if user_ids:
         count = (
             await db.execute(
-                text(
-                    "SELECT COUNT(*) FROM workspace_members WHERE workspace_id=:workspace AND status='ACTIVE' AND user_id=ANY(CAST(:ids AS text[]))"
-                ),
+                CONFIG_REFERENCES_SELECT_WORKSPACE_MEMBERS,
                 {"workspace": workspace, "ids": list(user_ids)},
             )
         ).scalar_one()
@@ -126,17 +132,7 @@ async def _view(
     db: AsyncSession, view_id: str, workspace_id: str, user_id: str
 ) -> dict[str, Any]:
     result = await db.execute(
-        text(
-            """SELECT view.id, view.workspace_id, view.created_by, view.name, view.description,
-                      view.entity_type, view.filters, view.is_shared, view.created_at, view.updated_at,
-                      creator.id AS creator_id, creator.name AS creator_name,
-                      creator.avatar_url AS creator_avatar_url
-               FROM saved_views view
-               JOIN users creator ON creator.id = view.created_by
-               WHERE view.id = :view_id AND view.workspace_id = :workspace_id
-                 AND (view.is_shared = TRUE OR view.created_by = :user_id)
-               LIMIT 1"""
-        ),
+        VIEW_SELECT_SAVED_VIEWS,
         {"view_id": view_id, "workspace_id": workspace_id, "user_id": user_id},
     )
     row = result.mappings().first()
@@ -181,12 +177,7 @@ async def list_views(
     if teamId:
         await team_access(db, workspaceId, teamId, user["id"])
     result = await db.execute(
-        text(
-            """SELECT id FROM saved_views
-               WHERE workspace_id = :workspace_id
-                 AND (is_shared = TRUE OR created_by = :user_id)
-               ORDER BY is_shared DESC, updated_at DESC"""
-        ),
+        LIST_VIEWS_SELECT_SAVED_VIEWS,
         {"workspace_id": workspaceId, "user_id": user["id"]},
     )
     views = [
@@ -235,12 +226,7 @@ async def create_view(
             await team_access(db, payload.workspaceId, filters["teamId"], user["id"])
     view_id = cuid()
     await db.execute(
-        text(
-            """INSERT INTO saved_views
-               (id, workspace_id, created_by, name, description, entity_type, filters, is_shared, created_at, updated_at)
-               VALUES (:id, :workspace_id, :created_by, :name, :description, :entity_type,
-                       CAST(:filters AS jsonb), :is_shared, :now, :now)"""
-        ),
+        CREATE_VIEW_INSERT_SAVED_VIEWS,
         {
             "id": view_id,
             "workspace_id": payload.workspaceId,
@@ -278,10 +264,7 @@ async def update_view(
     # Millisecond timestamps must advance even when two successful writes share the same clock tick.
     # VI: Timestamp mili giây phải tăng ngay cả khi hai lần ghi thành công nằm trong cùng một nhịp đồng hồ.
     result = await db.execute(
-        text("""UPDATE saved_views SET name=:name, description=:description,
-        filters=CAST(:filters AS jsonb), is_shared=:shared,
-        updated_at=GREATEST(:now, updated_at + interval '1 millisecond')
-        WHERE id=:id AND workspace_id=:workspace AND created_by=:user AND updated_at=:expected RETURNING id"""),
+        UPDATE_VIEW_UPDATE_SAVED_VIEWS,
         {
             "id": view_id,
             "workspace": workspaceId,
@@ -314,12 +297,7 @@ async def delete_view(
 ) -> dict[str, Any]:
     await workspace_access(db, workspaceId, user["id"])
     result = await db.execute(
-        text(
-            """DELETE FROM saved_views
-               WHERE id = :view_id AND workspace_id = :workspace_id AND created_by = :user_id
-                 AND (CAST(:expected AS timestamp) IS NULL OR updated_at=CAST(:expected AS timestamp))
-               RETURNING id"""
-        ),
+        DELETE_VIEW_DELETE_SAVED_VIEWS,
         {
             "view_id": view_id,
             "workspace_id": workspaceId,

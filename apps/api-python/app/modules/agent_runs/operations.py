@@ -1,6 +1,5 @@
 from fastapi import Depends, Query
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
-from sqlalchemy import text
 
 from ...core.clock import utcnow
 from ...core.utc_responses import UtcAPIRouter
@@ -10,6 +9,13 @@ from ..identity.auth import current_user
 from ..mcp.quotas import limits, update_limits
 from ..mcp.registry import TOOLS
 from .audit import management_audit
+from .queries import (
+    OVERVIEW_SELECT_AI_PROVIDER_CALLS,
+    OVERVIEW_SELECT_AI_PROVIDER_CALLS_2,
+    OVERVIEW_SELECT_AI_TOOL_WINDOWS,
+    OVERVIEW_SELECT_AUDIT_LOGS,
+    OVERVIEW_SELECT_AUDIT_LOGS_2,
+)
 
 router = UtcAPIRouter(prefix="/api/v1/ai-operations", tags=["ai-operations"])
 
@@ -55,45 +61,31 @@ async def overview(
     params = {"workspace": workspaceId, "now": utcnow()}
     tools = (
         await db.execute(
-            text("""SELECT metadata->>'tool' AS tool,count(*)::int AS calls,
-        count(*) FILTER(WHERE metadata->>'outcome'<>'succeeded')::int AS errors,
-        percentile_cont(0.95) WITHIN GROUP(ORDER BY (metadata->>'durationMs')::int) AS "p95Ms"
-        FROM audit_logs WHERE workspace_id=:workspace AND entity_type='mcp-tool' AND created_at>CAST(:now AS timestamp)-INTERVAL '24 hours'
-        GROUP BY metadata->>'tool' ORDER BY count(*) DESC LIMIT 100"""),
+            OVERVIEW_SELECT_AUDIT_LOGS,
             params,
         )
     ).mappings()
     recent = (
         await db.execute(
-            text("""SELECT metadata->>'tool' AS tool,metadata->>'outcome' AS outcome,created_at AS "createdAt"
-        FROM audit_logs WHERE workspace_id=:workspace AND entity_type='mcp-tool' AND metadata->>'outcome'<>'succeeded'
-        ORDER BY created_at DESC LIMIT 25"""),
+            OVERVIEW_SELECT_AUDIT_LOGS_2,
             params,
         )
     ).mappings()
     usage = (
         await db.execute(
-            text(
-                "SELECT used FROM ai_tool_windows WHERE workspace_id=:workspace AND tool='*' AND window_start=date_trunc('minute',CAST(:now AS timestamp))"
-            ),
+            OVERVIEW_SELECT_AI_TOOL_WINDOWS,
             params,
         )
     ).scalar_one_or_none()
     provider_calls = (
         await db.execute(
-            text("""SELECT feature,count(*)::int AS calls,count(*) FILTER(WHERE outcome<>'ok')::int AS failed,
-        COALESCE(sum(input_tokens),0)::bigint AS "inputTokens",COALESCE(sum(output_tokens),0)::bigint AS "outputTokens",
-        percentile_cont(0.95) WITHIN GROUP(ORDER BY duration_ms) AS "p95Ms"
-        FROM ai_provider_calls WHERE workspace_id=:workspace AND created_at>CAST(:now AS timestamp)-INTERVAL '7 days'
-        GROUP BY feature ORDER BY COALESCE(sum(input_tokens),0)+COALESCE(sum(output_tokens),0) DESC"""),
+            OVERVIEW_SELECT_AI_PROVIDER_CALLS,
             params,
         )
     ).mappings()
     provider_errors = (
         await db.execute(
-            text("""SELECT feature,outcome,status_code AS "statusCode",model,created_at AS "createdAt"
-        FROM ai_provider_calls WHERE workspace_id=:workspace AND outcome<>'ok'
-        ORDER BY created_at DESC LIMIT 10"""),
+            OVERVIEW_SELECT_AI_PROVIDER_CALLS_2,
             params,
         )
     ).mappings()

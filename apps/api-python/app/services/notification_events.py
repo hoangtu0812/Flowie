@@ -30,13 +30,26 @@ from typing import Any
 
 import httpx
 from fastapi import WebSocket
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.audit_context import audit_agent
 from ..core.clock import utcnow
 from ..core.identifiers import cuid
+from .commands import (
+    CREATE_NOTIFICATION_BATCH_INSERT_NOTIFICATIONS,
+)
 from .microsoft_teams import teams_available, teams_mention_message, teams_message
+from .queries import (
+    DISCORD_WEBHOOK_SELECT_DISCORD_WEBHOOKS,
+    ISSUE_RECIPIENT_IDS_SELECT_ISSUE_SUBSCRIPTIONS,
+    PROJECT_RECIPIENT_IDS_SELECT_PROJECT_MEMBERS,
+    PROJECT_TEAMS_BATCH_SELECT_PROJECT_TEAMS_CHANNELS,
+    TEAM_RECIPIENT_IDS_SELECT_TEAM_MEMBERS,
+    TEAMS_MENTION_CARD_SELECT_PROJECT_TEAMS_CHANNELS,
+    TEAMS_MENTION_CARD_SELECT_USERS,
+    TEAMS_WEBHOOKS_SELECT_TEAMS_WEBHOOKS,
+    WORKSPACE_ROUTE_ID_SELECT_WORKSPACES,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -124,13 +137,13 @@ def actor_payload(actor: Any) -> dict[str, str | None]:
 
 
 async def team_recipient_ids(db: AsyncSession, team_id: str | None) -> set[str]:
-    result = await db.execute(text('SELECT user_id FROM team_members WHERE team_id = :team_id'), {'team_id': team_id})
+    result = await db.execute(TEAM_RECIPIENT_IDS_SELECT_TEAM_MEMBERS, {'team_id': team_id})
     return {row['user_id'] for row in result.mappings().all()}
 
 
 async def issue_recipient_ids(db: AsyncSession, issue_id: str, assignee_id: str | None = None) -> set[str]:
     result = await db.execute(
-        text('SELECT user_id FROM issue_subscriptions WHERE issue_id = :issue_id'), {'issue_id': issue_id}
+        ISSUE_RECIPIENT_IDS_SELECT_ISSUE_SUBSCRIPTIONS, {'issue_id': issue_id}
     )
     recipients = {row['user_id'] for row in result.mappings().all()}
     if assignee_id:
@@ -142,10 +155,7 @@ async def project_recipient_ids(
     db: AsyncSession, project_id: str, lead_id: str | None = None
 ) -> set[str]:
     result = await db.execute(
-        text(
-            '''SELECT user_id FROM project_members WHERE project_id = :project_id
-               UNION SELECT user_id FROM project_subscriptions WHERE project_id = :project_id'''
-        ),
+        PROJECT_RECIPIENT_IDS_SELECT_PROJECT_MEMBERS,
         {'project_id': project_id},
     )
     recipients = {row['user_id'] for row in result.mappings().all()}
@@ -156,10 +166,7 @@ async def project_recipient_ids(
 
 async def _discord_webhook(db: AsyncSession, workspace_id: str) -> str | None:
     result = await db.execute(
-        text(
-            '''SELECT webhook_url FROM discord_webhooks
-               WHERE workspace_id = :workspace_id AND enabled = TRUE LIMIT 1'''
-        ),
+        DISCORD_WEBHOOK_SELECT_DISCORD_WEBHOOKS,
         {'workspace_id': workspace_id},
     )
     return result.scalar_one_or_none()
@@ -173,18 +180,7 @@ async def _teams_webhooks(
     if not teams_available():
         return []
     result = await db.execute(
-        text(
-            '''SELECT webhook_url FROM teams_webhooks
-               WHERE workspace_id = :workspace_id AND enabled = TRUE
-               UNION
-               SELECT c.webhook_url FROM project_teams_channels c
-               JOIN projects p ON p.id = c.project_id
-               WHERE p.workspace_id = :workspace_id AND c.enabled = TRUE
-                 AND p.id IN (
-                     SELECT CAST(:entity_id AS text) WHERE CAST(:entity_type AS text) = 'project'
-                     UNION SELECT project_id FROM issues
-                     WHERE id = :entity_id AND CAST(:entity_type AS text) = 'issue')'''
-        ),
+        TEAMS_WEBHOOKS_SELECT_TEAMS_WEBHOOKS,
         {'workspace_id': workspace_id, 'entity_type': entity_type, 'entity_id': entity_id},
     )
     return list(result.scalars().all())
@@ -218,10 +214,7 @@ async def project_teams_batch(
     if not teams_available():
         return None
     result = await db.execute(
-        text(
-            '''SELECT c.webhook_url, p.name FROM project_teams_channels c JOIN projects p ON p.id = c.project_id
-               WHERE c.project_id = :project_id AND p.workspace_id = :workspace_id AND c.enabled = TRUE'''
-        ),
+        PROJECT_TEAMS_BATCH_SELECT_PROJECT_TEAMS_CHANNELS,
         {'project_id': project_id, 'workspace_id': workspace_id},
     )
     channel = result.mappings().first()
@@ -264,16 +257,7 @@ async def _teams_mention_card(
         return None
     url = (
         await db.execute(
-            text(
-                '''SELECT webhook_url FROM (
-                       SELECT c.webhook_url, 0 AS rank FROM project_teams_channels c
-                       JOIN issues i ON i.project_id = c.project_id
-                       WHERE i.id = :issue_id AND c.enabled = TRUE
-                       UNION ALL
-                       SELECT webhook_url, 1 FROM teams_webhooks
-                       WHERE workspace_id = :workspace_id AND enabled = TRUE) channel
-                   ORDER BY rank LIMIT 1'''
-            ),
+            TEAMS_MENTION_CARD_SELECT_PROJECT_TEAMS_CHANNELS,
             {'issue_id': issue_id, 'workspace_id': workspace_id},
         )
     ).scalar_one_or_none()
@@ -281,16 +265,7 @@ async def _teams_mention_card(
         return None
     people = (
         await db.execute(
-            text(
-                '''SELECT DISTINCT ON (u.id) split_part(identity.provider_account_id, ':', 2) AS id, u.name
-                   FROM users u JOIN user_identities identity
-                     ON identity.user_id = u.id AND identity.provider = 'MICROSOFT'
-                   WHERE u.id = ANY(CAST(:users AS text[]))
-                     AND NOT EXISTS(SELECT 1 FROM notification_preferences preference
-                         WHERE preference.workspace_id = :workspace_id AND preference.user_id = u.id
-                           AND NOT preference.teams_enabled)
-                   ORDER BY u.id, identity.updated_at DESC'''
-            ),
+            TEAMS_MENTION_CARD_SELECT_USERS,
             {'users': sorted(recipients), 'workspace_id': workspace_id},
         )
     ).mappings().all()
@@ -306,7 +281,7 @@ def _app_url() -> str:
 
 async def _workspace_route_id(db: AsyncSession, workspace_id: str) -> str | None:
     result = await db.execute(
-        text('SELECT id FROM workspaces WHERE id = :workspace_id'), {'workspace_id': workspace_id}
+        WORKSPACE_ROUTE_ID_SELECT_WORKSPACES, {'workspace_id': workspace_id}
     )
     return result.scalar_one_or_none()
 
@@ -442,12 +417,7 @@ async def create_notification_batch(
     for recipient_id in recipients:
         notification_id = cuid()
         await db.execute(
-            text(
-                '''INSERT INTO notifications
-                   (id, workspace_id, user_id, type, entity_type, entity_id, data, created_at)
-                   VALUES (:id, :workspace_id, :user_id, :type, :entity_type, :entity_id,
-                           CAST(:data AS jsonb), :created_at)'''
-            ),
+            CREATE_NOTIFICATION_BATCH_INSERT_NOTIFICATIONS,
             {
                 'id': notification_id,
                 'workspace_id': workspace_id,
