@@ -9,8 +9,8 @@ from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
 from app.domains.native_issues import MoveIssueInput, list_sub_issues, move_issue
-from app.domains.native_projects import _project, _project_issue_rows
 from app.modules.notifications.access import readable_recipients
+from app.modules.portfolio.projects_api import _project, _project_issue_rows
 from app.modules.sla.alerts import escalation_actor
 from app.modules.work_items.bug_reports import report
 from app.modules.work_items.contracts import CreateIssueInput, UpdateIssueInput

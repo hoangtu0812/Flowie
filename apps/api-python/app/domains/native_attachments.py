@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.errors import ApiError
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
+from ..modules.access.projects import team_access, workspace_access
 from ..modules.attachments.tables import (
     UnreadableSpreadsheet,
     csv_sheet,
@@ -24,7 +25,6 @@ from ..modules.attachments.tables import (
 from ..modules.sharepoint.graph import viewer_url
 from ..storage.minio import MinioStorage
 from .auth import _cuid, _utcnow, current_user
-from .native_projects import _team_access, _workspace_access
 
 router = APIRouter(prefix='/api/v1/_native/attachments', tags=['native-attachments'])
 # Storage authorization is entity-aware and already native. Expose this
@@ -75,7 +75,7 @@ async def _entity_team_id(db: AsyncSession, workspace_id: str, entity_type: Enti
 
 
 async def _authorize_entity(db: AsyncSession, workspace_id: str, entity_type: EntityType, entity_id: str, user_id: str, *, writing: bool = False) -> None:
-    await _workspace_access(db, workspace_id, user_id)
+    await workspace_access(db, workspace_id, user_id)
     # Requesters sit outside the ticket's team, so the team rule below would lock them out of their own files.
     # VI: Người yêu cầu ở ngoài team của ticket, nên quy tắc team bên dưới sẽ chặn họ khỏi tệp của chính mình.
     if entity_type == 'ticket':
@@ -85,7 +85,7 @@ async def _authorize_entity(db: AsyncSession, workspace_id: str, entity_type: En
         return
     team_id = await _entity_team_id(db, workspace_id, entity_type, entity_id)
     if team_id:
-        await _team_access(db, workspace_id, team_id, user_id)
+        await team_access(db, workspace_id, team_id, user_id)
     if writing and entity_type == 'comment':
         author = (await db.execute(text('SELECT author_id FROM comments WHERE id=:id'), {'id': entity_id})).scalar_one()
         if author != user_id:

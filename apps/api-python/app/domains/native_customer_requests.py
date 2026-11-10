@@ -11,8 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.errors import ApiError
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
+from ..modules.access.projects import workspace_access
 from .auth import _cuid, _utcnow, current_user
-from .native_projects import _workspace_access
 
 router = APIRouter(prefix='/api/v1/customer-requests', tags=['customer-requests'])
 RequestSource = Literal['manual', 'interview', 'support', 'sales', 'other']
@@ -98,14 +98,14 @@ async def _can_manage(db: AsyncSession, request: dict[str, Any], workspace_id: s
 
 @router.get('')
 async def list_customer_requests(workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
-    await _workspace_access(db, workspaceId, user['id'])
+    await workspace_access(db, workspaceId, user['id'])
     result = await db.execute(text('SELECT id FROM customer_requests WHERE workspace_id = :workspace_id AND archived_at IS NULL ORDER BY updated_at DESC'), {'workspace_id': workspaceId})
     return {'data': [await _request(db, row['id'], workspaceId) for row in result.mappings().all()]}
 
 
 @router.post('')
 async def create_customer_request(payload: CreateCustomerRequestInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    await _workspace_access(db, payload.workspaceId, user['id'])
+    await workspace_access(db, payload.workspaceId, user['id'])
     await _references(db, payload.workspaceId, payload.projectId, payload.issueId)
     request_id, now = _cuid(), _utcnow()
     await db.execute(text('''INSERT INTO customer_requests (id, workspace_id, title, description, customer, source, status, priority, project_id, issue_id, created_by, created_at, updated_at)

@@ -13,6 +13,7 @@ from ..core.errors import ApiError
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
 from ..modules.access.project_scope import project_read_scope
+from ..modules.access.projects import team_access, workspace_access
 from ..modules.work_items.contracts import CreateIssueInput, UpdateIssueInput
 from ..modules.work_items.issue_activity import _transition as _transition
 from ..modules.work_items.issue_activity import _write_activity as _write_activity
@@ -50,7 +51,6 @@ from ..services.notification_events import (
     team_recipient_ids,
 )
 from .auth import _cuid, _utcnow, current_user
-from .native_projects import _date, _team_access, _workspace_access
 from .native_slas import resolve_deadline
 from .teams import _manager
 
@@ -184,9 +184,9 @@ async def list_issues(
 ) -> dict:
     from ..core.config import Settings
     from ..modules.work_items.issue_search import search_page
-    await _workspace_access(db, workspaceId, user['id'])
+    await workspace_access(db, workspaceId, user['id'])
     if teamId:
-        await _team_access(db, workspaceId, teamId, user['id'])
+        await team_access(db, workspaceId, teamId, user['id'])
     settings = request.app.state.settings if request else Settings.from_environment()
     options = {
         'teamId': teamId, 'categories': categories, 'scope': scope, 'limit': limit, 'cursor': cursor,
@@ -208,7 +208,7 @@ async def list_issues(
 async def lookup_issue(reference: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict:
     if len(reference) > 100:
         raise ApiError(400, 'Invalid issue reference.', 'Bad Request')
-    await _workspace_access(db, workspaceId, user['id'])
+    await workspace_access(db, workspaceId, user['id'])
     row = (await db.execute(text('SELECT id FROM issues WHERE workspace_id=:workspace AND (id=:reference OR identifier=:reference) AND archived_at IS NULL LIMIT 1'), {'workspace': workspaceId, 'reference': reference})).mappings().first()
     if not row:
         raise ApiError(404, 'Issue not found.', 'Not Found')
@@ -229,9 +229,9 @@ async def issue_options(
     db: AsyncSession = Depends(get_session),
     noTeam: bool = False,
 ) -> dict[str, dict[str, list[dict[str, Any]]]]:
-    await _workspace_access(db, workspaceId, user['id'])
+    await workspace_access(db, workspaceId, user['id'])
     if teamId:
-        await _team_access(db, workspaceId, teamId, user['id'])
+        await team_access(db, workspaceId, teamId, user['id'])
     await _ensure_default_issue_statuses(db, workspaceId)
     await db.commit()
     team_filter = 'AND team_id IS NULL' if noTeam else ('AND (team_id IS NULL OR team_id = :team_id)' if teamId else '')
@@ -328,7 +328,7 @@ async def list_issue_templates(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, list[dict[str, Any]]]:
-    await _workspace_access(db, workspaceId, user['id'])
+    await workspace_access(db, workspaceId, user['id'])
     result = await db.execute(
         text(
             '''SELECT template.*, creator.id AS creator_id, creator.name AS creator_name,
@@ -652,7 +652,7 @@ async def move_issue(
     if issue['teamId'] == payload.teamId:
         return {'data': issue}
     if payload.teamId:
-        await _team_access(db, payload.workspaceId, payload.teamId, user['id'])
+        await team_access(db, payload.workspaceId, payload.teamId, user['id'])
     from ..modules.work_items.issue_numbering import allocate_issue_number
     team = await allocate_issue_number(db, payload.workspaceId, payload.teamId)
     status = await db.execute(
@@ -892,7 +892,7 @@ async def get_issue(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _workspace_access(db, workspaceId, user['id'])
+    await workspace_access(db, workspaceId, user['id'])
     return {'data': await _issue_row(db, issue_id, workspaceId, user['id'])}
 
 

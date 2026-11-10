@@ -11,9 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.errors import ApiError
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
+from ..modules.access.projects import workspace_access
 from ..modules.notifications.access import notification_scope
 from .auth import _cuid, _utcnow, current_user
-from .native_projects import _workspace_access
 
 router = APIRouter(prefix='/api/v1/notifications', tags=['notifications'])
 
@@ -25,7 +25,7 @@ class NotificationPreferencesInput(BaseModel):
 
 
 async def _access(db: AsyncSession, workspace_id: str, user_id: str) -> None:
-    await _workspace_access(db, workspace_id, user_id)
+    await workspace_access(db, workspace_id, user_id)
 
 
 @router.websocket('/stream')

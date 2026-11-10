@@ -29,8 +29,6 @@ from .domains.native_integrations import router as integrations_router
 from .domains.native_issues import public_router as issues_router
 from .domains.native_issues import router as native_issues_router
 from .domains.native_notifications import router as notifications_router
-from .domains.native_projects import public_router as projects_router
-from .domains.native_projects import router as native_projects_router
 from .domains.native_pulse import router as pulse_router
 from .domains.native_slas import router as slas_router
 from .domains.scm.router import router as scm_router
@@ -57,6 +55,8 @@ from .modules.mcp.maintenance import maintenance_loop
 from .modules.mcp.uploads import router as mcp_upload_router
 from .modules.notifications.outbox import outbox_loop
 from .modules.operations.heartbeats import supervise
+from .modules.portfolio.projects_api import public_router as projects_router
+from .modules.portfolio.projects_api import router as native_projects_router
 from .modules.releases.api import router as releases_router
 from .modules.reviews.api import router as reviews_router
 from .modules.views.api import router as views_router

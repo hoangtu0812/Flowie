@@ -26,19 +26,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.errors import ApiError
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
+from ..modules.access.projects import team_access, workspace_access, workspace_manager
 from ..modules.ai.calls import PROVIDER_LABELS, call_provider
 from ..modules.identity.password_reset import limit_request
-from .auth import _cuid, _utcnow, current_user
-from .native_issues import CreateIssueInput, create_issue
-from .native_projects import (
+from ..modules.portfolio.projects_api import (
     CreateProjectInput,
     UpdateProjectInput,
-    _team_access,
-    _workspace_access,
-    _workspace_manager,
     create_project,
     update_project,
 )
+from .auth import _cuid, _utcnow, current_user
+from .native_issues import CreateIssueInput, create_issue
 from .team_insights import (
     assignment_suggestions,
     hcm_today,
@@ -1328,7 +1326,7 @@ async def _conversation_source_text(db: AsyncSession, conversation_id: str) -> s
 
 @router.get('/providers')
 async def list_providers(workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
-    await _workspace_access(db, workspaceId, user['id'])
+    await workspace_access(db, workspaceId, user['id'])
     manager = await db.execute(text("SELECT role FROM workspace_members WHERE workspace_id = :workspace_id AND user_id = :user_id AND status = 'ACTIVE'"), {'workspace_id': workspaceId, 'user_id': user['id']})
     rows = await db.execute(text('SELECT * FROM workspace_agent_providers WHERE workspace_id = :workspace_id ORDER BY provider'), {'workspace_id': workspaceId})
     return {'data': {'canManage': manager.scalar_one() in {'OWNER', 'ADMIN'}, 'providers': [_provider_view(row) for row in rows.mappings().all()]}}
@@ -1336,7 +1334,7 @@ async def list_providers(workspaceId: str = Query(min_length=1), user: Any = Dep
 
 @router.put('/providers/{provider}')
 async def save_provider(provider: ProviderName, payload: ProviderInput, request: Request, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
-    await _workspace_manager(db, workspaceId, user['id'])
+    await workspace_manager(db, workspaceId, user['id'])
     endpoint = _validated_endpoint(provider, payload.endpoint, request.app.state.settings.agent_provider_allowed_hosts)
     current = await db.execute(text('SELECT api_key_encrypted FROM workspace_agent_providers WHERE workspace_id = :workspace_id AND provider = CAST(:provider AS "AgentProvider")'), {'workspace_id': workspaceId, 'provider': provider})
     existing_key = current.scalar_one_or_none()
@@ -1374,7 +1372,7 @@ async def check_provider(provider: ProviderName, request: Request, workspaceId: 
     VI: từ client nên không thể dùng để gọi host tuỳ ý. Lỗi provider chính là kết quả cần biết, nên
     VI: trả 200 kèm lý do thay vì báo lỗi.
     """
-    await _workspace_manager(db, workspaceId, user['id'])
+    await workspace_manager(db, workspaceId, user['id'])
     settings = request.app.state.settings
     await limit_request(db, settings.auth_jwt_secret, 'agent-provider-test', user['id'], PROVIDER_TEST_HOURLY_LIMIT)
     result = await db.execute(
@@ -1398,7 +1396,7 @@ async def check_provider(provider: ProviderName, request: Request, workspaceId: 
 
 @router.get('/tools')
 async def list_tools(workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
-    await _workspace_access(db, workspaceId, user['id'])
+    await workspace_access(db, workspaceId, user['id'])
     role = await db.execute(text("SELECT role FROM workspace_members WHERE workspace_id = :workspace_id AND user_id = :user_id AND status = 'ACTIVE'"), {'workspace_id': workspaceId, 'user_id': user['id']})
     installed = await _installed_tool_keys(db, workspaceId)
     return {'data': {'canManage': role.scalar_one() in {'OWNER', 'ADMIN'}, 'tools': [
@@ -1411,7 +1409,7 @@ async def list_tools(workspaceId: str = Query(min_length=1), user: Any = Depends
 async def install_tool(tool_key: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
     if tool_key not in TOOL_DETAILS:
         raise ApiError(404, 'Agent tool not found.', 'Not Found')
-    await _workspace_manager(db, workspaceId, user['id'])
+    await workspace_manager(db, workspaceId, user['id'])
     now = _utcnow()
     await db.execute(text('''INSERT INTO workspace_agent_tools (id, workspace_id, tool_key, created_at, updated_at)
             VALUES (:id, :workspace_id, :tool_key, :now, :now)
@@ -1427,7 +1425,7 @@ async def install_tool(tool_key: str, workspaceId: str = Query(min_length=1), us
 async def remove_tool(tool_key: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
     if tool_key not in TOOL_DETAILS:
         raise ApiError(404, 'Agent tool not found.', 'Not Found')
-    await _workspace_manager(db, workspaceId, user['id'])
+    await workspace_manager(db, workspaceId, user['id'])
     await db.execute(text('DELETE FROM workspace_agent_tools WHERE workspace_id = :workspace_id AND tool_key = :tool_key'), {'workspace_id': workspaceId, 'tool_key': tool_key})
     await db.execute(text('''INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at)
             VALUES (:id, :workspace_id, :actor_id, 'agent.tool.removed', 'workspace_agent_tool', :entity_id, '{}'::jsonb, :now)'''), {'id': _cuid(), 'workspace_id': workspaceId, 'actor_id': user['id'], 'entity_id': tool_key, 'now': _utcnow()})
@@ -1626,7 +1624,7 @@ async def _project_facts(db: AsyncSession, workspace_id: str, project_id: str, u
     if not project:
         raise ApiError(404, 'Project not found.', 'Not Found')
     if project['team_id']:
-        await _team_access(db, workspace_id, project['team_id'], user_id)
+        await team_access(db, workspace_id, project['team_id'], user_id)
 
     statuses = await db.execute(
         text(
@@ -1764,7 +1762,7 @@ async def compose_project_update(
     Nothing is written: the text comes back for the author to edit and post,
     so the agent never publishes on someone's behalf.
     """
-    await _workspace_access(db, payload.workspaceId, user['id'])
+    await workspace_access(db, payload.workspaceId, user['id'])
     facts = await _project_facts(db, payload.workspaceId, payload.projectId, user['id'])
     if payload.health:
         facts['intendedHealth'] = payload.health
@@ -1805,7 +1803,7 @@ async def _project_schedule_facts(
     if not project:
         raise ApiError(404, 'Project not found.', 'Not Found')
     if project['team_id']:
-        await _team_access(db, workspace_id, project['team_id'], user_id)
+        await team_access(db, workspace_id, project['team_id'], user_id)
     if not project['target_date']:
         raise ApiError(400, 'Set the project target date before asking AI to schedule its issues.', 'Bad Request')
 
@@ -1918,7 +1916,7 @@ async def draft_project_schedule(
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
     """Return a validated proposal; schedule dates remain unchanged until the user applies it."""
-    await _workspace_access(db, payload.workspaceId, user['id'])
+    await workspace_access(db, payload.workspaceId, user['id'])
     facts = await _project_schedule_facts(db, payload.workspaceId, project_id, user['id'])
     provider = await _configured_provider(request, db, payload.workspaceId, user['id'])
     history = [{'role': 'user', 'content': json.dumps(facts, ensure_ascii=False)}]
@@ -1957,7 +1955,7 @@ async def apply_project_schedule(
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
     """Apply an already reviewed schedule atomically after revalidating current project scope."""
-    await _workspace_access(db, payload.workspaceId, user['id'])
+    await workspace_access(db, payload.workspaceId, user['id'])
     facts = await _project_schedule_facts(db, payload.workspaceId, project_id, user['id'])
     proposal = ProjectScheduleProposal(summary='Applied reviewed schedule.', schedules=payload.schedules)
     _validate_schedule_proposal(proposal, facts)
@@ -2015,7 +2013,7 @@ async def apply_project_schedule(
 
 @router.get('/conversations')
 async def list_conversations(workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
-    await _workspace_access(db, workspaceId, user['id'])
+    await workspace_access(db, workspaceId, user['id'])
     result = await db.execute(text('''SELECT id, title, created_at, updated_at FROM agent_conversations
             WHERE workspace_id = :workspace_id AND user_id = :user_id ORDER BY updated_at DESC LIMIT 50'''), {'workspace_id': workspaceId, 'user_id': user['id']})
     return {'data': [{'id': row['id'], 'title': row['title'], 'createdAt': row['created_at'], 'updatedAt': row['updated_at']} for row in result.mappings().all()]}
@@ -2023,7 +2021,7 @@ async def list_conversations(workspaceId: str = Query(min_length=1), user: Any =
 
 @router.get('/conversations/{conversation_id}')
 async def get_conversation(conversation_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
-    await _workspace_access(db, workspaceId, user['id'])
+    await workspace_access(db, workspaceId, user['id'])
     conversation = await db.execute(text('''SELECT id, title, created_at, updated_at FROM agent_conversations
             WHERE id = :id AND workspace_id = :workspace_id AND user_id = :user_id'''), {'id': conversation_id, 'workspace_id': workspaceId, 'user_id': user['id']})
     row = conversation.mappings().first()
@@ -2360,7 +2358,7 @@ async def _process_message(
     progress: ProgressReporter,
 ) -> dict[str, Any]:
     await progress({'id': 'workspace.access', 'label': 'Checking workspace access', 'state': 'running', 'orb': 'working'})
-    await _workspace_access(db, workspace_id, user['id'])
+    await workspace_access(db, workspace_id, user['id'])
     await progress({'id': 'workspace.access', 'label': 'Workspace access checked', 'state': 'completed', 'orb': 'working'})
     if len(files) > 5:
         raise ApiError(400, 'Attach at most five source files.', 'Bad Request')
@@ -2618,7 +2616,7 @@ async def stream_message(request: Request, workspaceId: str = Form(), message: s
 
 @router.post('/messages/{message_id}/accept')
 async def accept_proposal(message_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
-    await _workspace_access(db, workspaceId, user['id'])
+    await workspace_access(db, workspaceId, user['id'])
     result = await db.execute(text('''SELECT message.* FROM agent_messages message
             JOIN agent_conversations conversation ON conversation.id = message.conversation_id
             WHERE message.id = :message_id AND conversation.workspace_id = :workspace_id AND conversation.user_id = :user_id
@@ -2676,7 +2674,7 @@ class AssignmentApplyInput(BaseModel):
 @router.post('/assignments/apply')
 async def apply_assignment(payload: AssignmentApplyInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
     """Apply one drafted assignment row. Stale rows are rejected, never overwritten."""
-    await _workspace_access(db, payload.workspaceId, user['id'])
+    await workspace_access(db, payload.workspaceId, user['id'])
     issue = await db.execute(
         text('''SELECT issue.id, issue.identifier, issue.assignee_id, assignee.name AS assignee_name
                 FROM issues issue

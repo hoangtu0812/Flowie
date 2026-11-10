@@ -10,12 +10,13 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.audit_context import audit_source
+from ..core.dates import parse_date
 from ..core.errors import ApiError
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
 from ..modules.access.project_scope import project_read_scope
+from ..modules.access.projects import workspace_access
 from .auth import _cuid, _utcnow, current_user
-from .native_projects import _date, _workspace_access
 from .teams import _manager
 
 router = APIRouter(prefix='/api/v1/_native/initiatives', tags=['native-initiatives'])
@@ -98,7 +99,7 @@ async def _project(db: AsyncSession, project_id: str, workspace_id: str, user_id
 
 
 async def _initiative(db: AsyncSession, initiative_id: str, workspace_id: str, user_id: str) -> dict[str, Any]:
-    await _workspace_access(db, workspace_id, user_id)
+    await workspace_access(db, workspace_id, user_id)
     result = await db.execute(
         text(
             """SELECT initiative.*, owner.id AS owner_id_value, owner.name AS owner_name, owner.avatar_url AS owner_avatar_url
@@ -184,7 +185,7 @@ async def list_initiatives(workspaceId: str = Query(min_length=1), user: Any = D
     request: Request = None, limit: Annotated[int, Query(ge=1,le=100)] = 100, cursor: Annotated[str | None, Query(max_length=2000)] = None) -> dict:
     from ..core.config import Settings
     from ..modules.portfolio.initiatives import initiative_page
-    await _workspace_access(db,workspaceId,user['id'])
+    await workspace_access(db,workspaceId,user['id'])
     settings=request.app.state.settings if request else Settings.from_environment()
     return await initiative_page(db,workspaceId,user['id'],settings.auth_jwt_secret,limit=limit,cursor=cursor)
 
@@ -199,7 +200,7 @@ async def create_initiative(payload: CreateInitiativeInput, user: Any = Depends(
     await db.execute(
         text('''INSERT INTO initiatives (id, workspace_id, name, description, status, priority, health, icon, owner_id, target_date, created_at, updated_at)
                 VALUES (:id, :workspace_id, :name, :description, :status, :priority, :health, :icon, :owner_id, :target_date, :now, :now)'''),
-        {'id': initiative_id, 'workspace_id': payload.workspaceId, 'name': payload.name.strip(), 'description': payload.description, 'status': payload.status, 'priority': payload.priority, 'health': payload.health, 'icon': payload.icon, 'owner_id': owner_id, 'target_date': _date(payload.targetDate), 'now': now},
+        {'id': initiative_id, 'workspace_id': payload.workspaceId, 'name': payload.name.strip(), 'description': payload.description, 'status': payload.status, 'priority': payload.priority, 'health': payload.health, 'icon': payload.icon, 'owner_id': owner_id, 'target_date': parse_date(payload.targetDate), 'now': now},
     )
     await _audit(db, payload.workspaceId, user['id'], 'initiative.created', initiative_id, {'name': payload.name.strip()})
     await db.commit()
@@ -225,7 +226,7 @@ async def update_initiative(initiative_id: str, payload: UpdateInitiativeInput, 
     sets = []
     for field, column in column_map.items():
         if field in values:
-            value = _date(values[field]) if field == 'targetDate' else values[field]
+            value = parse_date(values[field]) if field == 'targetDate' else values[field]
             params[field] = value.strip() if field in {'name', 'description'} and isinstance(value, str) else value
             sets.append(f'{column} = :{field}')
     if sets:
