@@ -6,9 +6,11 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.work_items.issue_search import search_page
 
 
@@ -21,13 +23,13 @@ async def verify_filters():
     engine = create_async_engine(_async_database_url(os.environ['MCP_TEST_DATABASE_URL']))
     try:
         async with async_sessionmaker(engine)() as db:
-            now = _utcnow()
-            user = _cuid()
-            await db.execute(text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,'Filter owner',:email,'ACTIVE',:now,:now)"), {'id': user, 'email': _cuid() + '@example.test', 'now': now})
-            seed = await create_workspace_bootstrap(db, user_id=user, organization_name='Filters', workspace_name=_cuid(), now=now)
+            now = utcnow()
+            user = cuid()
+            await db.execute(text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,'Filter owner',:email,'ACTIVE',:now,:now)"), {'id': user, 'email': cuid() + '@example.test', 'now': now})
+            seed = await create_workspace_bootstrap(db, user_id=user, organization_name='Filters', workspace_name=cuid(), now=now)
             workspace, team = seed['workspace_id'], seed['team_id']
             statuses = dict((await db.execute(text("SELECT DISTINCT ON (category) category::text, id FROM issue_statuses WHERE workspace_id=:workspace ORDER BY category, position"), {'workspace': workspace})).all())
-            project, other_project, cycle, red, blue = (_cuid() for _ in range(5))
+            project, other_project, cycle, red, blue = (cuid() for _ in range(5))
             for project_id in (project, other_project):
                 await db.execute(text("INSERT INTO projects(id,workspace_id,name,identifier,created_at,updated_at) VALUES (:id,:workspace,:id,:id,:now,:now)"), {'id': project_id, 'workspace': workspace, 'now': now})
             await db.execute(text("INSERT INTO cycles(id,workspace_id,team_id,name,created_at,updated_at) VALUES (:id,:workspace,:team,'Cycle 1',:now,:now)"), {'id': cycle, 'workspace': workspace, 'team': team, 'now': now})
@@ -42,7 +44,7 @@ async def verify_filters():
                 ('D', 'STARTED', user, 'HIGH', [blue], None, cycle, 'TASK', None),
             ]
             for number, (name, category, assignee, priority, labels, project_id, cycle_id, issue_type, severity) in enumerate(fixtures, 1):
-                issue = _cuid()
+                issue = cuid()
                 await db.execute(text('''INSERT INTO issues(id,workspace_id,team_id,status_id,identifier,number,title,priority,assignee_id,project_id,issue_type,severity,creator_id,created_at,updated_at)
                     VALUES (:id,:workspace,:team,:status,:identifier,:number,:title,CAST(:priority AS "IssuePriority"),:assignee,:project,CAST(:issue_type AS "IssueType"),CAST(:severity AS "BugSeverity"),:user,:now,:now)'''),
                     {'id': issue, 'workspace': workspace, 'team': team, 'status': statuses[category], 'identifier': f'FLT-{name}', 'number': number, 'title': name,

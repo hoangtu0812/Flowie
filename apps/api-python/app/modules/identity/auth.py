@@ -4,7 +4,7 @@ import re
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from hmac import compare_digest
-from secrets import choice, token_urlsafe
+from secrets import choice
 from string import digits
 from typing import Any
 from urllib.parse import urlsplit
@@ -20,24 +20,22 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.clock import _utcnow as _utcnow
-from ..core.config import Settings
-from ..core.errors import ApiError
-from ..core.identifiers import _cuid as _cuid
-from ..core.identifiers import _hash_token as _hash_token
-from ..core.passwords import compatible_hash as _compatible_argon2_hash
-from ..core.passwords import verify_password
-from ..core.slugs import GENERATED_ID, RESERVED_WORKSPACE_SLUGS
-from ..core.utc_responses import UtcAPIRouter as APIRouter
-from ..db.session import get_session
-from ..modules.work_items.workflow_catalog import DEFAULT_ISSUE_STATUSES
-from ..services.auth_policy import require_password_sign_in
-from ..services.microsoft_identity import MicrosoftIdentityClient, MicrosoftProfile
-from ..services.registration_verification import (
+from ...core.clock import utcnow
+from ...core.config import Settings
+from ...core.errors import ApiError
+from ...core.identifiers import cuid, hash_token
+from ...core.passwords import verify_password
+from ...core.slugs import GENERATED_ID, RESERVED_WORKSPACE_SLUGS
+from ...core.utc_responses import UtcAPIRouter as APIRouter
+from ...db.session import get_session
+from ...services.auth_policy import require_password_sign_in
+from ...services.microsoft_identity import MicrosoftIdentityClient, MicrosoftProfile
+from ...services.registration_verification import (
     RegistrationDeliveryError,
     deliver_registration_code,
 )
-from ..storage.minio import MinioStorage
+from ...storage.minio import MinioStorage
+from ..work_items.workflow_catalog import DEFAULT_ISSUE_STATUSES
 
 router = APIRouter(prefix='/api/v1/auth', tags=['auth'])
 password_hasher = PasswordHasher()
@@ -106,13 +104,6 @@ def normalized_email(value: str) -> str:
     return email
 
 
-# shortcut: private alias kept for callers not yet moved out of app/domains; delete it once DTD-523
-# has switched every caller to `normalized_email`.
-# VI: shortcut: alias nội bộ giữ cho các nơi gọi chưa chuyển khỏi app/domains; xoá khi DTD-523 đã
-# VI: chuyển mọi nơi gọi sang `normalized_email`.
-_normalized_email = normalized_email
-
-
 def _valid_timezone(value: str | None) -> str | None:
     if not value:
         return None
@@ -133,7 +124,7 @@ def _api_key_expiry(value: str | None) -> datetime | None:
         raise ApiError(400, 'expiresAt must be a valid ISO 8601 datetime', 'Bad Request') from error
     if parsed.tzinfo:
         parsed = parsed.astimezone(UTC).replace(tzinfo=None)
-    if parsed <= _utcnow():
+    if parsed <= utcnow():
         raise ApiError(400, 'API key expiry must be in the future.', 'Bad Request')
     return parsed
 
@@ -295,9 +286,9 @@ async def create_workspace_bootstrap(
     now: datetime,
 ) -> dict[str, str]:
     slug = await _unique_workspace_slug(db, workspace_name)
-    organization_id = _cuid()
-    workspace_id = _cuid()
-    team_id = _cuid()
+    organization_id = cuid()
+    workspace_id = cuid()
+    team_id = cuid()
     await db.execute(
         text(
             '''
@@ -324,7 +315,7 @@ async def create_workspace_bootstrap(
         await db.execute(
             text('''INSERT INTO workspace_agent_tools (id, workspace_id, tool_key, created_at, updated_at)
                     VALUES (:id, :workspace_id, :tool_key, :now, :now)'''),
-            {'id': _cuid(), 'workspace_id': workspace_id, 'tool_key': tool_key, 'now': now},
+            {'id': cuid(), 'workspace_id': workspace_id, 'tool_key': tool_key, 'now': now},
         )
     await db.execute(
         text(
@@ -333,7 +324,7 @@ async def create_workspace_bootstrap(
             VALUES (:id, :workspace_id, :user_id, 'ACTIVE', 'OWNER', :now, :now, :now)
             '''
         ),
-        {'id': _cuid(), 'workspace_id': workspace_id, 'user_id': user_id, 'now': now},
+        {'id': cuid(), 'workspace_id': workspace_id, 'user_id': user_id, 'now': now},
     )
     await db.execute(
         text(
@@ -357,7 +348,7 @@ async def create_workspace_bootstrap(
                 '''
             ),
             {
-                'id': _cuid(),
+                'id': cuid(),
                 'workspace_id': workspace_id,
                 'name': status_name,
                 'category': category,
@@ -373,7 +364,9 @@ async def create_workspace_bootstrap(
 
 def _set_cookies(response: Response, access_token: str, refresh_token: str, settings: Settings) -> None:
     response.headers['Cache-Control'] = 'private, no-store'
-    cookie = {'httponly': True, 'secure': settings.auth_cookie_secure, 'samesite': 'lax', 'path': '/'}
+    # Shared flags for both session cookies; `Any` lets mypy accept the `**cookie` spread.
+    # VI: Cờ dùng chung cho hai cookie phiên; `Any` để mypy chấp nhận cách truyền `**cookie`.
+    cookie: dict[str, Any] = {'httponly': True, 'secure': settings.auth_cookie_secure, 'samesite': 'lax', 'path': '/'}
     response.set_cookie(
         'flowie_access',
         access_token,
@@ -397,14 +390,14 @@ def _clear_cookies(response: Response, settings: Settings) -> None:
 async def _create_session(
     db: AsyncSession, user: Any, request: Request, settings: Settings, *, method: str = 'PASSWORD', authenticated_at=None
 ) -> tuple[str, str, dict[str, Any]]:
-    from ..modules.identity.security.sessions import create_session
+    from .security.sessions import create_session
     access, refresh = await create_session(db, user, request, settings, method=method, authenticated_at=authenticated_at)
     workspace = await _first_workspace(db, user['id'])
     return access, refresh, {'user': _authenticated_user(user), 'workspace': workspace}
 
 
 async def current_user(request: Request, db: AsyncSession = Depends(get_session)) -> Any:
-    from ..modules.identity.security.sessions import (
+    from .security.sessions import (
         active_identity,
         decode_access,
         expired,
@@ -426,9 +419,9 @@ async def request_registration_verification(
 ) -> JSONResponse:
     require_password_sign_in(request.app.state.settings)
     name = _normalized_name(payload.name)
-    email = _normalized_email(payload.email)
+    email = normalized_email(payload.email)
     timezone_name = _valid_timezone(payload.timezone) or 'UTC'
-    now = _utcnow()
+    now = utcnow()
     expires_at = now + timedelta(seconds=request.app.state.settings.registration_otp_ttl_seconds)
     code = _registration_code()
     fingerprint = _request_fingerprint(request, request.app.state.settings.auth_jwt_secret)
@@ -483,12 +476,12 @@ async def request_registration_verification(
                     '''
                 ),
                 {
-                    'id': _cuid(),
+                    'id': cuid(),
                     'email': email,
                     'name': name,
                     'password_hash': password_hasher.hash(payload.password),
                     'timezone': timezone_name,
-                    'code_hash': _hash_token(code),
+                    'code_hash': hash_token(code),
                     'request_fingerprint': fingerprint,
                     'expires_at': expires_at,
                     'created_at': now,
@@ -503,7 +496,7 @@ async def request_registration_verification(
     except RegistrationDeliveryError as error:
         await db.execute(
             text('DELETE FROM registration_verification_tokens WHERE email = :email AND code_hash = :code_hash'),
-            {'email': email, 'code_hash': _hash_token(code)},
+            {'email': email, 'code_hash': hash_token(code)},
         )
         await db.commit()
         raise ApiError(503, str(error), 'Service Unavailable') from error
@@ -517,8 +510,8 @@ async def verify_registration(
     db: AsyncSession = Depends(get_session),
 ) -> JSONResponse:
     require_password_sign_in(request.app.state.settings)
-    email = _normalized_email(payload.email)
-    now = _utcnow()
+    email = normalized_email(payload.email)
+    now = utcnow()
     async with db.begin():
         result = await db.execute(
             text(
@@ -538,7 +531,7 @@ async def verify_registration(
             raise ApiError(400, 'The verification code has expired. Request a new code.', 'Bad Request')
         if pending['attempt_count'] >= 5:
             raise ApiError(429, 'Too many incorrect codes. Request a new code.', 'Too Many Requests')
-        if not compare_digest(pending['code_hash'], _hash_token(payload.code)):
+        if not compare_digest(pending['code_hash'], hash_token(payload.code)):
             await db.execute(
                 text('UPDATE registration_verification_tokens SET attempt_count = attempt_count + 1 WHERE id = :id'),
                 {'id': pending['id']},
@@ -547,7 +540,7 @@ async def verify_registration(
         if await _find_user_by_email(db, email):
             raise ApiError(409, 'An account already exists for this email address.', 'Conflict')
         user = {
-            'id': _cuid(),
+            'id': cuid(),
             'email': email,
             'name': pending['name'],
             'username': None,
@@ -582,7 +575,7 @@ async def verify_registration(
                 ) VALUES (:id, :user_id, 'LOCAL', :provider_account_id, :email, :now, :now)
                 '''
             ),
-            {'id': _cuid(), 'user_id': user['id'], 'provider_account_id': email, 'email': email, 'now': now},
+            {'id': cuid(), 'user_id': user['id'], 'provider_account_id': email, 'email': email, 'now': now},
         )
         await create_workspace_bootstrap(
             db,
@@ -620,7 +613,7 @@ async def _join_tenant_workspaces(db: AsyncSession, user_id: str, tenant_id: str
     )
     joined = 0
     for workspace_id in open_workspaces.scalars().all():
-        member_id = _cuid()
+        member_id = cuid()
         inserted = await db.execute(
             text(
                 '''INSERT INTO workspace_members (id, workspace_id, user_id, status, role, joined_at, created_at, updated_at)
@@ -636,7 +629,7 @@ async def _join_tenant_workspaces(db: AsyncSession, user_id: str, tenant_id: str
                 '''INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at)
                    VALUES (:id, :workspace_id, :actor_id, 'workspace.member.auto_joined', 'workspace-member', :entity_id, CAST('{}' AS jsonb), :now)'''
             ),
-            {'id': _cuid(), 'workspace_id': workspace_id, 'actor_id': user_id, 'entity_id': member_id, 'now': now},
+            {'id': cuid(), 'workspace_id': workspace_id, 'actor_id': user_id, 'entity_id': member_id, 'now': now},
         )
         joined += 1
     return joined
@@ -650,7 +643,7 @@ async def _upsert_microsoft_user(
     settings: Settings,
 ) -> str:
     provider_account_id = f'{profile.tenant_id.lower()}:{profile.object_id.lower()}'
-    now = _utcnow()
+    now = utcnow()
     async with db.begin():
         identity = await db.execute(
             text(
@@ -694,7 +687,7 @@ async def _upsert_microsoft_user(
                            )'''
                     ),
                     {
-                        'id': _cuid(),
+                        'id': cuid(),
                         'user_id': user['id'],
                         'provider_account_id': provider_account_id,
                         'email': profile.email,
@@ -703,7 +696,7 @@ async def _upsert_microsoft_user(
                     },
                 )
             else:
-                user_id = _cuid()
+                user_id = cuid()
                 await db.execute(
                     text(
                         '''INSERT INTO users (
@@ -735,7 +728,7 @@ async def _upsert_microsoft_user(
                            )'''
                     ),
                     {
-                        'id': _cuid(),
+                        'id': cuid(),
                         'user_id': user_id,
                         'provider_account_id': provider_account_id,
                         'email': profile.email,
@@ -893,7 +886,7 @@ async def microsoft_callback(
             text(
                 'UPDATE users SET avatar_url = :avatar_url, updated_at = :now WHERE id = :id'
             ),
-            {'id': user_id, 'avatar_url': avatar_url, 'now': _utcnow()},
+            {'id': user_id, 'avatar_url': avatar_url, 'now': utcnow()},
         )
         await db.commit()
     except (httpx.HTTPError, ValueError, ApiError):
@@ -903,7 +896,7 @@ async def microsoft_callback(
     if not user or user['status'] != 'ACTIVE':
         raise ApiError(403, 'This Flowie account is not active.', 'Forbidden')
     user = _runtime_user(user, settings)
-    from ..modules.identity.security.mfa.login import begin_login, challenge_cookie
+    from .security.mfa.login import begin_login, challenge_cookie
     challenge = await begin_login(db, user, request, method='MICROSOFT', authenticated_at=profile.authenticated_at, next_path=_safe_app_path(stored.get('next')))
     if challenge:
         await db.commit()
@@ -925,10 +918,10 @@ async def microsoft_callback(
 @router.post('/login')
 async def login(payload: LoginInput, request: Request, db: AsyncSession = Depends(get_session)) -> JSONResponse:
     require_password_sign_in(request.app.state.settings)
-    from ..modules.identity.password_reset import limit_request
-    from ..modules.identity.security.events import record_event
+    from .password_reset import limit_request
+    from .security.events import record_event
     settings = request.app.state.settings
-    email = _normalized_email(payload.email)
+    email = normalized_email(payload.email)
     await limit_request(db, settings.auth_jwt_secret, 'login-ip', request.client.host if request.client else 'unknown', settings.auth_login_ip_limit)
     await limit_request(db, settings.auth_jwt_secret, 'login-account', email, settings.auth_login_account_limit)
     user = await _find_user_by_email(db, email)
@@ -944,7 +937,7 @@ async def login(payload: LoginInput, request: Request, db: AsyncSession = Depend
         raise ApiError(401, 'Invalid email or password.', 'Unauthorized')
 
     user = _runtime_user(user, request.app.state.settings)
-    from ..modules.identity.security.mfa.login import begin_login, challenge_cookie
+    from .security.mfa.login import begin_login, challenge_cookie
     challenge = await begin_login(db, user, request, method='PASSWORD', next_path=_safe_app_path(payload.next))
     if challenge:
         await db.commit()
@@ -960,7 +953,7 @@ async def login(payload: LoginInput, request: Request, db: AsyncSession = Depend
                 WHERE id = :id'''),
         {
             'id': user['id'],
-            'now': _utcnow(),
+            'now': utcnow(),
             'timezone': timezone_name,
             'is_platform_admin': user['is_platform_admin'],
         },
@@ -978,7 +971,7 @@ async def refresh_presence(
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, datetime]]:
     """Persist an explicit browser heartbeat without marking background API reads as activity."""
-    now = _utcnow()
+    now = utcnow()
     await db.execute(
         text('UPDATE users SET last_seen_at = :now WHERE id = :id'),
         {'id': user['id'], 'now': now},
@@ -991,7 +984,7 @@ async def refresh_presence(
 async def refresh(
     request: Request, payload: RefreshInput | None = None, db: AsyncSession = Depends(get_session)
 ) -> JSONResponse:
-    from ..modules.identity.security.sessions import expired, rotate_session
+    from .security.sessions import expired, rotate_session
     refresh_token = (payload.refreshToken if payload else None) or request.cookies.get('flowie_refresh')
     if not refresh_token:
         raise expired()
@@ -1007,8 +1000,8 @@ async def refresh(
 
 @router.post('/logout', status_code=204)
 async def logout(request: Request, db: AsyncSession = Depends(get_session)) -> Response:
-    from ..modules.identity.security.sessions import logout_session
-    from ..services.notification_events import notification_hub
+    from ...services.notification_events import notification_hub
+    from .security.sessions import logout_session
     owner = await logout_session(db, request, request.app.state.settings)
     await db.commit()
     if owner:
@@ -1025,7 +1018,7 @@ async def list_sessions(
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, list[dict[str, Any]]]:
     current_refresh = request.cookies.get('flowie_refresh')
-    current_hash = _hash_token(current_refresh) if current_refresh else None
+    current_hash = hash_token(current_refresh) if current_refresh else None
     result = await db.execute(
         text(
             '''
@@ -1035,7 +1028,7 @@ async def list_sessions(
             ORDER BY last_used_at DESC
             '''
         ),
-        {'user_id': user['id'], 'now': _utcnow()},
+        {'user_id': user['id'], 'now': utcnow()},
     )
     sessions = []
     for session in result.mappings():
@@ -1057,8 +1050,8 @@ async def list_sessions(
 async def revoke_other_sessions(
     request: Request, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)
 ) -> dict[str, dict[str, int]]:
-    from ..modules.identity.security.sessions import revoke_sessions
-    from ..services.notification_events import notification_hub
+    from ...services.notification_events import notification_hub
+    from .security.sessions import revoke_sessions
     rows = await revoke_sessions(db, user, request)
     await db.commit()
     await notification_hub.close_user(user['id'])
@@ -1069,8 +1062,8 @@ async def revoke_other_sessions(
 async def revoke_session(
     session_id: str, request: Request, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)
 ) -> dict[str, dict[str, Any]]:
-    from ..modules.identity.security.sessions import revoke_sessions
-    from ..services.notification_events import notification_hub
+    from ...services.notification_events import notification_hub
+    from .security.sessions import revoke_sessions
     await revoke_sessions(db, user, request, identifier=session_id)
     await db.commit()
     await notification_hub.close_user(user['id'])
@@ -1103,7 +1096,7 @@ async def list_api_keys(
             ORDER BY created_at DESC
             '''
         ),
-        {'user_id': user['id'], 'now': _utcnow()},
+        {'user_id': user['id'], 'now': utcnow()},
     )
     return {'data': [_api_key(row) for row in result.mappings().all()]}
 
@@ -1130,7 +1123,7 @@ async def revoke_api_key(
             RETURNING id
             '''
         ),
-        {'id': key_id, 'user_id': user['id'], 'now': _utcnow()},
+        {'id': key_id, 'user_id': user['id'], 'now': utcnow()},
     )
     if not result.scalar_one_or_none():
         raise ApiError(404, 'API key not found.', 'Not Found')

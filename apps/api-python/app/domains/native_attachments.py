@@ -12,7 +12,9 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.clock import utcnow
 from ..core.errors import ApiError
+from ..core.identifiers import cuid
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
 from ..modules.access.projects import team_access, workspace_access
@@ -22,9 +24,9 @@ from ..modules.attachments.tables import (
     table_page,
     xlsx_sheets,
 )
+from ..modules.identity.auth import current_user
 from ..modules.sharepoint.graph import viewer_url
 from ..storage.minio import MinioStorage
-from .auth import _cuid, _utcnow, current_user
 
 router = APIRouter(prefix='/api/v1/_native/attachments', tags=['native-attachments'])
 # Storage authorization is entity-aware and already native. Expose this
@@ -154,8 +156,8 @@ async def store_attachment(db: AsyncSession, settings: Any, workspace_id: str, u
         await _authorize_entity(db, workspace_id, entity_type, entity_id, user_id, writing=True)
     object_key = f'{workspace_id}/{user_id}/{token_urlsafe(18)}-{filename}'
     await MinioStorage(settings).put(object_key, body, mime_type)
-    attachment_id = _cuid()
-    await db.execute(text('''INSERT INTO attachments (id, workspace_id, uploaded_by, entity_type, entity_id, object_key, filename, mime_type, size, created_at) VALUES (:id, :workspace_id, :uploaded_by, :entity_type, :entity_id, :object_key, :filename, :mime_type, :size, :now)'''), {'id': attachment_id, 'workspace_id': workspace_id, 'uploaded_by': user_id, 'entity_type': entity_type, 'entity_id': entity_id, 'object_key': object_key, 'filename': filename, 'mime_type': mime_type, 'size': len(body), 'now': _utcnow()})
+    attachment_id = cuid()
+    await db.execute(text('''INSERT INTO attachments (id, workspace_id, uploaded_by, entity_type, entity_id, object_key, filename, mime_type, size, created_at) VALUES (:id, :workspace_id, :uploaded_by, :entity_type, :entity_id, :object_key, :filename, :mime_type, :size, :now)'''), {'id': attachment_id, 'workspace_id': workspace_id, 'uploaded_by': user_id, 'entity_type': entity_type, 'entity_id': entity_id, 'object_key': object_key, 'filename': filename, 'mime_type': mime_type, 'size': len(body), 'now': utcnow()})
     result = await db.execute(text('SELECT * FROM attachments WHERE id = :id'), {'id': attachment_id})
     return _present(result.mappings().one())
 

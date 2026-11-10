@@ -9,8 +9,8 @@ from ...core.clock import _utcnow
 from ...core.pagination import CursorCodec
 from ...core.utc_responses import UtcAPIRouter as APIRouter
 from ...db.session import get_session
-from ...domains.auth import current_user
 from ..access.membership import _workspace_role
+from ..identity.auth import current_user
 from . import connections, instructions
 from .contracts import ConnectionInput, ConnectionUpdateInput, InstructionsInput
 from .domain import ALL_SCOPES, Principal

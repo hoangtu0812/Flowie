@@ -5,8 +5,10 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.work_items.comments import create_comment, update_comment
 from app.modules.work_items.contracts import (
     CommentInput,
@@ -33,9 +35,9 @@ async def verify_assignment_and_mention_notifications():
     engine = create_async_engine(_async_database_url(os.environ["MCP_TEST_DATABASE_URL"]))
     try:
         async with async_sessionmaker(engine)() as db:
-            now = _utcnow()
+            now = utcnow()
             people = {
-                name: {"id": _cuid(), "name": name, "avatar_url": None}
+                name: {"id": cuid(), "name": name, "avatar_url": None}
                 for name in ["Owner", "Bao", "Outsider", "Quiet", "Local"]
             }
             for person in people.values():
@@ -47,7 +49,7 @@ async def verify_assignment_and_mention_notifications():
                 )
             owner = people["Owner"]
             seed = await create_workspace_bootstrap(
-                db, user_id=owner["id"], organization_name="Mentions", workspace_name=_cuid(), now=now
+                db, user_id=owner["id"], organization_name="Mentions", workspace_name=cuid(), now=now
             )
             workspace, team = seed["workspace_id"], seed["team_id"]
             for name, person in people.items():
@@ -57,7 +59,7 @@ async def verify_assignment_and_mention_notifications():
                     text(
                         "INSERT INTO workspace_members(id,workspace_id,user_id,role,status,created_at,updated_at) VALUES (:id,:workspace,:user,'MEMBER','ACTIVE',:now,:now)"
                     ),
-                    {"id": _cuid(), "workspace": workspace, "user": person["id"], "now": now},
+                    {"id": cuid(), "workspace": workspace, "user": person["id"], "now": now},
                 )
                 if name != "Outsider":
                     await db.execute(
@@ -69,7 +71,7 @@ async def verify_assignment_and_mention_notifications():
                         text(
                             "INSERT INTO user_identities(id,user_id,provider,provider_account_id,created_at,updated_at) VALUES (:id,:user,'MICROSOFT',:account,:now,:now)"
                         ),
-                        {"id": _cuid(), "user": person["id"], "account": f"tenant:oid-{name.lower()}", "now": now},
+                        {"id": cuid(), "user": person["id"], "account": f"tenant:oid-{name.lower()}", "now": now},
                     )
             await db.execute(
                 text(
@@ -81,7 +83,7 @@ async def verify_assignment_and_mention_notifications():
                 text(
                     "INSERT INTO teams_webhooks(id,workspace_id,webhook_url,enabled,created_at,updated_at) VALUES (:id,:workspace,:url,true,:now,:now)"
                 ),
-                {"id": _cuid(), "workspace": workspace, "url": WORKSPACE_HOOK, "now": now},
+                {"id": cuid(), "workspace": workspace, "url": WORKSPACE_HOOK, "now": now},
             )
 
             async def cards():
@@ -128,7 +130,7 @@ async def verify_assignment_and_mention_notifications():
             assert card["url"] == WORKSPACE_HOOK and mentioned(card) == ["oid-bao"]
 
             # A project channel wins over the workspace channel.
-            project = _cuid()
+            project = cuid()
             await db.execute(
                 text("INSERT INTO projects(id,workspace_id,name,identifier,created_at,updated_at) VALUES (:id,:workspace,'Mentions','MEN',:now,:now)"),
                 {"id": project, "workspace": workspace, "now": now},
@@ -137,7 +139,7 @@ async def verify_assignment_and_mention_notifications():
                 text(
                     "INSERT INTO project_teams_channels(id,project_id,webhook_url,enabled,created_at,updated_at) VALUES (:id,:project,:url,true,:now,:now)"
                 ),
-                {"id": _cuid(), "project": project, "url": PROJECT_HOOK, "now": now},
+                {"id": cuid(), "project": project, "url": PROJECT_HOOK, "now": now},
             )
             await db.execute(
                 text("UPDATE issues SET project_id=:project WHERE id=:id"), {"project": project, "id": issue["id"]}

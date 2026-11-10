@@ -8,12 +8,14 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.clock import utcnow
 from ..core.errors import ApiError
+from ..core.identifiers import cuid
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
 from ..modules.access.projects import workspace_access
+from ..modules.identity.auth import current_user
 from ..modules.notifications.access import notification_scope
-from .auth import _cuid, _utcnow, current_user
 
 router = APIRouter(prefix='/api/v1/notifications', tags=['notifications'])
 
@@ -51,7 +53,7 @@ async def list_notifications(
                AND (:include_snoozed OR snoozed_until IS NULL OR snoozed_until<=:now)
                ORDER BY created_at DESC'''
         ),
-        {'workspace_id': workspaceId, 'user_id': user['id'], 'include_snoozed':includeSnoozed, 'now':_utcnow()},
+        {'workspace_id': workspaceId, 'user_id': user['id'], 'include_snoozed':includeSnoozed, 'now':utcnow()},
     )
     return {'data': [
         {
@@ -98,7 +100,7 @@ async def update_notification_preferences(
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, bool]]:
     await _access(db, workspaceId, user['id'])
-    now = _utcnow()
+    now = utcnow()
     await db.execute(
         text(
             """INSERT INTO notification_preferences
@@ -125,7 +127,7 @@ async def update_notification_preferences(
                VALUES (:id, :workspace_id, :actor_id, 'notification.preferences.updated', 'user', :actor_id, CAST(:metadata AS jsonb), :now)"""
         ),
         {
-            'id': _cuid(),
+            'id': cuid(),
             'workspace_id': workspaceId,
             'actor_id': user['id'],
             'metadata': json.dumps(payload.model_dump()),
@@ -162,7 +164,7 @@ async def mark_all_read(
             '''UPDATE notifications SET read_at = :now
                WHERE workspace_id = :workspace_id AND user_id = :user_id AND read_at IS NULL'''
         ),
-        {'now': _utcnow(), 'workspace_id': workspaceId, 'user_id': user['id']},
+        {'now': utcnow(), 'workspace_id': workspaceId, 'user_id': user['id']},
     )
     await db.commit()
     return {'ok': True}
@@ -179,7 +181,7 @@ async def mark_read(
     await _notification_exists(db, notification_id, workspaceId, user['id'])
     await db.execute(
         text('UPDATE notifications SET read_at = :now WHERE id = :id'),
-        {'id': notification_id, 'now': _utcnow()},
+        {'id': notification_id, 'now': utcnow()},
     )
     await db.commit()
     return {'ok': True}

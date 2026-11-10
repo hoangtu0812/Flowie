@@ -17,13 +17,9 @@ from ...core.identifiers import cuid
 from ...core.slugs import RESERVED_WORKSPACE_SLUGS, url_slug
 from ...core.utc_responses import UtcAPIRouter as APIRouter
 from ...db.session import get_session
-from ...domains.auth import (
-    create_workspace_bootstrap,
-    current_user,
-    normalized_email,
-)
 from ...services.auth_policy import microsoft_sign_in_enabled
 from ..access.read_only import ADMIN_READ_ROLES
+from ..identity.auth import create_workspace_bootstrap, current_user, normalized_email
 
 router = APIRouter(prefix='/api/v1/workspaces', tags=['workspaces'])
 

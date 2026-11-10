@@ -20,9 +20,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.utc_responses import UtcAPIRouter as APIRouter
 from ...db.session import get_session
-from ...domains.auth import current_user
 from ..access.membership import workspace_role
 from ..access.team_scope import workspace_team_scope
+from ..identity.auth import current_user
 from .document_review import approval_block, approver_ids
 
 router = APIRouter(prefix='/api/v1/approvals', tags=['approvals'])

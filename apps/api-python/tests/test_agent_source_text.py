@@ -5,9 +5,11 @@ from datetime import timedelta
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
+from app.core.identifiers import cuid
 from app.domains.agent import _conversation_source_text, _persist_turn
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.modules.identity.auth import create_workspace_bootstrap
 
 
 async def _turn(db, conversation_id, workspace, user_id, is_new, source_text=None):
@@ -33,18 +35,18 @@ async def verify_source_text():
     engine = create_async_engine(_async_database_url(os.environ['MCP_TEST_DATABASE_URL']))
     try:
         async with async_sessionmaker(engine)() as db:
-            now = _utcnow()
-            user_id = _cuid()
+            now = utcnow()
+            user_id = cuid()
             await db.execute(
                 text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,'Agent',:email,'ACTIVE',:now,:now)"),
-                {'id': user_id, 'email': _cuid() + '@example.test', 'now': now},
+                {'id': user_id, 'email': cuid() + '@example.test', 'now': now},
             )
             workspace = (
                 await create_workspace_bootstrap(
-                    db, user_id=user_id, organization_name='Agent', workspace_name=_cuid(), now=now
+                    db, user_id=user_id, organization_name='Agent', workspace_name=cuid(), now=now
                 )
             )['workspace_id']
-            conversation = _cuid()
+            conversation = cuid()
 
             first = await _turn(db, conversation, workspace, user_id, True, 'first file')
             assert 'source_text' not in first['userMessage'] and 'sourceText' not in first['userMessage']
@@ -58,7 +60,7 @@ async def verify_source_text():
             # VI: Áp dụng đề xuất là đóng kế hoạch đó, nên file của nó không còn dùng cho lượt mới.
             await db.execute(
                 text('UPDATE agent_messages SET applied_at = :at WHERE id = :id'),
-                {'at': _utcnow() + timedelta(seconds=1), 'id': first['message']['id']},
+                {'at': utcnow() + timedelta(seconds=1), 'id': first['message']['id']},
             )
             await db.commit()
             assert await _conversation_source_text(db, conversation) == ''

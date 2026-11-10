@@ -8,9 +8,12 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.clock import utcnow
 from ..core.errors import ApiError
+from ..core.identifiers import cuid
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
+from ..modules.identity.auth import current_user
 from ..modules.work_items.contracts import CreateDocumentInput, UpdateDocumentInput
 from ..modules.work_items.document_repository import _document as _document
 from ..modules.work_items.document_repository import _document_by_id as _document_by_id
@@ -20,7 +23,6 @@ from ..modules.work_items.document_repository import _resolve_folder as _resolve
 from ..modules.work_items.document_repository import _source_url as _source_url
 from ..modules.work_items.document_repository import _team_access as _team_access
 from ..modules.work_items.document_review import DecisionInput, ReviewersInput
-from .auth import _cuid, _utcnow, current_user
 from .teams import _workspace_role
 
 router = APIRouter(prefix='/api/v1/documents', tags=['documents'])

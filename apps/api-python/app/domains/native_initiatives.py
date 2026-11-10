@@ -10,13 +10,15 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.audit_context import audit_source
+from ..core.clock import utcnow
 from ..core.dates import parse_date
 from ..core.errors import ApiError
+from ..core.identifiers import cuid
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
 from ..modules.access.project_scope import project_read_scope
 from ..modules.access.projects import workspace_access
-from .auth import _cuid, _utcnow, current_user
+from ..modules.identity.auth import current_user
 from .teams import _manager
 
 router = APIRouter(prefix='/api/v1/_native/initiatives', tags=['native-initiatives'])
@@ -87,8 +89,8 @@ async def _audit(
                VALUES (:id, :workspace_id, :actor_id, :action, 'initiative', :entity_id, CAST(:metadata AS jsonb), :now)"""
         ),
         {
-            'id': _cuid(), 'workspace_id': workspace_id, 'actor_id': actor_id, 'action': action,
-            'entity_id': initiative_id, 'metadata': json.dumps({**(metadata or {}),'source':audit_source.get()}), 'now': _utcnow(),
+            'id': cuid(), 'workspace_id': workspace_id, 'actor_id': actor_id, 'action': action,
+            'entity_id': initiative_id, 'metadata': json.dumps({**(metadata or {}),'source':audit_source.get()}), 'now': utcnow(),
         },
     )
 
@@ -196,7 +198,7 @@ async def create_initiative(payload: CreateInitiativeInput, user: Any = Depends(
     await _manager(db, payload.workspaceId, user['id'])
     owner_id = payload.ownerId or user['id']
     await _active_member(db, payload.workspaceId, owner_id)
-    initiative_id, now = _cuid(), _utcnow()
+    initiative_id, now = cuid(), utcnow()
     await db.execute(
         text('''INSERT INTO initiatives (id, workspace_id, name, description, status, priority, health, icon, owner_id, target_date, created_at, updated_at)
                 VALUES (:id, :workspace_id, :name, :description, :status, :priority, :health, :icon, :owner_id, :target_date, :now, :now)'''),
@@ -222,7 +224,7 @@ async def update_initiative(initiative_id: str, payload: UpdateInitiativeInput, 
     if 'ownerId' in values and values['ownerId']:
         await _active_member(db, workspaceId, values['ownerId'])
     column_map = {'name': 'name', 'description': 'description', 'status': 'status', 'priority': 'priority', 'health': 'health', 'icon': 'icon', 'ownerId': 'owner_id', 'targetDate': 'target_date'}
-    params: dict[str, Any] = {'initiative_id': initiative_id, 'now': _utcnow()}
+    params: dict[str, Any] = {'initiative_id': initiative_id, 'now': utcnow()}
     sets = []
     for field, column in column_map.items():
         if field in values:
@@ -241,7 +243,7 @@ async def update_initiative(initiative_id: str, payload: UpdateInitiativeInput, 
 async def archive_initiative(initiative_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     await _manager(db, workspaceId, user['id'])
     await _initiative(db, initiative_id, workspaceId, user['id'])
-    now = _utcnow()
+    now = utcnow()
     await db.execute(text('UPDATE initiatives SET archived_at = :now, updated_at = :now WHERE id = :initiative_id'), {'initiative_id': initiative_id, 'now': now})
     await _audit(db, workspaceId, user['id'], 'initiative.archived', initiative_id)
     await db.commit()
@@ -334,7 +336,7 @@ async def initiative_updates(initiative_id: str,workspaceId: str = Query(min_len
 async def create_update(initiative_id: str, payload: InitiativeUpdateInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     await _manager(db, payload.workspaceId, user['id'])
     initiative = await _initiative(db, initiative_id, payload.workspaceId, user['id'])
-    update_id, now = _cuid(), _utcnow()
+    update_id, now = cuid(), utcnow()
     health = payload.health or initiative['health']
     await db.execute(text('''INSERT INTO initiative_updates (id, workspace_id, initiative_id, author_id, body, health, created_at, updated_at)
         VALUES (:id, :workspace_id, :initiative_id, :author_id, :body, :health, :now, :now)'''), {'id': update_id, 'workspace_id': payload.workspaceId, 'initiative_id': initiative_id, 'author_id': user['id'], 'body': payload.body.strip(), 'health': health, 'now': now})
@@ -353,7 +355,7 @@ async def add_resource(initiative_id: str, payload: InitiativeResourceInput, use
     parsed = urlparse(payload.url.strip())
     if parsed.scheme not in {'http', 'https'} or not parsed.netloc:
         raise ApiError(400, 'Resource URL must be a valid HTTP or HTTPS URL.', 'Bad Request')
-    resource_id, now = _cuid(), _utcnow()
+    resource_id, now = cuid(), utcnow()
     await db.execute(text('''INSERT INTO initiative_resources (id, workspace_id, initiative_id, created_by, label, url, created_at, updated_at)
         VALUES (:id, :workspace_id, :initiative_id, :created_by, :label, :url, :now, :now)'''), {'id': resource_id, 'workspace_id': payload.workspaceId, 'initiative_id': initiative_id, 'created_by': user['id'], 'label': payload.label.strip(), 'url': payload.url.strip(), 'now': now})
     await _audit(db, payload.workspaceId, user['id'], 'initiative.resource.added', initiative_id, {'resourceId': resource_id, 'label': payload.label.strip(), 'url': payload.url.strip()})

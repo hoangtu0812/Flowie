@@ -10,8 +10,8 @@ from ...core.errors import ApiError
 from ...core.identifiers import _cuid
 from ...core.utc_responses import UtcAPIRouter as APIRouter
 from ...db.session import get_session
-from ...domains.auth import current_user
 from ..access.membership import _manager, _workspace_role
+from ..identity.auth import current_user
 from ..mcp.domain import Principal
 from ..mcp.policy import AccessPolicy
 from .audit import management_audit

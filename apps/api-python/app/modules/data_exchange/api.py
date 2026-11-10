@@ -6,10 +6,10 @@ from sqlalchemy import text
 from ...core.downloads import private_download
 from ...core.utc_responses import UtcAPIRouter
 from ...db.session import get_session
-from ...domains.auth import current_user
 from ...storage.minio import MinioStorage
 from ..access.projects import _team_access, _workspace_access
 from ..audit.write import record_change
+from ..identity.auth import current_user
 from ..identity.password_reset import limit_request
 from .contracts import CsvInput, DocumentExport, ImportPreview, IssueExport
 from .csv_input import parse_csv

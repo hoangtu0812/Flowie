@@ -8,9 +8,11 @@ from pydantic import ValidationError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.views.api import (
     CreateViewInput,
     UpdateViewInput,
@@ -149,22 +151,22 @@ async def verify_saved_views():
         _async_database_url(os.environ["MCP_TEST_DATABASE_URL"])
     )
     workspace = None
-    users = [_cuid() for _ in range(3)]
+    users = [cuid() for _ in range(3)]
     try:
         async with async_sessionmaker(engine)() as db:
-            now = _utcnow()
+            now = utcnow()
             for user in users:
                 await db.execute(
                     text(
                         "INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,'View user',:email,'ACTIVE',:now,:now)"
                     ),
-                    {"id": user, "email": _cuid() + "@example.test", "now": now},
+                    {"id": user, "email": cuid() + "@example.test", "now": now},
                 )
             seed = await create_workspace_bootstrap(
                 db,
                 user_id=users[0],
                 organization_name="Saved views",
-                workspace_name=_cuid(),
+                workspace_name=cuid(),
                 now=now,
             )
             workspace, team = seed["workspace_id"], seed["team_id"]
@@ -172,7 +174,7 @@ async def verify_saved_views():
                 text(
                     "INSERT INTO workspace_members(id,workspace_id,user_id,role,status,joined_at,created_at,updated_at) VALUES (:id,:w,:u,'MEMBER','ACTIVE',:now,:now,:now)"
                 ),
-                {"id": _cuid(), "w": workspace, "u": users[1], "now": now},
+                {"id": cuid(), "w": workspace, "u": users[1], "now": now},
             )
             status = (
                 await db.execute(
@@ -187,7 +189,7 @@ async def verify_saved_views():
                     text("""INSERT INTO issues(id,workspace_id,team_id,status_id,identifier,number,title,priority,creator_id,created_at,updated_at)
                     VALUES (:id,:w,:team,:status,:identifier,:number,'Matching task','HIGH',:creator,:now,:now)"""),
                     {
-                        "id": _cuid(),
+                        "id": cuid(),
                         "w": workspace,
                         "team": team,
                         "status": status,

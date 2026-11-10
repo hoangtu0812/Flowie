@@ -73,8 +73,8 @@ MCP cung cấp giao diện công cụ và dữ liệu cho AI. Khả năng sửa 
 
 Nguồn đối chiếu:
 
-- [Khởi tạo FastAPI](../apps/api-python/app/main.py), [xác thực](../apps/api-python/app/domains/auth.py).
-- [Issue](../apps/api-python/app/domains/native_issues.py), [project](../apps/api-python/app/domains/native_projects.py), [comment](../apps/api-python/app/domains/native_comments.py).
+- [Khởi tạo FastAPI](../apps/api-python/app/main.py), [xác thực](../apps/api-python/app/modules/identity/auth.py).
+- [Issue](../apps/api-python/app/modules/work_items/issues_api.py), [project](../apps/api-python/app/modules/portfolio/projects_api.py), [comment](../apps/api-python/app/domains/native_comments.py).
 - [Document](../apps/api-python/app/domains/native_documents.py), [schema Prisma](../packages/database/prisma/schema.prisma).
 - [Agent](../apps/api-python/app/domains/agent.py), [hướng dẫn Agent](agent-setup.md), [tích hợp SCM](reviews-integrations.md).
 

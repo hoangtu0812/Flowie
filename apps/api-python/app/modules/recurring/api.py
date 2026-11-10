@@ -5,7 +5,7 @@ from fastapi import Depends, Query, Request
 from ...core.clock import _utcnow
 from ...core.utc_responses import UtcAPIRouter
 from ...db.session import get_session
-from ...domains.auth import current_user
+from ..identity.auth import current_user
 from ..identity.password_reset import limit_request
 from .calendar import upcoming
 from .contracts import CreateSchedule, ScheduleCommand, ScheduleRule, UpdateSchedule

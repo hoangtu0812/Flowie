@@ -7,9 +7,11 @@ from pydantic import ValidationError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.reporting.breakdowns import change_page, project_page
 from app.modules.reporting.contracts import WorkflowReport
 from app.modules.reporting.dashboard import dashboard_report
@@ -45,19 +47,19 @@ async def verify_report():
     )
     try:
         async with async_sessionmaker(engine)() as db:
-            user = {"id": _cuid(), "name": "Reporting owner"}
-            now = _utcnow()
+            user = {"id": cuid(), "name": "Reporting owner"}
+            now = utcnow()
             await db.execute(
                 text(
                     "INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"
                 ),
-                {**user, "email": _cuid() + "@example.test", "now": now},
+                {**user, "email": cuid() + "@example.test", "now": now},
             )
             seed = await create_workspace_bootstrap(
                 db,
                 user_id=user["id"],
                 organization_name="Reporting",
-                workspace_name=_cuid(),
+                workspace_name=cuid(),
                 now=now,
             )
             workspace, team = seed["workspace_id"], seed["team_id"]
@@ -80,7 +82,7 @@ async def verify_report():
                 "started": statuses["In Progress"],
                 "actor": user["id"],
             }
-            issue, baseline, legacy_done = _cuid(), _cuid(), _cuid()
+            issue, baseline, legacy_done = cuid(), cuid(), cuid()
             await db.execute(
                 text(
                     """INSERT INTO issues(id,workspace_id,team_id,status_id,identifier,number,title,issue_type,creator_id,created_at,updated_at,version,estimated_effort,actual_effort)
@@ -107,7 +109,7 @@ async def verify_report():
             for index, (at, previous, current, from_category, to_category) in enumerate(
                 events, 1
             ):
-                eid = _cuid()
+                eid = cuid()
                 event_ids.append(eid)
                 await db.execute(
                     text(
@@ -134,7 +136,7 @@ async def verify_report():
                 ),
                 {"ids": [baseline, legacy_done]},
             )
-            prefix = _cuid()
+            prefix = cuid()
             await db.execute(
                 text(
                     """INSERT INTO issues(id,workspace_id,team_id,status_id,identifier,number,title,creator_id,created_at,updated_at,estimated_effort,start_date,assignee_id,due_date)
@@ -149,7 +151,7 @@ async def verify_report():
                 ),
                 {"prefix": prefix + "%"},
             )
-            private = _cuid()
+            private = cuid()
             await db.execute(
                 text(
                     "INSERT INTO teams(id,workspace_id,name,identifier,created_at,updated_at) VALUES (:id,:workspace,'Private reporting','SECRET',:now,:now)"
@@ -161,7 +163,7 @@ async def verify_report():
                     """INSERT INTO issues(id,workspace_id,team_id,status_id,identifier,number,title,creator_id,created_at,updated_at)
                 SELECT :prefix||n::text,:workspace,:private,:todo,'SECRET-'||n::text,n,'Secret reporting task',:actor,'2026-10-12','2026-10-12' FROM generate_series(1,150) n"""
                 ),
-                {**base, "prefix": _cuid(), "private": private},
+                {**base, "prefix": cuid(), "private": private},
             )
             query = WorkflowReport(
                 fromDate="2026-10-11", toDate="2026-10-15", timezone="UTC"
@@ -278,7 +280,7 @@ async def verify_report():
                 projects["meta"]["total"] == 1 and projects["data"][0]["total"] == 153
             )
             assert projects["data"][0]["completions"] == 2
-            project_prefix, secret_project = _cuid(), _cuid()
+            project_prefix, secret_project = cuid(), cuid()
             await db.execute(
                 text(
                     """INSERT INTO projects(id,workspace_id,team_id,name,identifier,created_at,updated_at)

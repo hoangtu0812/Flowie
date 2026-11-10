@@ -8,8 +8,8 @@ from datetime import timedelta
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from ..core.clock import utcnow
 from ..core.config import Settings
-from ..domains.auth import _utcnow
 from ..domains.scm.service import connection_sync_lock, sync_connection
 from ..modules.operations.heartbeats import progress
 
@@ -38,7 +38,7 @@ async def sync_due_connections(
     # lấy cửa sổ 100 PR mỗi process API. Connection đang bị khoá bởi Sync thủ công hoặc process
     # khác thì bỏ qua, và điều kiện đến hạn được kiểm tra lại khi đã giữ lock để không lặp lại lần
     # đồng bộ vừa xong giữa lúc quét và lúc lấy lock. Trả về số lần đồng bộ thành công.
-    due = _utcnow() - timedelta(seconds=interval_seconds)
+    due = utcnow() - timedelta(seconds=interval_seconds)
     async with factory() as db:
         result = await db.execute(
             text(f'SELECT id FROM scm_connections WHERE {DUE} ORDER BY last_synced_at ASC NULLS FIRST'),

@@ -18,7 +18,6 @@ from ...core.identifiers import cuid
 from ...core.slugs import url_slug
 from ...core.utc_responses import UtcAPIRouter as APIRouter
 from ...db.session import get_session
-from ...domains.auth import current_user
 from ...domains.teams import team_record
 from ...services.notification_events import (
     create_notification_batch,
@@ -26,6 +25,7 @@ from ...services.notification_events import (
     publish_notification_batches,
 )
 from ..access.projects import team_access, workspace_access, workspace_manager
+from ..identity.auth import current_user
 
 # This router is deliberately private until the complete Projects contract is
 # ported. It lets us exercise real Python/database behavior without switching

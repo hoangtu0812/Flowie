@@ -7,12 +7,13 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ...core.clock import utcnow
 from ...core.errors import ApiError
 from ...core.utc_responses import UtcAPIRouter
 from ...db.session import get_session
-from ...domains.auth import _utcnow, current_user
 from ..access.project_scope import project_read_scope
 from ..access.projects import _workspace_access
+from ..identity.auth import current_user
 
 router = UtcAPIRouter(prefix="/api/v1/manual-order", tags=["manual-order"])
 
@@ -132,7 +133,7 @@ async def reorder(
         text(
             f"UPDATE {table} SET updated_at=:now WHERE id=:id AND workspace_id=:workspace"
         ),
-        {"id": payload.sourceId, "workspace": payload.workspaceId, "now": _utcnow()},
+        {"id": payload.sourceId, "workspace": payload.workspaceId, "now": utcnow()},
     )
     await db.commit()
     return {"data": {"id": payload.sourceId, "manualOrder": str((index + 1) * 1024)}}

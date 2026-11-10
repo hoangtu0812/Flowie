@@ -5,9 +5,11 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.search.service import search
 from app.modules.work_items.contracts import CreateDocumentInput, CreateIssueInput
 from app.modules.work_items.documents import create_document
@@ -27,19 +29,19 @@ async def verify_search():
     )
     try:
         async with async_sessionmaker(engine)() as db:
-            user = {"id": _cuid(), "name": "Đăng nhập owner"}
-            now = _utcnow()
+            user = {"id": cuid(), "name": "Đăng nhập owner"}
+            now = utcnow()
             await db.execute(
                 text(
                     "INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"
                 ),
-                {**user, "email": _cuid() + "@example.test", "now": now},
+                {**user, "email": cuid() + "@example.test", "now": now},
             )
             seed = await create_workspace_bootstrap(
                 db,
                 user_id=user["id"],
                 organization_name="Search",
-                workspace_name=_cuid(),
+                workspace_name=cuid(),
                 now=now,
             )
             issue = (
@@ -103,7 +105,7 @@ async def verify_search():
                     db,
                 )
             )["data"]
-            project = _cuid()
+            project = cuid()
             await db.execute(
                 text(
                     "INSERT INTO projects(id,workspace_id,team_id,name,identifier,created_at,updated_at) VALUES (:id,:workspace,:team,'Đăng nhập project','SRCH',:now,:now)"
@@ -158,7 +160,7 @@ async def verify_search():
                     cursor=first["meta"]["nextCursor"],
                 )
             assert error.value.status_code == 400
-            hidden = _cuid()
+            hidden = cuid()
             await db.execute(
                 text(
                     "INSERT INTO teams(id,workspace_id,name,identifier,created_at,updated_at) VALUES (:id,:workspace,'Private','PRIV',:now,:now)"
@@ -170,7 +172,7 @@ async def verify_search():
                     "INSERT INTO documents(id,workspace_id,team_id,title,content,created_by,updated_by,created_at,updated_at) VALUES (:id,:workspace,:team,'Hidden document','Secret word',:user,:user,:now,:now)"
                 ),
                 {
-                    "id": _cuid(),
+                    "id": cuid(),
                     "workspace": seed["workspace_id"],
                     "team": hidden,
                     "user": user["id"],

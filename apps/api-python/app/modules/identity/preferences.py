@@ -10,7 +10,7 @@ from ...core.errors import ApiError
 from ...core.timezones import time_zone
 from ...core.utc_responses import UtcAPIRouter
 from ...db.session import get_session
-from ...domains.auth import current_user
+from .auth import current_user
 
 router = UtcAPIRouter(
     prefix="/api/v1/users/me/ui-preferences", tags=["account-preferences"]

@@ -7,9 +7,11 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.work_items.contracts import CreateIssueInput, UpdateIssueInput
 from app.modules.work_items.issues import create_issue, update_issue
 from app.modules.work_items.issues_api import (
@@ -30,26 +32,26 @@ def test_issue_parent_can_be_set_moved_and_removed_without_cycles():
 async def verify_issue_parenting():
     engine = create_async_engine(_async_database_url(os.environ["MCP_TEST_DATABASE_URL"]))
     factory = async_sessionmaker(engine, expire_on_commit=False)
-    now = _utcnow()
-    owner = {"id": _cuid(), "name": "Owner"}
-    outsider = {"id": _cuid(), "name": "Workspace member outside the team"}
+    now = utcnow()
+    owner = {"id": cuid(), "name": "Owner"}
+    outsider = {"id": cuid(), "name": "Workspace member outside the team"}
     async with factory() as db:
         for user in (owner, outsider):
             await db.execute(
                 text("""INSERT INTO users(id,name,email,status,created_at,updated_at)
                         VALUES (:id,:name,:email,'ACTIVE',:now,:now)"""),
-                {**user, "email": _cuid() + "@example.test", "now": now},
+                {**user, "email": cuid() + "@example.test", "now": now},
             )
         seed = await create_workspace_bootstrap(
             db, user_id=owner["id"], organization_name="Parenting",
-            workspace_name=_cuid(), now=now,
+            workspace_name=cuid(), now=now,
         )
         workspace, team = seed["workspace_id"], seed["team_id"]
-        other_team = _cuid()
+        other_team = cuid()
         await db.execute(
             text("""INSERT INTO workspace_members(id,workspace_id,user_id,role,status,created_at,updated_at)
                     VALUES (:id,:workspace,:user,'MEMBER','ACTIVE',:now,:now)"""),
-            {"id": _cuid(), "workspace": workspace, "user": outsider["id"], "now": now},
+            {"id": cuid(), "workspace": workspace, "user": outsider["id"], "now": now},
         )
         await db.execute(
             text("""INSERT INTO teams (id,workspace_id,name,identifier,created_at,updated_at)

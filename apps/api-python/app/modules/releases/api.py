@@ -15,8 +15,8 @@ from ...core.errors import ApiError
 from ...core.identifiers import cuid
 from ...core.utc_responses import UtcAPIRouter as APIRouter
 from ...db.session import get_session
-from ...domains.auth import current_user
 from ..access.projects import workspace_access, workspace_manager
+from ..identity.auth import current_user
 
 router = APIRouter(prefix='/api/v1/releases', tags=['releases'])
 ReleaseStatus = Literal['planned', 'in-progress', 'released', 'canceled']

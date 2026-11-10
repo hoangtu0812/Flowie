@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.utc_responses import UtcAPIRouter
 from ...db.session import get_session
-from ...domains.auth import current_user
+from ..identity.auth import current_user
 from .contracts import ArchiveKind, RestoreInput
 from .repository import archive_page
 from .service import restore, restore_preview

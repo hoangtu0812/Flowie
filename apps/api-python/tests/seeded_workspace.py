@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.core.clock import _utcnow
 from app.core.config import _async_database_url
 from app.core.identifiers import _cuid
-from app.domains.auth import create_workspace_bootstrap
+from app.modules.identity.auth import create_workspace_bootstrap
 
 
 async def _user(db, users, name):

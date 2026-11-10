@@ -14,7 +14,6 @@ from .core.errors import ApiError, api_error_handler, validation_error_handler
 from .core.readiness import dependency_status
 from .db.session import create_session_factory
 from .domains.agent import router as agent_router
-from .domains.auth import router as auth_router
 from .domains.native_admin import router as admin_router
 from .domains.native_asks import router as asks_router
 from .domains.native_attachments import public_router as attachments_router
@@ -46,6 +45,7 @@ from .modules.cycles.api import public_router as cycles_router
 from .modules.cycles.api import router as native_cycles_router
 from .modules.emojis.api import router as emojis_router
 from .modules.identity.api import router as password_reset_router
+from .modules.identity.auth import router as auth_router
 from .modules.labels.api import router as labels_router
 from .modules.link_metadata.api import router as link_metadata_router
 from .modules.mcp.api import router as mcp_management_router

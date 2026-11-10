@@ -5,8 +5,8 @@ from sqlalchemy import text
 from ...core.clock import _utcnow
 from ...core.utc_responses import UtcAPIRouter
 from ...db.session import get_session
-from ...domains.auth import current_user
 from ..access.membership import _manager
+from ..identity.auth import current_user
 from ..mcp.quotas import limits, update_limits
 from ..mcp.registry import TOOLS
 from .audit import management_audit

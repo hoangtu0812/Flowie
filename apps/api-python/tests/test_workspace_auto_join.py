@@ -7,14 +7,11 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.domains.auth import (
-    _cuid,
-    _upsert_microsoft_user,
-    _utcnow,
-    create_workspace_bootstrap,
-)
+from app.core.identifiers import cuid
+from app.modules.identity.auth import _upsert_microsoft_user, create_workspace_bootstrap
 from app.modules.workspaces.api import (
     AutoJoinInput,
     auto_join_status,
@@ -41,7 +38,7 @@ def request(*, tenant=TENANT):
 
 
 def profile(tenant=TENANT, email=None):
-    unique = _cuid()
+    unique = cuid()
     return MicrosoftProfile(object_id=unique, tenant_id=tenant, email=email or f"{unique}@example.test", name="Company Staff")
 
 
@@ -63,13 +60,13 @@ async def verify_join():
 
     try:
         async with factory() as db:
-            now = _utcnow()
-            owner = {"id": _cuid(), "name": "Owner"}
+            now = utcnow()
+            owner = {"id": cuid(), "name": "Owner"}
             await db.execute(
                 text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"),
-                {**owner, "email": _cuid() + "@example.test", "now": now},
+                {**owner, "email": cuid() + "@example.test", "now": now},
             )
-            seed = await create_workspace_bootstrap(db, user_id=owner["id"], organization_name="Desk", workspace_name=_cuid(), now=now)
+            seed = await create_workspace_bootstrap(db, user_id=owner["id"], organization_name="Desk", workspace_name=cuid(), now=now)
             workspace, team = seed["workspace_id"], seed["team_id"]
             member = await add_member(db, workspace, None, name="Member")
             await db.commit()
@@ -171,7 +168,7 @@ async def verify_join():
             await update_auto_join(workspace, AutoJoinInput(enabled=True), request(), owner, db)
             await db.execute(
                 text("INSERT INTO workspace_members(id,workspace_id,user_id,status,role,created_at,updated_at) VALUES (:id,:w,:u,'SUSPENDED','MEMBER',:now,:now)"),
-                {"id": _cuid(), "w": workspace, "u": invited_id, "now": _utcnow()},
+                {"id": cuid(), "w": workspace, "u": invited_id, "now": utcnow()},
             )
             await db.commit()
             await sign_in(invited)

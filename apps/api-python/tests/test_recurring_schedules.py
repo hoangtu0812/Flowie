@@ -8,10 +8,12 @@ from pydantic import ValidationError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
+from app.core.identifiers import cuid
 from app.core.timezones import local_instant, time_zone
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.recurring.calendar import next_occurrence, upcoming
 from app.modules.recurring.contracts import (
     CreateSchedule,
@@ -92,22 +94,22 @@ async def verify_recurring():
         _async_database_url(os.environ["MCP_TEST_DATABASE_URL"])
     )
     factory = async_sessionmaker(engine)
-    user = {"id": _cuid(), "name": "Recurring owner"}
+    user = {"id": cuid(), "name": "Recurring owner"}
     workspace = None
     try:
         async with factory() as db:
-            now = _utcnow()
+            now = utcnow()
             await db.execute(
                 text(
                     "INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"
                 ),
-                {**user, "email": _cuid() + "@example.test", "now": now},
+                {**user, "email": cuid() + "@example.test", "now": now},
             )
             seed = await create_workspace_bootstrap(
                 db,
                 user_id=user["id"],
                 organization_name="Recurring tests",
-                workspace_name=_cuid(),
+                workspace_name=cuid(),
                 now=now,
             )
             workspace, team = seed["workspace_id"], seed["team_id"]
@@ -115,7 +117,7 @@ async def verify_recurring():
         payload = CreateSchedule(
             workspaceId=workspace,
             teamId=team,
-            requestKey=_cuid(),
+            requestKey=cuid(),
             name="Daily support",
             rule={
                 "timezone": "Asia/Ho_Chi_Minh",
@@ -155,7 +157,7 @@ async def verify_recurring():
                 await db.commit()
                 return result
 
-        manual_key = _cuid()
+        manual_key = cuid()
         await command("run-now", requestKey=manual_key)
         await command("run-now", requestKey=manual_key)
         assert (
@@ -190,19 +192,19 @@ async def verify_recurring():
         await command("run-now", requestKey=manual_key)
         assert not await process_schedule(factory)
         async with factory() as db:
-            project, private_team = _cuid(), _cuid()
+            project, private_team = cuid(), cuid()
             await db.execute(
                 text(
                     "INSERT INTO projects(id,workspace_id,name,identifier,created_at,updated_at) VALUES (:id,:workspace,'Recurring project',:id,:now,:now)"
                 ),
-                {"id": project, "workspace": workspace, "now": _utcnow()},
+                {"id": project, "workspace": workspace, "now": utcnow()},
             )
             private_schedule = await create_schedule(
                 db,
                 user,
                 payload.model_copy(
                     update={
-                        "requestKey": _cuid(),
+                        "requestKey": cuid(),
                         "name": "Changed reference",
                         "template": payload.template.model_copy(
                             update={"projectId": project}
@@ -214,7 +216,7 @@ async def verify_recurring():
                 text(
                     "INSERT INTO teams(id,workspace_id,name,identifier,created_at,updated_at) VALUES (:id,:workspace,'Private team','PRIVATE',:now,:now)"
                 ),
-                {"id": private_team, "workspace": workspace, "now": _utcnow()},
+                {"id": private_team, "workspace": workspace, "now": utcnow()},
             )
             await db.execute(
                 text("UPDATE projects SET team_id=:team WHERE id=:id"),
@@ -240,7 +242,7 @@ async def verify_recurring():
                 workspace,
                 private_schedule["id"],
                 "run-now",
-                ScheduleCommand(expectedVersion=1, requestKey=_cuid()),
+                ScheduleCommand(expectedVersion=1, requestKey=cuid()),
             )
             await db.commit()
         assert await process_schedule(factory)
@@ -264,11 +266,11 @@ async def verify_recurring():
         paused = await command("pause")
         assert not paused["active"]
         with pytest.raises(ApiError):
-            await command("run-now", version=paused["version"], requestKey=_cuid())
+            await command("run-now", version=paused["version"], requestKey=cuid())
         with pytest.raises(ApiError):
             await command("resume")
         schedule = await command("resume", version=paused["version"])
-        past = _utcnow() - timedelta(days=40)
+        past = utcnow() - timedelta(days=40)
         async with factory() as db:
             await db.execute(
                 text("UPDATE recurring_schedules SET next_run_at=:due WHERE id=:id"),
@@ -288,7 +290,7 @@ async def verify_recurring():
                     text("SELECT next_run_at FROM recurring_schedules WHERE id=:id"),
                     {"id": schedule["id"]},
                 )
-            ).scalar_one() > _utcnow()
+            ).scalar_one() > utcnow()
             # Simulate a stale due value after a committed run: occurrence uniqueness still prevents replay.
             await db.execute(
                 text(
@@ -309,7 +311,7 @@ async def verify_recurring():
             await db.execute(
                 text("""INSERT INTO recurring_runs(id,schedule_id,occurrence_key,scheduled_for,state,snapshot,created_at)
                 SELECT 'c'||md5(:id||n::text),:id,'history:'||n,:now,'DONE',jsonb_build_object('version',1),:now FROM generate_series(1,105) n"""),
-                {"id": schedule["id"], "now": _utcnow()},
+                {"id": schedule["id"], "now": utcnow()},
             )
             await db.commit()
             page = await run_history(db, workspace, user, "secret", schedule["id"])
@@ -341,7 +343,7 @@ async def verify_recurring():
                     ),
                 )
         # A domain failure after creating a task rolls its task and side effects back.
-        await command("run-now", requestKey=_cuid())
+        await command("run-now", requestKey=cuid())
 
         async def fail_after_create(payload, user, db):
             from app.modules.work_items.issues import create_issue
@@ -370,7 +372,7 @@ async def verify_recurring():
             ] == 2
             with pytest.raises(ApiError) as denied:
                 await create_schedule(
-                    db, user, payload.model_copy(update={"requestKey": _cuid()})
+                    db, user, payload.model_copy(update={"requestKey": cuid()})
                 )
             assert denied.value.status_code == 403
             with pytest.raises(ApiError):
@@ -381,7 +383,7 @@ async def verify_recurring():
                     schedule["id"],
                     "run-now",
                     ScheduleCommand(
-                        expectedVersion=schedule["version"], requestKey=_cuid()
+                        expectedVersion=schedule["version"], requestKey=cuid()
                     ),
                 )
             await db.rollback()
@@ -393,14 +395,14 @@ async def verify_recurring():
             )
             await db.execute(
                 text("UPDATE recurring_schedules SET next_run_at=:due WHERE id=:id"),
-                {"id": schedule["id"], "due": _utcnow() - timedelta(minutes=1)},
+                {"id": schedule["id"], "due": utcnow() - timedelta(minutes=1)},
             )
             await db.commit()
         assert await process_schedule(factory)
         async with factory() as db:
             await db.execute(
                 text("UPDATE recurring_schedules SET next_run_at=:due WHERE id=:id"),
-                {"id": schedule["id"], "due": _utcnow() - timedelta(minutes=2)},
+                {"id": schedule["id"], "due": utcnow() - timedelta(minutes=2)},
             )
             await db.commit()
         assert await process_schedule(factory)

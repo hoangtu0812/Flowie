@@ -10,13 +10,13 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.core.clock import _utcnow
 from app.core.config import _async_database_url
 from app.core.identifiers import _cuid
-from app.domains.auth import create_workspace_bootstrap
 from app.jobs import cycle_cadence
 from app.jobs.cycle_cadence import (
     _create_generated_cycle,
     run_cycle_cadence,
     start_of_utc_day,
 )
+from app.modules.identity.auth import create_workspace_bootstrap
 
 
 def test_start_of_utc_day_truncates_without_shifting_zone():

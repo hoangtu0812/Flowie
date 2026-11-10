@@ -10,7 +10,7 @@ from ...core.downloads import private_download
 from ...core.errors import ApiError
 from ...core.utc_responses import UtcAPIRouter
 from ...db.session import get_session
-from ...domains.auth import current_user
+from ..identity.auth import current_user
 from ..identity.password_reset import limit_request
 from .contracts import AuditFilters
 from .query import audit_page

@@ -7,8 +7,9 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import Settings, _async_database_url
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
 from app.domains.native_asks import (
     AskMessageInput,
     AskTransitionInput,
@@ -18,6 +19,7 @@ from app.domains.native_asks import (
     create_ask_message,
     transition_ask,
 )
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.notifications.delivery_worker import deliver_one
 from app.modules.notifications.ticket_email import ticket_email
 from tests.document_review_support import add_member
@@ -85,13 +87,13 @@ async def verify_delivery():
     )
     try:
         async with factory() as db:
-            now = _utcnow()
-            owner = {"id": _cuid(), "name": "Owner"}
+            now = utcnow()
+            owner = {"id": cuid(), "name": "Owner"}
             await db.execute(
                 text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"),
-                {**owner, "email": _cuid() + "@example.test", "now": now},
+                {**owner, "email": cuid() + "@example.test", "now": now},
             )
-            seed = await create_workspace_bootstrap(db, user_id=owner["id"], organization_name="Desk", workspace_name=_cuid(), now=now)
+            seed = await create_workspace_bootstrap(db, user_id=owner["id"], organization_name="Desk", workspace_name=cuid(), now=now)
             workspace, team = seed["workspace_id"], seed["team_id"]
             handler = await add_member(db, workspace, team, name="Handler")
             colleague = await add_member(db, workspace, team, name="Colleague")
@@ -150,9 +152,9 @@ async def verify_delivery():
             # VI: Tắt email cũng dừng các dòng đang chờ, và không xếp thêm dòng mới.
             await db.execute(
                 text("INSERT INTO notification_preferences(workspace_id,user_id,ticket_email_enabled,created_at,updated_at) VALUES (:w,:u,false,:now,:now)"),
-                {"w": workspace, "u": requester["id"], "now": _utcnow()},
+                {"w": workspace, "u": requester["id"], "now": utcnow()},
             )
-            await db.execute(text("UPDATE notification_email_deliveries SET available_at = :now, lease_until = NULL WHERE notification_id = :id"), {"now": _utcnow(), "id": ids[0]})
+            await db.execute(text("UPDATE notification_email_deliveries SET available_at = :now, lease_until = NULL WHERE notification_id = :id"), {"now": utcnow(), "id": ids[0]})
             await db.commit()
             send = AsyncMock()
             await deliver(ids[0], send)
@@ -183,7 +185,7 @@ async def verify_delivery():
             # VI: Thành viên team đã bật email cũng nhận nội dung email ticket.
             await db.execute(
                 text("INSERT INTO notification_preferences(workspace_id,user_id,email_enabled,created_at,updated_at) VALUES (:w,:u,true,:now,:now)"),
-                {"w": workspace, "u": colleague["id"], "now": _utcnow()},
+                {"w": workspace, "u": colleague["id"], "now": utcnow()},
             )
             await db.commit()
             third = (await create_ask(ticket, requester, db))["data"]["id"]

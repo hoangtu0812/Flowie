@@ -5,9 +5,11 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.work_items.contracts import CreateDocumentInput, UpdateDocumentInput
 from app.modules.work_items.document_tree import (
     create_folder,
@@ -30,23 +32,23 @@ pytestmark = pytest.mark.skipif(
 
 
 async def seed(db):
-    now = _utcnow()
-    user = {"id": _cuid(), "name": "Docs actions"}
+    now = utcnow()
+    user = {"id": cuid(), "name": "Docs actions"}
     await db.execute(
         text(
             "INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"
         ),
-        {**user, "email": _cuid() + "@example.test", "now": now},
+        {**user, "email": cuid() + "@example.test", "now": now},
     )
     workspace = await create_workspace_bootstrap(
         db,
         user_id=user["id"],
         organization_name="Docs actions",
-        workspace_name=_cuid(),
+        workspace_name=cuid(),
         now=now,
     )
     scope = {"workspace_id": workspace["workspace_id"], "user_id": user["id"]}
-    projects = [_cuid(), _cuid()]
+    projects = [cuid(), cuid()]
     for project in projects:
         await db.execute(
             text(
@@ -114,7 +116,7 @@ async def verify_actions():
                     "INSERT INTO document_links(id,document_id,workspace_id,project_id) VALUES (:id,:doc,:workspace,:project)"
                 ),
                 {
-                    "id": _cuid(),
+                    "id": cuid(),
                     "doc": document["id"],
                     "workspace": scope["workspace_id"],
                     "project": tree["projectId"],
@@ -267,7 +269,7 @@ async def verify_actions():
                 ),
             )
 
-            file_id = _cuid()
+            file_id = cuid()
             await db.execute(
                 text(
                     "INSERT INTO attachments(id,workspace_id,uploaded_by,entity_type,entity_id,object_key,filename,mime_type,size,created_at) VALUES (:id,:workspace,:user,'document-folder',:folder,:id,'test.pdf','application/pdf',5,:now)"
@@ -277,7 +279,7 @@ async def verify_actions():
                     "workspace": scope["workspace_id"],
                     "user": user["id"],
                     "folder": child["id"],
-                    "now": _utcnow(),
+                    "now": utcnow(),
                 },
             )
             await rejected(409, delete_folder(db, **scope, folder_id=child["id"]))

@@ -12,8 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
 from app.domains.scm.contracts import (
     ProviderRepository,
     ProviderReview,
@@ -21,6 +22,7 @@ from app.domains.scm.contracts import (
     ProviderRevision,
 )
 from app.domains.scm.service import upsert_repository, upsert_review
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.reviews.api import list_reviews
 
 
@@ -46,13 +48,13 @@ class ScmPersistenceIntegrationTests(unittest.TestCase):
                     )
                     owner = seed.mappings().first()
                     if not owner:
-                        now, fixture_user = _utcnow(), _cuid()
+                        now, fixture_user = utcnow(), cuid()
                         await db.execute(text("INSERT INTO users(id,email,name,status,created_at,updated_at) VALUES (:id,:email,'SCM fixture','ACTIVE',:now,:now)"), {'id': fixture_user, 'email': fixture_user + '@example.test', 'now': now})
-                        fixture = await create_workspace_bootstrap(db, user_id=fixture_user, organization_name='SCM fixture', workspace_name=_cuid(), now=now)
+                        fixture = await create_workspace_bootstrap(db, user_id=fixture_user, organization_name='SCM fixture', workspace_name=cuid(), now=now)
                         team_id = (await db.execute(text('SELECT id FROM teams WHERE workspace_id=:workspace LIMIT 1'), {'workspace': fixture['workspace_id']})).scalar_one()
                         owner = {'workspace_id': fixture['workspace_id'], 'user_id': fixture_user, 'team_id': team_id}
-                    now = _utcnow()
-                    connection_id = _cuid()
+                    now = utcnow()
+                    connection_id = cuid()
                     await db.execute(
                         text(
                             '''INSERT INTO scm_connections (
@@ -96,7 +98,7 @@ class ScmPersistenceIntegrationTests(unittest.TestCase):
                                )'''
                         ),
                         {
-                            'id': _cuid(),
+                            'id': cuid(),
                             'workspace_id': owner['workspace_id'],
                             'connection_id': connection_id,
                             'user_id': owner['user_id'],
@@ -140,7 +142,7 @@ class ScmPersistenceIntegrationTests(unittest.TestCase):
                     self.assertEqual(assigned['meta']['total'], 1)
                     self.assertTrue(assigned['data'][0]['assignedToMe'])
                     self.assertTrue(assigned['data'][0]['unread'])
-                    outsider_id = _cuid()
+                    outsider_id = cuid()
                     await db.execute(
                         text(
                             '''INSERT INTO users (id, email, name, status, created_at, updated_at)
@@ -157,7 +159,7 @@ class ScmPersistenceIntegrationTests(unittest.TestCase):
                                )'''
                         ),
                         {
-                            'id': _cuid(),
+                            'id': cuid(),
                             'workspace_id': owner['workspace_id'],
                             'user_id': outsider_id,
                             'now': now,
@@ -182,7 +184,7 @@ class ScmPersistenceIntegrationTests(unittest.TestCase):
                             {'workspace': owner['workspace_id']},
                         )
                     ).scalar_one()
-                    linked_issue, other_issue = _cuid(), _cuid()
+                    linked_issue, other_issue = cuid(), cuid()
                     await db.execute(
                         text(
                             '''INSERT INTO issues(id,workspace_id,team_id,status_id,identifier,number,title,creator_id,created_at,updated_at)

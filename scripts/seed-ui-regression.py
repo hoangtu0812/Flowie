@@ -13,7 +13,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'apps/api-python'))
 from app.core.clock import _utcnow
 from app.core.config import _async_database_url
-from app.domains.auth import _cuid, create_workspace_bootstrap, password_hasher
+from app.core.identifiers import cuid
+from app.modules.identity.auth import create_workspace_bootstrap, password_hasher
 from app.modules.work_items.contracts import CreateDocumentInput, CreateIssueInput
 from app.modules.work_items.documents import create_document
 from app.modules.work_items.issues import create_issue
@@ -29,11 +30,11 @@ async def main():
     password = 'Synthetic-E2E-Only-2026!'
     try:
         async with factory() as db:
-            user = {'id': _cuid(), 'name': 'Regression Owner', 'email': f'{_cuid()}@example.test', 'avatarUrl': None}
+            user = {'id': cuid(), 'name': 'Regression Owner', 'email': f'{cuid()}@example.test', 'avatarUrl': None}
             now = _utcnow()
             await db.execute(text("INSERT INTO users(id,name,email,password_hash,status,email_verified_at,created_at,updated_at) VALUES (:id,:name,:email,:password,'ACTIVE',:now,:now,:now)"), {**user, 'password': password_hasher.hash(password), 'now': now})
-            seed = await create_workspace_bootstrap(db, user_id=user['id'], organization_name='Regression', workspace_name='UI Regression ' + _cuid(), now=now)
-            folder, project = _cuid(), _cuid()
+            seed = await create_workspace_bootstrap(db, user_id=user['id'], organization_name='Regression', workspace_name='UI Regression ' + cuid(), now=now)
+            folder, project = cuid(), cuid()
             await db.execute(text("INSERT INTO document_folders(id,workspace_id,team_id,name,created_at,updated_at) VALUES (:id,:workspace,:team,'Regression notes',:now,:now)"), {'id': folder, 'workspace': seed['workspace_id'], 'team': seed['team_id'], 'now': now})
             await db.execute(text("INSERT INTO projects(id,workspace_id,team_id,name,identifier,created_at,updated_at) VALUES (:id,:workspace,:team,'Regression project','REG',:now,:now)"), {'id': project, 'workspace': seed['workspace_id'], 'team': seed['team_id'], 'now': now})
             status = (await db.execute(text("SELECT id FROM issue_statuses WHERE workspace_id=:workspace AND category='UNSTARTED' LIMIT 1"), {'workspace': seed['workspace_id']})).scalar_one()
@@ -43,23 +44,23 @@ async def main():
                 issues.append(issue)
             document = (await create_document(CreateDocumentInput(workspaceId=seed['workspace_id'], teamId=seed['team_id'], folderId=folder, title='Regression Markdown notes', content='# Regression\n\n```python\nprint("safe")\n```\n\n| Status | Count |\n| --- | --- |\n| Open | 2 |\n\n1. Reproduce\n2. Verify\n\n- [x] Fixture ready\n\n<script>alert(1)</script>\n[Unsafe](javascript:alert(1))'), user, db))['data']
             await db.execute(text("INSERT INTO notifications(id,workspace_id,user_id,type,entity_type,entity_id,data,created_at) VALUES (:id,:workspace,:user,'issue.assignment','issue',:issue,CAST(:data AS jsonb),:now)"), {
-                'id': _cuid(), 'workspace': seed['workspace_id'], 'user': user['id'], 'issue': issues[0]['id'], 'now': now,
+                'id': cuid(), 'workspace': seed['workspace_id'], 'user': user['id'], 'issue': issues[0]['id'], 'now': now,
                 'data': json.dumps({'title': issues[0]['title'], 'entityPath': '/issue/' + issues[0]['identifier'], 'actor': {'id': user['id'], 'name': user['name']}}),
             })
             # Separate accounts: a platform role changes where sign-in lands, which the workspace specs must not see.
             # VI: Tài khoản riêng: vai trò hệ thống đổi trang sau đăng nhập, các spec workspace không được bị ảnh hưởng.
             platform_users = {}
             for key, name, role in [('superAdminEmail', 'Regression Super Admin', 'SUPER_ADMIN'), ('adminViewerEmail', 'Regression Admin Viewer', 'VIEWER'), ('plainUserEmail', 'Regression Plain User', None)]:
-                platform_users[key] = f'{_cuid()}@example.test'
+                platform_users[key] = f'{cuid()}@example.test'
                 await db.execute(text("""INSERT INTO users(id,name,email,password_hash,status,email_verified_at,is_platform_admin,platform_role,created_at,updated_at)
-                    VALUES (:id,:name,:email,:password,'ACTIVE',:now,:admin,CAST(:role AS "PlatformRole"),:now,:now)"""), {'id': _cuid(), 'name': name, 'email': platform_users[key], 'password': password_hasher.hash(password), 'admin': role is not None, 'role': role, 'now': now})
+                    VALUES (:id,:name,:email,:password,'ACTIVE',:now,:admin,CAST(:role AS "PlatformRole"),:now,:now)"""), {'id': cuid(), 'name': name, 'email': platform_users[key], 'password': password_hasher.hash(password), 'admin': role is not None, 'role': role, 'now': now})
             # A workspace member in no team: the Service Desk requester, who must not see team work.
             # VI: Thành viên workspace không thuộc team nào: người yêu cầu Service Desk, không được thấy việc của team.
-            requester = {'id': _cuid(), 'email': f'{_cuid()}@example.test'}
+            requester = {'id': cuid(), 'email': f'{cuid()}@example.test'}
             await db.execute(text("""INSERT INTO users(id,name,email,password_hash,status,email_verified_at,created_at,updated_at)
                 VALUES (:id,'Regression Requester',:email,:password,'ACTIVE',:now,:now,:now)"""), {**requester, 'password': password_hasher.hash(password), 'now': now})
             await db.execute(text("""INSERT INTO workspace_members(id,workspace_id,user_id,status,role,created_at,updated_at)
-                VALUES (:id,:workspace,:user,'ACTIVE','MEMBER',:now,:now)"""), {'id': _cuid(), 'workspace': seed['workspace_id'], 'user': requester['id'], 'now': now})
+                VALUES (:id,:workspace,:user,'ACTIVE','MEMBER',:now,:now)"""), {'id': cuid(), 'workspace': seed['workspace_id'], 'user': requester['id'], 'now': now})
             platform_users['deskRequesterEmail'] = requester['email']
             await db.commit()
             output = {**seed, **platform_users, 'legacy_slug': seed['slug'], 'slug': seed['slug'], 'userId': user['id'], 'email': user['email'], 'password': password,

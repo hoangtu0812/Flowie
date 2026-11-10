@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.utc_responses import UtcAPIRouter
 from ...db.session import get_session
-from ...domains.auth import current_user
+from ..identity.auth import current_user
 from .workflow_statuses import CreateStatus, EditStatus, mutate_status, statuses
 
 router = UtcAPIRouter(prefix='/api/v1/issue-statuses', tags=['workflow'])

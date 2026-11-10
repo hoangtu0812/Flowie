@@ -9,17 +9,19 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.clock import utcnow
 from ..core.errors import ApiError
+from ..core.identifiers import cuid
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
 from ..modules.access.project_scope import project_read_scope
+from ..modules.identity.auth import current_user
 from ..services.microsoft_teams import (
     masked_webhook,
     teams_available,
     teams_message,
     valid_teams_webhook,
 )
-from .auth import _cuid, _utcnow, current_user
 
 router = APIRouter(prefix='/api/v1/integrations', tags=['integrations'])
 
@@ -94,7 +96,7 @@ async def save_discord(
     if not row and not payload.webhookUrl:
         raise ApiError(400, 'A Discord webhook URL is required.', 'Bad Request')
     webhook_url = _validate_webhook(payload.webhookUrl) if payload.webhookUrl else row['webhook_url']
-    now = _utcnow()
+    now = utcnow()
     if row:
         result = await db.execute(
             text(
@@ -113,7 +115,7 @@ async def save_discord(
                    RETURNING enabled, daily_digest_enabled, webhook_url, updated_at'''
             ),
             {
-                'id': _cuid(), 'workspace_id': workspaceId, 'webhook_url': webhook_url,
+                'id': cuid(), 'workspace_id': workspaceId, 'webhook_url': webhook_url,
                 'enabled': payload.enabled, 'daily_digest_enabled': payload.dailyDigestEnabled, 'now': now,
             },
         )
@@ -232,7 +234,7 @@ async def save_teams(
     current = existing.scalar_one_or_none()
     if not current and not payload.webhookUrl:
         raise ApiError(400, 'A Microsoft Teams webhook URL is required.', 'Bad Request')
-    now = _utcnow()
+    now = utcnow()
     result = await db.execute(
         text(
             '''INSERT INTO teams_webhooks (id, workspace_id, webhook_url, enabled, created_at, updated_at)
@@ -242,7 +244,7 @@ async def save_teams(
                RETURNING enabled, webhook_url, updated_at'''
         ),
         {
-            'id': _cuid(), 'workspace_id': workspaceId,
+            'id': cuid(), 'workspace_id': workspaceId,
             'webhook_url': _teams_url(payload.webhookUrl) if payload.webhookUrl else current,
             'enabled': payload.enabled, 'now': now,
         },
@@ -331,7 +333,7 @@ async def save_project_teams(
     current = existing.scalar_one_or_none()
     if not current and not payload.webhookUrl:
         raise ApiError(400, 'A Microsoft Teams webhook URL is required.', 'Bad Request')
-    now = _utcnow()
+    now = utcnow()
     result = await db.execute(
         text(
             '''INSERT INTO project_teams_channels (id, project_id, channel_name, webhook_url, enabled, created_at, updated_at)
@@ -341,7 +343,7 @@ async def save_project_teams(
                RETURNING channel_name, enabled, webhook_url, updated_at'''
         ),
         {
-            'id': _cuid(), 'project_id': projectId,
+            'id': cuid(), 'project_id': projectId,
             'channel_name': (payload.channelName or '').strip() or None,
             'webhook_url': _teams_url(payload.webhookUrl) if payload.webhookUrl else current,
             'enabled': payload.enabled, 'now': now,

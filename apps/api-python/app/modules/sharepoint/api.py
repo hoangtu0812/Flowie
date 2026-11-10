@@ -18,8 +18,8 @@ from ...core.clock import _utcnow
 from ...core.errors import ApiError
 from ...core.utc_responses import UtcAPIRouter as APIRouter
 from ...db.session import get_session
-from ...domains.auth import current_user
 from ...domains.native_integrations import _manager_access
+from ..identity.auth import current_user
 from ..work_items.document_tree import _project_team
 from .graph import SharePointError
 from .service import (

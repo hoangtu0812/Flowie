@@ -5,9 +5,11 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.sla.contracts import PolicyValues, UpdatePolicy
 from app.modules.sla.policies import (
     create_policy,
@@ -33,22 +35,22 @@ async def verify_policies():
     )
     try:
         async with async_sessionmaker(engine)() as db:
-            now = _utcnow()
+            now = utcnow()
             owner, reader = [
-                {"id": _cuid(), "name": "SLA policy test"} for _ in range(2)
+                {"id": cuid(), "name": "SLA policy test"} for _ in range(2)
             ]
             for user in [owner, reader]:
                 await db.execute(
                     text(
                         "INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"
                     ),
-                    {**user, "email": _cuid() + "@example.test", "now": now},
+                    {**user, "email": cuid() + "@example.test", "now": now},
                 )
             seed = await create_workspace_bootstrap(
                 db,
                 user_id=owner["id"],
                 organization_name="SLA tests",
-                workspace_name=_cuid(),
+                workspace_name=cuid(),
                 now=now,
             )
             workspace, team = seed["workspace_id"], seed["team_id"]
@@ -57,7 +59,7 @@ async def verify_policies():
                     "INSERT INTO workspace_members(id,workspace_id,user_id,role,status,created_at,updated_at) VALUES (:id,:workspace,:actor,'ADMIN','ACTIVE',:now,:now)"
                 ),
                 {
-                    "id": _cuid(),
+                    "id": cuid(),
                     "workspace": workspace,
                     "actor": reader["id"],
                     "now": now,
@@ -161,7 +163,7 @@ async def verify_policies():
             assert (await policy_history(db, workspace, reader, private["id"]))["meta"][
                 "total"
             ] == 3
-            private_status = _cuid()
+            private_status = cuid()
             await db.execute(
                 text(
                     "INSERT INTO issue_statuses(id,workspace_id,team_id,name,category,color,created_at,updated_at) VALUES (:id,:workspace,:team,'Waiting privately','STARTED','gray',:now,:now)"

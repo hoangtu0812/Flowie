@@ -6,8 +6,10 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.audit_context import audit_agent, audit_source
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.work_items.collaboration_feed import comment_rows
 from app.modules.work_items.comments import create_comment
 from app.modules.work_items.contracts import (
@@ -31,19 +33,19 @@ async def verify_attribution():
     )
     try:
         async with async_sessionmaker(engine)() as db:
-            now = _utcnow()
-            user = {"id": _cuid(), "name": "Attribution test"}
+            now = utcnow()
+            user = {"id": cuid(), "name": "Attribution test"}
             await db.execute(
                 text(
                     "INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"
                 ),
-                {**user, "email": _cuid() + "@example.test", "now": now},
+                {**user, "email": cuid() + "@example.test", "now": now},
             )
             seed = await create_workspace_bootstrap(
                 db,
                 user_id=user["id"],
                 organization_name="Attribution",
-                workspace_name=_cuid(),
+                workspace_name=cuid(),
                 now=now,
             )
             workspace, team = seed["workspace_id"], seed["team_id"]

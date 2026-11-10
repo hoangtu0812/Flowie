@@ -11,8 +11,8 @@ from app.core.clock import _utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.core.identifiers import _cuid
-from app.domains.auth import create_workspace_bootstrap
 from app.modules.agent_runs.operations import LimitsInput, overview, put_limits
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.mcp.quotas import consume_quota, update_limits
 
 

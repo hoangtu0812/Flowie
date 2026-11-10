@@ -7,10 +7,12 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
 from app.domains.native_initiatives import initiative_activity, list_initiatives
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.portfolio.projects_api import (
     public_get_project,
     public_list_projects,
@@ -30,22 +32,22 @@ async def verify_scope(role):
     engine = create_async_engine(_async_database_url(os.environ['MCP_TEST_DATABASE_URL']))
     try:
         async with async_sessionmaker(engine)() as db:
-            now = _utcnow()
-            owner, member = {'id': _cuid(), 'name': 'Scope owner'}, {'id': _cuid(), 'name': 'Scope member'}
+            now = utcnow()
+            owner, member = {'id': cuid(), 'name': 'Scope owner'}, {'id': cuid(), 'name': 'Scope member'}
             for user in [owner, member]:
-                await db.execute(text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"), {**user,'email':_cuid()+'@example.test','now':now})
-            seed = await create_workspace_bootstrap(db,user_id=owner['id'],organization_name='Scope',workspace_name=_cuid(),now=now)
+                await db.execute(text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"), {**user,'email':cuid()+'@example.test','now':now})
+            seed = await create_workspace_bootstrap(db,user_id=owner['id'],organization_name='Scope',workspace_name=cuid(),now=now)
             workspace, team = seed['workspace_id'], seed['team_id']
-            await db.execute(text("INSERT INTO workspace_members(id,workspace_id,user_id,status,role,created_at,updated_at) VALUES (:id,:workspace,:user,'ACTIVE',:role,:now,:now)"), {'id':_cuid(),'workspace':workspace,'user':member['id'],'role':role,'now':now})
-            hidden, visible, initiative = _cuid(), _cuid(), _cuid()
+            await db.execute(text("INSERT INTO workspace_members(id,workspace_id,user_id,status,role,created_at,updated_at) VALUES (:id,:workspace,:user,'ACTIVE',:role,:now,:now)"), {'id':cuid(),'workspace':workspace,'user':member['id'],'role':role,'now':now})
+            hidden, visible, initiative = cuid(), cuid(), cuid()
             for project, project_team in [(hidden,team),(visible,None)]:
                 await db.execute(text("INSERT INTO projects(id,workspace_id,team_id,name,identifier,created_at,updated_at) VALUES (:id,:workspace,:team,:name,:identifier,:now,:now)"), {'id':project,'workspace':workspace,'team':project_team,'name':'Scope restricted project' if project_team else 'Scope accessible project','identifier':project,'now':now})
             await db.execute(text("INSERT INTO initiatives(id,workspace_id,name,created_at,updated_at) VALUES (:id,:workspace,'Scope initiative',:now,:now)"), {'id':initiative,'workspace':workspace,'now':now})
             status=(await db.execute(text("SELECT id FROM issue_statuses WHERE workspace_id=:workspace LIMIT 1"),{'workspace':workspace})).scalar_one()
-            await db.execute(text("INSERT INTO issues(id,workspace_id,team_id,project_id,status_id,identifier,number,title,creator_id,created_at,updated_at) VALUES (:id,:workspace,:team,:project,:status,'SECRET-1',1,'Hidden team issue',:user,:now,:now)"),{'id':_cuid(),'workspace':workspace,'team':team,'project':visible,'status':status,'user':owner['id'],'now':now})
+            await db.execute(text("INSERT INTO issues(id,workspace_id,team_id,project_id,status_id,identifier,number,title,creator_id,created_at,updated_at) VALUES (:id,:workspace,:team,:project,:status,'SECRET-1',1,'Hidden team issue',:user,:now,:now)"),{'id':cuid(),'workspace':workspace,'team':team,'project':visible,'status':status,'user':owner['id'],'now':now})
             for project in [hidden, visible]:
                 await db.execute(text('INSERT INTO initiative_projects(initiative_id,project_id,created_at) VALUES (:initiative,:project,:now)'), {'initiative':initiative,'project':project,'now':now})
-                await db.execute(text("INSERT INTO audit_logs(id,workspace_id,actor_id,action,entity_type,entity_id,metadata,created_at) VALUES (:id,:workspace,:actor,'initiative.project.linked','initiative',:initiative,CAST(:metadata AS jsonb),:now)"), {'id':_cuid(),'workspace':workspace,'actor':owner['id'],'initiative':initiative,'metadata':json.dumps({'projectId':project,'projectName':'Scope project'}),'now':now})
+                await db.execute(text("INSERT INTO audit_logs(id,workspace_id,actor_id,action,entity_type,entity_id,metadata,created_at) VALUES (:id,:workspace,:actor,'initiative.project.linked','initiative',:initiative,CAST(:metadata AS jsonb),:now)"), {'id':cuid(),'workspace':workspace,'actor':owner['id'],'initiative':initiative,'metadata':json.dumps({'projectId':project,'projectName':'Scope project'}),'now':now})
 
             async def assert_visible(expected):
                 projects = await public_list_projects(workspace,None,member,db)

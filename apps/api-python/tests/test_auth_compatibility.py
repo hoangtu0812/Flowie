@@ -9,13 +9,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from pydantic import ValidationError
 
-from app.domains.auth import (
-    _compatible_argon2_hash,
+from app.core.passwords import compatible_hash
+from app.domains.native_admin import UpdateAdminUserInput
+from app.modules.identity.auth import (
     _is_environment_admin,
     _safe_app_path,
     _valid_timezone,
 )
-from app.domains.native_admin import UpdateAdminUserInput
 
 
 class Argon2CompatibilityTests(unittest.TestCase):
@@ -23,14 +23,14 @@ class Argon2CompatibilityTests(unittest.TestCase):
         legacy = '$argon2id$v=19$m=65536,p=4,t=3$encoded-salt$encoded-hash'
 
         self.assertEqual(
-            _compatible_argon2_hash(legacy),
+            compatible_hash(legacy),
             '$argon2id$v=19$m=65536,t=3,p=4$encoded-salt$encoded-hash',
         )
 
     def test_leaves_standard_parameter_order_unchanged(self) -> None:
         standard = '$argon2id$v=19$m=65536,t=3,p=4$encoded-salt$encoded-hash'
 
-        self.assertEqual(_compatible_argon2_hash(standard), standard)
+        self.assertEqual(compatible_hash(standard), standard)
 
     def test_normalizes_windows_saigon_timezone_alias(self) -> None:
         self.assertEqual(_valid_timezone('Asia/Saigon'), 'Asia/Ho_Chi_Minh')

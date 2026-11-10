@@ -16,9 +16,9 @@ from ...core.errors import ApiError
 from ...core.identifiers import cuid
 from ...core.utc_responses import UtcAPIRouter as APIRouter
 from ...db.session import get_session
-from ...domains.auth import current_user
 from ...storage.minio import MinioStorage
 from ..access.projects import workspace_access, workspace_manager
+from ..identity.auth import current_user
 
 router = APIRouter(prefix='/api/v1/emojis', tags=['emojis'])
 MAX_EMOJI_BYTES = 512 * 1024

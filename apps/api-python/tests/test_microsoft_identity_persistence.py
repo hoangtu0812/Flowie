@@ -13,7 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.core.config import _async_database_url
-from app.domains.auth import _cuid, _upsert_microsoft_user
+from app.core.identifiers import cuid
+from app.modules.identity.auth import _upsert_microsoft_user
 from app.services.microsoft_identity import MicrosoftProfile
 
 
@@ -28,7 +29,7 @@ class MicrosoftIdentityPersistenceTests(unittest.TestCase):
                 transaction = await connection.begin()
                 db = AsyncSession(bind=connection, expire_on_commit=False)
                 try:
-                    unique = _cuid()
+                    unique = cuid()
                     email = f'{unique}@example.invalid'
                     settings = SimpleNamespace(admin_email=email)
                     profile = MicrosoftProfile(

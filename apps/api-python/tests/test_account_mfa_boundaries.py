@@ -18,8 +18,8 @@ from app.core.config import Settings, _async_database_url
 from app.core.errors import ApiError
 from app.core.identifiers import _cuid, _hash_token
 from app.db.session import get_session
-from app.domains import auth
 from app.main import create_app
+from app.modules.identity import auth
 from app.modules.identity.password_reset import consume_reset, issue_reset
 from app.modules.identity.security.mfa import login
 from app.modules.identity.security.mfa.crypto import (

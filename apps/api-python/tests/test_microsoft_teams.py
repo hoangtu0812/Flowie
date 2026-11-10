@@ -13,8 +13,8 @@ from app.core.clock import _utcnow
 from app.core.config import Settings, _async_database_url
 from app.core.identifiers import _cuid, _hash_token
 from app.db.session import get_session
-from app.domains.auth import create_workspace_bootstrap
 from app.main import create_app
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.identity.security.sessions import access_token
 from app.modules.notifications.outbox import deliver
 from app.services.microsoft_teams import (

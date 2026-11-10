@@ -7,9 +7,11 @@ from pydantic import ValidationError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.work_items.bulk_contracts import BulkChanges, BulkPreview
 from app.modules.work_items.bulk_service import bulk_command, bulk_preview, bulk_result
 from app.modules.work_items.bulk_worker import process_bulk_item
@@ -47,22 +49,22 @@ async def verify_bulk():
         _async_database_url(os.environ["MCP_TEST_DATABASE_URL"])
     )
     factory = async_sessionmaker(engine)
-    user = {"id": _cuid(), "name": "Bulk owner"}
+    user = {"id": cuid(), "name": "Bulk owner"}
     workspace = None
     try:
         async with factory() as db:
-            now = _utcnow()
+            now = utcnow()
             await db.execute(
                 text(
                     "INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"
                 ),
-                {**user, "email": _cuid() + "@example.test", "now": now},
+                {**user, "email": cuid() + "@example.test", "now": now},
             )
             seed = await create_workspace_bootstrap(
                 db,
                 user_id=user["id"],
                 organization_name="Bulk tests",
-                workspace_name=_cuid(),
+                workspace_name=cuid(),
                 now=now,
             )
             workspace, team = seed["workspace_id"], seed["team_id"]
@@ -74,7 +76,7 @@ async def verify_bulk():
                     {"workspace": workspace},
                 )
             ).scalar_one()
-            ids = [_cuid() for _ in range(4)]
+            ids = [cuid() for _ in range(4)]
             await db.execute(
                 text("""INSERT INTO issues(id,workspace_id,team_id,status_id,identifier,number,title,priority,creator_id,created_at,updated_at)
                 VALUES (:id,:workspace,:team,:status,:identifier,:number,'Bulk issue','LOW',:user,:now,:now)"""),
@@ -98,7 +100,7 @@ async def verify_bulk():
             async with factory() as db:
                 payload = BulkPreview(
                     workspaceId=workspace,
-                    requestKey=extra.pop("requestKey", _cuid()),
+                    requestKey=extra.pop("requestKey", cuid()),
                     items=[
                         {"id": identifier, "version": 1}
                         for identifier in (selected or ids)
@@ -135,7 +137,7 @@ async def verify_bulk():
                     "workspace": workspace,
                     "status": status,
                     "user": user["id"],
-                    "now": _utcnow(),
+                    "now": utcnow(),
                 },
             )
             with pytest.raises(ApiError) as too_many:
@@ -144,7 +146,7 @@ async def verify_bulk():
                     user,
                     BulkPreview(
                         workspaceId=workspace,
-                        requestKey=_cuid(),
+                        requestKey=cuid(),
                         selection="all_matching",
                         confirmAll=True,
                         changes={"priority": "HIGH"},
@@ -276,7 +278,7 @@ async def verify_bulk():
         assert final["counts"] == {"FAILED": 1} and final["items"] == []
         async with factory() as db:
             with pytest.raises(ApiError) as denied:
-                await bulk_result(db, {"id": _cuid()}, workspace, operation["id"])
+                await bulk_result(db, {"id": cuid()}, workspace, operation["id"])
             assert denied.value.status_code in {403, 404}
     finally:
         async with factory() as db:

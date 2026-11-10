@@ -14,8 +14,8 @@ from app.core.config import Settings, _async_database_url
 from app.core.errors import ApiError
 from app.core.identifiers import _cuid, _hash_token
 from app.db.session import get_session
-from app.domains.auth import create_workspace_bootstrap
 from app.main import create_app
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.identity.security.credentials import revoke_credential
 from app.modules.identity.security.queries import (
     credential_page,

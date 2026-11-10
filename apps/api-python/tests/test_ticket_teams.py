@@ -7,8 +7,9 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
 from app.domains.native_asks import (
     AskMessageInput,
     AskTransitionInput,
@@ -17,6 +18,7 @@ from app.domains.native_asks import (
     create_ask_message,
     transition_ask,
 )
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.notifications.outbox import process_one
 from tests.document_review_support import add_member
 from tests.test_service_desk_asks import add_project
@@ -33,10 +35,10 @@ def test_new_tickets_reach_only_the_project_channel():
 
 
 async def add_channel(db, project, *, enabled=True):
-    now = _utcnow()
+    now = utcnow()
     await db.execute(
         text("INSERT INTO project_teams_channels(id,project_id,webhook_url,enabled,created_at,updated_at) VALUES (:id,:project,:url,:enabled,:now,:now)"),
-        {"id": _cuid(), "project": project, "url": PROJECT_HOOK, "enabled": enabled, "now": now},
+        {"id": cuid(), "project": project, "url": PROJECT_HOOK, "enabled": enabled, "now": now},
     )
     await db.commit()
 
@@ -46,19 +48,19 @@ async def verify_cards():
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
         async with factory() as db:
-            now = _utcnow()
-            owner = {"id": _cuid(), "name": "Owner"}
+            now = utcnow()
+            owner = {"id": cuid(), "name": "Owner"}
             await db.execute(
                 text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"),
-                {**owner, "email": _cuid() + "@example.test", "now": now},
+                {**owner, "email": cuid() + "@example.test", "now": now},
             )
-            seed = await create_workspace_bootstrap(db, user_id=owner["id"], organization_name="Desk", workspace_name=_cuid(), now=now)
+            seed = await create_workspace_bootstrap(db, user_id=owner["id"], organization_name="Desk", workspace_name=cuid(), now=now)
             workspace, team = seed["workspace_id"], seed["team_id"]
             handler = await add_member(db, workspace, team, name="Handler")
             requester = await add_member(db, workspace, None, name="Requester")
             await db.execute(
                 text("INSERT INTO teams_webhooks(id,workspace_id,webhook_url,enabled,created_at,updated_at) VALUES (:id,:workspace,:url,true,:now,:now)"),
-                {"id": _cuid(), "workspace": workspace, "url": WORKSPACE_HOOK, "now": now},
+                {"id": cuid(), "workspace": workspace, "url": WORKSPACE_HOOK, "now": now},
             )
             await db.commit()
             connected = await add_project(db, workspace, team, enabled=True)
@@ -80,7 +82,7 @@ async def verify_cards():
                 return [(outbox_id, card) for outbox_id, payload in rows for card in payload["teams_cards"]]
 
             async def clear():
-                await db.execute(text("UPDATE notification_outbox SET delivered_at = :now WHERE workspace_id = :workspace"), {"now": _utcnow(), "workspace": workspace})
+                await db.execute(text("UPDATE notification_outbox SET delivered_at = :now WHERE workspace_id = :workspace"), {"now": utcnow(), "workspace": workspace})
                 await db.commit()
 
             with patch("app.services.notification_events.teams_available", return_value=True):

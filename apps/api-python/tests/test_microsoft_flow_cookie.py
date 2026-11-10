@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.domains.auth import _microsoft_flow_cookie_path
+from app.modules.identity.auth import _microsoft_flow_cookie_path
 
 
 class MicrosoftFlowCookiePathTests(unittest.TestCase):

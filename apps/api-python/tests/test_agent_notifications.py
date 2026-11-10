@@ -6,8 +6,10 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.audit_context import audit_agent
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.work_items.contracts import CreateIssueInput
 from app.modules.work_items.issues import create_issue
 from app.services.notification_events import actor_payload, create_notification_batch
@@ -35,19 +37,19 @@ async def verify_agent_notifications():
     )
     try:
         async with async_sessionmaker(engine)() as db:
-            now = _utcnow()
-            owner = {"id": _cuid(), "name": "Agent owner", "avatar_url": None}
+            now = utcnow()
+            owner = {"id": cuid(), "name": "Agent owner", "avatar_url": None}
             await db.execute(
                 text(
                     "INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"
                 ),
-                {"id": owner["id"], "name": owner["name"], "email": _cuid() + "@example.test", "now": now},
+                {"id": owner["id"], "name": owner["name"], "email": cuid() + "@example.test", "now": now},
             )
             seed = await create_workspace_bootstrap(
                 db,
                 user_id=owner["id"],
                 organization_name="Agent inbox",
-                workspace_name=_cuid(),
+                workspace_name=cuid(),
                 now=now,
             )
             workspace = seed["workspace_id"]

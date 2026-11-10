@@ -8,10 +8,12 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.clock import utcnow
 from ..core.errors import ApiError
+from ..core.identifiers import cuid
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
-from .auth import _cuid, _is_environment_admin, _platform_role, _utcnow, current_user
+from ..modules.identity.auth import _is_environment_admin, _platform_role, current_user
 
 router = APIRouter(prefix='/api/v1/admin', tags=['admin'])
 
@@ -232,7 +234,7 @@ async def update_user(
             'Bad Request',
         )
 
-    now = _utcnow()
+    now = utcnow()
     sets, params = [], {'id': user_id}
     if payload.status:
         sets.append('status = :status')
@@ -259,7 +261,7 @@ async def update_user(
                VALUES (:id, :actor_id, 'admin.user.updated', 'user', :entity_id, CAST(:metadata AS jsonb), :now)'''
         ),
         {
-            'id': _cuid(),
+            'id': cuid(),
             'actor_id': user['id'],
             'entity_id': user_id,
             'metadata': json.dumps(

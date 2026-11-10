@@ -7,9 +7,10 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 import app.domains.native_asks as native_asks
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
 from app.domains.native_asks import (
     AskTransitionInput,
     CreateAskInput,
@@ -25,11 +26,12 @@ from app.domains.native_asks import (
     update_ask,
 )
 from app.jobs.ticket_status import notify_ticket_status_changes
+from app.modules.identity.auth import create_workspace_bootstrap
 from tests.document_review_support import add_member
 from tests.test_service_desk_asks import add_project, forbidden
 from tests.test_ticket_messages import inbox, set_issue_category
 
-NOW = _utcnow()
+NOW = utcnow()
 EARLIER = NOW - timedelta(hours=1)
 
 
@@ -81,14 +83,14 @@ async def verify_lifecycle():
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
         async with factory() as db:
-            now = _utcnow()
-            owner = {"id": _cuid(), "name": "Owner"}
+            now = utcnow()
+            owner = {"id": cuid(), "name": "Owner"}
             await db.execute(
                 text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"),
-                {**owner, "email": _cuid() + "@example.test", "now": now},
+                {**owner, "email": cuid() + "@example.test", "now": now},
             )
             seed = await create_workspace_bootstrap(
-                db, user_id=owner["id"], organization_name="Desk", workspace_name=_cuid(), now=now
+                db, user_id=owner["id"], organization_name="Desk", workspace_name=cuid(), now=now
             )
             workspace, team = seed["workspace_id"], seed["team_id"]
             handler = await add_member(db, workspace, team, name="Handler")
@@ -163,7 +165,7 @@ async def verify_lifecycle():
             await rejected(transition_ask(converted_id, act("decline", "No"), workspace, handler, db), 400)
             await forbidden(transition_ask(converted_id, act("reopen", "Early"), workspace, requester, db))
             await set_issue_category(db, workspace, issue_id, "COMPLETED")
-            await set_issue_closed_at(db, issue_id, _utcnow())
+            await set_issue_closed_at(db, issue_id, utcnow())
             assert (await view(converted_id))["ticketStatus"] == "done"
             await notify_ticket_status_changes(factory)
 
@@ -179,7 +181,7 @@ async def verify_lifecycle():
 
             # Closing the issue again puts the ticket back on the issue, and the requester hears it.
             # VI: Đóng lại Issue đưa ticket về theo Issue, và người yêu cầu được báo.
-            await set_issue_closed_at(db, issue_id, _utcnow() + timedelta(minutes=1))
+            await set_issue_closed_at(db, issue_id, utcnow() + timedelta(minutes=1))
             assert (await view(converted_id))["ticketStatus"] == "done"
             assert (await view(converted_id, handler))["reopenPending"] is False
             assert await notify_ticket_status_changes(factory) == 1
@@ -187,7 +189,7 @@ async def verify_lifecycle():
             # A pending reopening can also be settled without touching the issue.
             # VI: Yêu cầu mở lại đang chờ cũng có thể kết thúc mà không đụng tới Issue.
             await transition_ask(converted_id, act("reopen", "Once more"), workspace, requester, db)
-            await set_issue_closed_at(db, issue_id, _utcnow() - timedelta(minutes=1))
+            await set_issue_closed_at(db, issue_id, utcnow() - timedelta(minutes=1))
             settled = (await transition_ask(converted_id, act("resolve", "Fixed by a restart"), workspace, handler, db))["data"]
             assert settled["ticketStatus"] == "done" and settled["convertedIssue"]
             assert (await transition_ask(converted_id, act("reopen", "No it is not"), workspace, requester, db))["data"]["status"] == "accepted"

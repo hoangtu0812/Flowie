@@ -7,9 +7,11 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.sla.commands import apply_current_policy
 from app.modules.sla.contracts import IssueSlaCommand, PolicyValues, UpdatePolicy
 from app.modules.sla.cycles import transition
@@ -77,19 +79,19 @@ async def verify_cycles():
     )
     try:
         async with async_sessionmaker(engine)() as db:
-            user = {"id": _cuid(), "name": "SLA clock test"}
-            now = _utcnow()
+            user = {"id": cuid(), "name": "SLA clock test"}
+            now = utcnow()
             await db.execute(
                 text(
                     "INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"
                 ),
-                {**user, "email": _cuid() + "@example.test", "now": now},
+                {**user, "email": cuid() + "@example.test", "now": now},
             )
             seed = await create_workspace_bootstrap(
                 db,
                 user_id=user["id"],
                 organization_name="SLA cycles",
-                workspace_name=_cuid(),
+                workspace_name=cuid(),
                 now=now,
             )
             workspace, team = seed["workspace_id"], seed["team_id"]
@@ -253,7 +255,7 @@ async def verify_cycles():
             await reapply_policy(db, issue["id"])
             await db.execute(
                 text("UPDATE issues SET archived_at=:now WHERE id=:id"),
-                {"id": issue["id"], "now": _utcnow()},
+                {"id": issue["id"], "now": utcnow()},
             )
             await sync_issue(db, issue["id"])
             assert (await latest_cycle(db, issue["id"]))["state"] == "CANCELED"
@@ -268,18 +270,18 @@ async def verify_cycles():
                 and restored["cycle"] == 6
                 and restored["policy_version"] == 2
             )
-            destination = _cuid()
+            destination = cuid()
             await db.execute(
                 text(
                     "INSERT INTO teams(id,workspace_id,name,identifier,created_at,updated_at) VALUES (:id,:workspace,'Destination','DEST',:now,:now)"
                 ),
-                {"id": destination, "workspace": workspace, "now": _utcnow()},
+                {"id": destination, "workspace": workspace, "now": utcnow()},
             )
             await db.execute(
                 text(
                     "INSERT INTO team_members(team_id,user_id,created_at) VALUES (:team,:actor,:now)"
                 ),
-                {"team": destination, "actor": user["id"], "now": _utcnow()},
+                {"team": destination, "actor": user["id"], "now": utcnow()},
             )
             destination_policy = await create_policy(
                 db,
@@ -339,7 +341,7 @@ async def verify_cycles():
                 text("""INSERT INTO issues(id,workspace_id,team_id,status_id,identifier,number,title,creator_id,created_at,updated_at)
                 SELECT :prefix||n::text,:workspace,:team,:status,'SLA-TEST-'||n::text,n+1000,'Legacy report issue',:actor,:now,:now FROM generate_series(1,150) n"""),
                 {
-                    "prefix": _cuid(),
+                    "prefix": cuid(),
                     "workspace": workspace,
                     "team": team,
                     "status": statuses["Todo"],

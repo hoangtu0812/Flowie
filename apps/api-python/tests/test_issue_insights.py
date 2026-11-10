@@ -6,8 +6,10 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.work_items.issue_insights import issue_insights
 from app.modules.work_items.issue_search import search_page
 
@@ -21,12 +23,12 @@ async def verify_insights():
     engine=create_async_engine(_async_database_url(os.environ['MCP_TEST_DATABASE_URL']))
     try:
         async with async_sessionmaker(engine)() as db:
-            user={'id':_cuid(),'name':'Report owner'}
-            now=_utcnow()
-            await db.execute(text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"), {**user,'email':_cuid()+'@example.test','now':now})
-            seed=await create_workspace_bootstrap(db,user_id=user['id'],organization_name='Reports',workspace_name=_cuid(),now=now)
+            user={'id':cuid(),'name':'Report owner'}
+            now=utcnow()
+            await db.execute(text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"), {**user,'email':cuid()+'@example.test','now':now})
+            seed=await create_workspace_bootstrap(db,user_id=user['id'],organization_name='Reports',workspace_name=cuid(),now=now)
             workspace,team=seed['workspace_id'],seed['team_id']
-            hidden=_cuid()
+            hidden=cuid()
             await db.execute(text("INSERT INTO teams(id,workspace_id,name,identifier,created_at,updated_at) VALUES (:id,:workspace,'Hidden','HIDE',:now,:now)"), {'id':hidden,'workspace':workspace,'now':now})
             status=(await db.execute(text("SELECT id FROM issue_statuses WHERE workspace_id=:workspace AND category='UNSTARTED' LIMIT 1"), {'workspace':workspace})).scalar_one()
             for fixture_team,count in [(team,150),(hidden,25)]:

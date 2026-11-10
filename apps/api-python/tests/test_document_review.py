@@ -6,9 +6,11 @@ from pydantic import ValidationError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.work_items.contracts import CreateDocumentInput, UpdateDocumentInput
 from app.modules.work_items.document_review import (
     DecisionInput,
@@ -33,16 +35,16 @@ async def verify_review_flow():
     engine = create_async_engine(_async_database_url(os.environ["MCP_TEST_DATABASE_URL"]))
     try:
         async with async_sessionmaker(engine, expire_on_commit=False)() as db:
-            now = _utcnow()
-            lead = {"id": _cuid(), "name": "Lead"}
+            now = utcnow()
+            lead = {"id": cuid(), "name": "Lead"}
             await db.execute(
                 text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"),
-                {**lead, "email": _cuid() + "@example.test", "now": now},
+                {**lead, "email": cuid() + "@example.test", "now": now},
             )
             # The workspace creator owns the workspace and leads its first team.
             # VI: Người tạo workspace là chủ workspace và là lead của team đầu tiên.
             seed = await create_workspace_bootstrap(
-                db, user_id=lead["id"], organization_name="Review", workspace_name=_cuid(), now=now
+                db, user_id=lead["id"], organization_name="Review", workspace_name=cuid(), now=now
             )
             workspace, team = seed["workspace_id"], seed["team_id"]
             author = await add_member(db, workspace, team, name="Author")
@@ -145,7 +147,7 @@ async def verify_review_flow():
             # Without a lead, a workspace Owner in the team approves; with nobody, review is refused.
             # VI: Không có lead thì Owner workspace trong team duyệt; không có ai thì không gửi duyệt được.
             for name, members in (("Leaderless", [author, lead]), ("Orphan", [author])):
-                other = _cuid()
+                other = cuid()
                 await db.execute(
                     text("INSERT INTO teams(id,workspace_id,name,identifier,created_at,updated_at) VALUES (:id,:w,:name,:name,:now,:now)"),
                     {"id": other, "w": workspace, "name": name, "now": now},
@@ -177,10 +179,10 @@ async def verify_workspace_approver(role):
     engine = create_async_engine(_async_database_url(os.environ["MCP_TEST_DATABASE_URL"]))
     try:
         async with async_sessionmaker(engine, expire_on_commit=False)() as db:
-            owner = {"id": _cuid(), "name": "Owner"}
-            now = _utcnow()
-            await db.execute(text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"), {**owner, "email":_cuid()+"@example.test","now":now})
-            seed = await create_workspace_bootstrap(db,user_id=owner["id"],organization_name="Approval roles",workspace_name=_cuid(),now=now)
+            owner = {"id": cuid(), "name": "Owner"}
+            now = utcnow()
+            await db.execute(text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"), {**owner, "email":cuid()+"@example.test","now":now})
+            seed = await create_workspace_bootstrap(db,user_id=owner["id"],organization_name="Approval roles",workspace_name=cuid(),now=now)
             workspace, team = seed["workspace_id"], seed["team_id"]
             await db.execute(text("UPDATE team_members SET role='MEMBER' WHERE team_id=:team AND user_id=:user"), {"team":team,"user":owner["id"]})
             lead = await add_member(db,workspace,team,team_role="LEAD",name="Team lead")
@@ -194,7 +196,7 @@ async def verify_workspace_approver(role):
             outside = await add_member(db,workspace,role="ADMIN",name="Other team admin")
             foreign = await add_member(db,workspace,role="ADMIN",name="Other workspace admin")
             await db.execute(text("DELETE FROM workspace_members WHERE workspace_id=:workspace AND user_id=:id"), {"workspace":workspace,"id":foreign["id"]})
-            await create_workspace_bootstrap(db,user_id=foreign["id"],organization_name="Foreign",workspace_name=_cuid(),now=now)
+            await create_workspace_bootstrap(db,user_id=foreign["id"],organization_name="Foreign",workspace_name=cuid(),now=now)
             ids = await approver_ids(db,workspace,team)
             assert {owner["id"],actor["id"],lead["id"]} <= set(ids)
             assert not ({readonly["id"],inactive["id"],suspended["id"],outside["id"],foreign["id"]} & set(ids))

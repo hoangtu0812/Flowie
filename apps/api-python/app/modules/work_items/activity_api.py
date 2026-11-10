@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.utc_responses import UtcAPIRouter as APIRouter
 from ...db.session import get_session
-from ...domains.auth import current_user
+from ..identity.auth import current_user
 
 router = APIRouter(prefix='/api/v1/_native/activities', tags=['native-activities'])
 public_router = APIRouter(prefix='/api/v1/activities', tags=['activities'])

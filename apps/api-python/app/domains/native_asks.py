@@ -9,10 +9,13 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.clock import utcnow
 from ..core.errors import ApiError
+from ..core.identifiers import cuid
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
 from ..modules.access.projects import team_access, workspace_access
+from ..modules.identity.auth import current_user
 from ..modules.notifications.outbox import stage_notifications
 from ..modules.work_items.issues_api import CreateIssueInput, create_issue
 from ..services.notification_events import (
@@ -20,7 +23,6 @@ from ..services.notification_events import (
     project_teams_batch,
     team_recipient_ids,
 )
-from .auth import _cuid, _utcnow, current_user
 from .service_desk_assistant import AssistantQuestion, answer_question, assistant_status
 
 router = APIRouter(prefix='/api/v1/asks', tags=['asks'])
@@ -98,7 +100,7 @@ async def _references(db: AsyncSession, workspace_id: str, team_id: str, project
 
 async def _audit(db: AsyncSession, workspace_id: str, actor_id: str, action: str, ask_id: str, metadata: dict[str, Any]) -> None:
     await db.execute(text('''INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at)
-                             VALUES (:id, :workspace_id, :actor_id, :action, 'ask', :entity_id, CAST(:metadata AS jsonb), :now)'''), {'id': _cuid(), 'workspace_id': workspace_id, 'actor_id': actor_id, 'action': action, 'entity_id': ask_id, 'metadata': json.dumps(metadata), 'now': _utcnow()})
+                             VALUES (:id, :workspace_id, :actor_id, :action, 'ask', :entity_id, CAST(:metadata AS jsonb), :now)'''), {'id': cuid(), 'workspace_id': workspace_id, 'actor_id': actor_id, 'action': action, 'entity_id': ask_id, 'metadata': json.dumps(metadata), 'now': utcnow()})
 
 
 def _identifier(number: int) -> str:
@@ -247,7 +249,7 @@ async def _parties(db: AsyncSession, ask: dict[str, Any]) -> set[str]:
 
 
 async def _add_message(db: AsyncSession, ask_id: str, author_id: str, content: str, now: Any) -> str:
-    message_id = _cuid()
+    message_id = cuid()
     await db.execute(text('INSERT INTO ask_messages (id, ask_id, author_id, content, created_at) VALUES (:id, :ask_id, :author_id, :content, :now)'), {'id': message_id, 'ask_id': ask_id, 'author_id': author_id, 'content': content, 'now': now})
     return message_id
 
@@ -256,7 +258,7 @@ async def _add_message(db: AsyncSession, ask_id: str, author_id: str, content: s
 async def create_ask(payload: CreateAskInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     await workspace_access(db, payload.workspaceId, user['id'])
     await _references(db, payload.workspaceId, payload.teamId, payload.projectId, user['id'])
-    ask_id, now = _cuid(), _utcnow()
+    ask_id, now = cuid(), utcnow()
     # The row lock lasts until commit, so concurrent tickets in a workspace take numbers in turn.
     # VI: Khoá dòng giữ đến khi commit, nên các ticket tạo đồng thời trong workspace lấy số lần lượt.
     number = (await db.execute(text('UPDATE workspaces SET ticket_sequence = ticket_sequence + 1 WHERE id = :id RETURNING ticket_sequence'), {'id': payload.workspaceId})).scalar_one()
@@ -290,7 +292,7 @@ async def update_ask(ask_id: str, payload: UpdateAskInput, workspaceId: str = Qu
     if values.get('assigneeId') and values['assigneeId'] not in await team_recipient_ids(db, team_id):
         raise ApiError(400, 'A ticket can only be assigned to a member of its team.', 'Bad Request')
     columns = {'teamId': 'team_id', 'projectId': 'project_id', 'title': 'title', 'description': 'description', 'priority': 'priority', 'assigneeId': 'assignee_id'}
-    sets, params = [], {'ask_id': ask_id, 'now': _utcnow()}
+    sets, params = [], {'ask_id': ask_id, 'now': utcnow()}
     for field, column in columns.items():
         if field in values:
             value = values[field]
@@ -320,7 +322,7 @@ async def transition_ask(ask_id: str, payload: AskTransitionInput, workspaceId: 
     # A reopened converted ticket keeps its issue, so it returns to accepted rather than open.
     # VI: Ticket đã chuyển Issue khi mở lại vẫn giữ Issue, nên về accepted thay vì open.
     if payload.action == 'reopen' and ask['convertedIssueId']: status = 'accepted'
-    now = _utcnow()
+    now = utcnow()
     # Matching the old status stops two people from overriding each other. Writing the label here
     # keeps the ticket-status job from repeating this news, or telling someone what they just did.
     # VI: Khớp trạng thái cũ để hai người không ghi đè nhau. Ghi nhãn tại đây để job ticket-status
@@ -348,7 +350,7 @@ async def convert_ask(ask_id: str, workspaceId: str = Query(min_length=1), user:
     if ask['status'] != 'open': raise ApiError(400, 'Only open tickets can be converted.', 'Bad Request')
     issue = await create_issue(CreateIssueInput(workspaceId=workspaceId, teamId=ask['teamId'], projectId=ask['projectId'], title=ask['title'], description=ask['description'], priority=ask['priority'], assigneeId=ask['assigneeId']), user, db)
     issue_data = issue['data']
-    await db.execute(text("UPDATE asks SET status = 'accepted', converted_issue_id = :issue_id, updated_at = :now WHERE id = :ask_id"), {'issue_id': issue_data['id'], 'ask_id': ask_id, 'now': _utcnow()})
+    await db.execute(text("UPDATE asks SET status = 'accepted', converted_issue_id = :issue_id, updated_at = :now WHERE id = :ask_id"), {'issue_id': issue_data['id'], 'ask_id': ask_id, 'now': utcnow()})
     await _audit(db, workspaceId, user['id'], 'ask.converted', ask_id, {'issueId': issue_data['id'], 'identifier': issue_data['identifier']}); await db.commit()
     return {'data': await _ask(db, ask_id, workspaceId)}
 
@@ -384,7 +386,7 @@ async def create_ask_message(ask_id: str, payload: AskMessageInput, workspaceId:
     ask = await _ask(db, ask_id, workspaceId); await _manage(db, ask, workspaceId, user['id'])
     content = payload.content.strip()
     if not content: raise ApiError(400, 'A message cannot be empty.', 'Bad Request')
-    now = _utcnow()
+    now = utcnow()
     message_id = await _add_message(db, ask_id, user['id'], content, now)
     await db.execute(text('UPDATE asks SET updated_at = :now WHERE id = :ask_id'), {'now': now, 'ask_id': ask_id})
     await _audit(db, workspaceId, user['id'], 'ask.message_created', ask_id, {'messageId': message_id})
@@ -408,7 +410,7 @@ async def record_ticket_file(db: AsyncSession, ask_id: str, workspace_id: str, u
     VI: thành một dòng cho mỗi file nếu không gom lại. Caller đã kiểm tra quyền tải lên.
     """
     ask = await _ask(db, ask_id, workspace_id)
-    now = _utcnow()
+    now = utcnow()
     recent = await db.execute(text('''SELECT 1 FROM audit_logs WHERE entity_type = 'ask' AND entity_id = :ask_id AND actor_id = :user_id
                                       AND action IN ('ask.created', 'ask.file_added') AND created_at > :since LIMIT 1'''), {'ask_id': ask_id, 'user_id': user['id'], 'since': now - TICKET_FILE_NOTICE_GAP})
     await db.execute(text('UPDATE asks SET updated_at = :now WHERE id = :ask_id'), {'now': now, 'ask_id': ask_id})
@@ -422,6 +424,6 @@ async def record_ticket_file(db: AsyncSession, ask_id: str, workspace_id: str, u
 @router.delete('/{ask_id}')
 async def archive_ask(ask_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     ask = await _ask(db, ask_id, workspaceId); await _triage(db, ask, workspaceId, user['id'])
-    now = _utcnow(); await db.execute(text('UPDATE asks SET archived_at = :now, updated_at = :now WHERE id = :ask_id'), {'ask_id': ask_id, 'now': now})
+    now = utcnow(); await db.execute(text('UPDATE asks SET archived_at = :now, updated_at = :now WHERE id = :ask_id'), {'ask_id': ask_id, 'now': now})
     await _audit(db, workspaceId, user['id'], 'ask.archived', ask_id, {'title': ask['title']}); await db.commit()
     return {'data': {'id': ask_id, 'archivedAt': now}}

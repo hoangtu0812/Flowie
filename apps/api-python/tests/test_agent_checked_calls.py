@@ -14,7 +14,7 @@ from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.core.identifiers import _cuid
 from app.domains import agent
-from app.domains.auth import create_workspace_bootstrap
+from app.modules.identity.auth import create_workspace_bootstrap
 
 KEY = Fernet.generate_key().decode('ascii')
 HISTORY = [{'role': 'user', 'content': 'Lập kế hoạch'}]

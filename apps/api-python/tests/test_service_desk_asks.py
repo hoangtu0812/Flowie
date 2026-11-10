@@ -5,9 +5,10 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
 from app.domains.native_asks import (
     AskTransitionInput,
     CreateAskInput,
@@ -21,6 +22,7 @@ from app.domains.native_asks import (
     transition_ask,
     update_ask,
 )
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.portfolio.projects_api import UpdateProjectInput, update_project
 from tests.document_review_support import add_member
 
@@ -61,7 +63,7 @@ async def forbidden(call):
 
 
 async def add_project(db, workspace, team, *, enabled):
-    project_id = _cuid()
+    project_id = cuid()
     await db.execute(
         text(
             """INSERT INTO projects(id,workspace_id,team_id,name,identifier,slug,service_desk_enabled,created_at,updated_at)
@@ -75,7 +77,7 @@ async def add_project(db, workspace, team, *, enabled):
             "identifier": project_id[-6:].upper(),
             "slug": project_id[-12:],
             "enabled": enabled,
-            "now": _utcnow(),
+            "now": utcnow(),
         },
     )
     await db.commit()
@@ -86,20 +88,20 @@ async def verify_intake():
     engine = create_async_engine(_async_database_url(os.environ["MCP_TEST_DATABASE_URL"]))
     try:
         async with async_sessionmaker(engine, expire_on_commit=False)() as db:
-            now = _utcnow()
-            owner = {"id": _cuid(), "name": "Owner"}
+            now = utcnow()
+            owner = {"id": cuid(), "name": "Owner"}
             await db.execute(
                 text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"),
-                {**owner, "email": _cuid() + "@example.test", "now": now},
+                {**owner, "email": cuid() + "@example.test", "now": now},
             )
             seed = await create_workspace_bootstrap(
-                db, user_id=owner["id"], organization_name="Desk", workspace_name=_cuid(), now=now
+                db, user_id=owner["id"], organization_name="Desk", workspace_name=cuid(), now=now
             )
             workspace, team = seed["workspace_id"], seed["team_id"]
             handler = await add_member(db, workspace, team, name="Handler")
             requester = await add_member(db, workspace, None, name="Requester")
             other = await add_member(db, workspace, None, name="Other")
-            stranger = {"id": _cuid(), "name": "Stranger"}
+            stranger = {"id": cuid(), "name": "Stranger"}
             await db.commit()
 
             enabled = await add_project(db, workspace, team, enabled=True)

@@ -8,8 +8,9 @@ from collections.abc import Awaitable, Callable
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from ..core.clock import utcnow
+from ..core.identifiers import cuid
 from ..core.utc_responses import utc_response_value
-from ..domains.auth import _cuid, _utcnow
 from ..modules.operations.heartbeats import progress
 
 logger = logging.getLogger(__name__)
@@ -18,7 +19,7 @@ logger = logging.getLogger(__name__)
 async def deliver_due_reminders(factory: async_sessionmaker[AsyncSession]) -> int:
     """Atomically claim due reminders and create their in-app notifications."""
     async with factory() as db:
-        now = _utcnow()
+        now = utcnow()
         due = await db.execute(
             text(
                 '''SELECT reminder.id, reminder.user_id, reminder.remind_at,
@@ -51,7 +52,7 @@ async def deliver_due_reminders(factory: async_sessionmaker[AsyncSession]) -> in
                         CAST(:data AS jsonb), :now)'''
                 ),
                 {
-                    'id': _cuid(), 'workspace_id': reminder['workspace_id'],
+                    'id': cuid(), 'workspace_id': reminder['workspace_id'],
                     'user_id': reminder['user_id'], 'issue_id': reminder['issue_id'],
                     'data': json.dumps({'identifier': reminder['identifier'], 'title': reminder['title'], 'remindAt': utc_response_value(reminder['remind_at']).isoformat()}),
                     'now': now,

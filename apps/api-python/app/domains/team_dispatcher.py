@@ -22,10 +22,12 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.clock import utcnow
 from ..core.errors import ApiError
+from ..core.identifiers import cuid
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
-from .auth import _cuid, _utcnow, current_user
+from ..modules.identity.auth import current_user
 from .team_insights import (
     HCM,
     _app_links,
@@ -74,9 +76,9 @@ def dispatch_cutoff_utc(now: datetime | None = None) -> datetime:
     """Start of today's dispatch window (08:30 +07) as naive UTC.
 
     Timestamp columns are `timestamp without time zone`, so the cutoff must
-    stay offset-naive like `_utcnow()` or asyncpg refuses the comparison.
+    stay offset-naive like `utcnow()` or asyncpg refuses the comparison.
     """
-    current = (now or _utcnow()).astimezone(HCM)
+    current = (now or utcnow()).astimezone(HCM)
     return (
         current.replace(
             hour=DISPATCH_HOUR, minute=DISPATCH_MINUTE, second=0, microsecond=0
@@ -88,7 +90,7 @@ def dispatch_cutoff_utc(now: datetime | None = None) -> datetime:
 
 def seconds_until_next_dispatch(now: datetime | None = None) -> float:
     """Seconds from now until the next 08:30 Asia/Ho_Chi_Minh dispatch run."""
-    current = (now or _utcnow()).astimezone(HCM)
+    current = (now or utcnow()).astimezone(HCM)
     target = current.replace(
         hour=DISPATCH_HOUR, minute=DISPATCH_MINUTE, second=0, microsecond=0
     )
@@ -306,7 +308,7 @@ async def run_team_dispatcher(
     if not settings["enabled"]:
         result["status"] = "disabled"
         return result
-    now = _utcnow()
+    now = utcnow()
     budget = remaining_budget(
         settings["maxActionsPerDay"], await _used_budget(db, team_id, cutoff)
     )
@@ -346,7 +348,7 @@ async def run_team_dispatcher(
                        VALUES (:id, :workspace_id, NULL, :action, 'issue', :entity_id,
                                CAST(:metadata AS jsonb), :now)"""),
                 {
-                    "id": _cuid(),
+                    "id": cuid(),
                     "workspace_id": workspace_id,
                     "action": ASSIGN_AUDIT_ACTION,
                     "entity_id": item["issueId"],
@@ -362,7 +364,7 @@ async def run_team_dispatcher(
                        VALUES (:id, :workspace_id, :user_id, :type, 'issue', :entity_id,
                                CAST(:data AS jsonb), :now)"""),
                 {
-                    "id": _cuid(),
+                    "id": cuid(),
                     "workspace_id": workspace_id,
                     "user_id": item["suggestedUserId"],
                     "type": ASSIGN_NOTIFICATION_TYPE,
@@ -404,7 +406,7 @@ async def run_team_dispatcher(
                        VALUES (:id, :workspace_id, :user_id, :type, 'issue', :entity_id,
                                CAST(:data AS jsonb), :now)"""),
                 {
-                    "id": _cuid(),
+                    "id": cuid(),
                     "workspace_id": workspace_id,
                     "user_id": issue["assignee_id"],
                     "type": NUDGE_NOTIFICATION_TYPE,
@@ -479,7 +481,7 @@ async def save_dispatcher_settings(
 ) -> dict[str, Any]:
     await _manager_access(db, workspaceId, user["id"])
     await _require_team(db, team_id, workspaceId)
-    now = _utcnow()
+    now = utcnow()
     result = await db.execute(
         text("""INSERT INTO team_dispatcher_settings
                (team_id, enabled, dry_run, max_actions_per_day, assign_unassigned,
