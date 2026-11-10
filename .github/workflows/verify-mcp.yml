@@ -317,8 +317,12 @@ jobs:
       # three downloads for two it would never open.
       # VI: Chỉ trình duyệt mà job này chạy. Cài cả ba khiến mỗi job tải về ba
       # VI: bản cho hai bản nó không bao giờ mở tới.
+      # WebKit pulls well over a hundred apt packages; when the runner's Ubuntu mirror is slow
+      # that alone has taken more than 15 minutes, so allow 30 before calling it stuck.
+      # VI: WebKit kéo hơn một trăm gói apt; khi mirror Ubuntu của runner chậm, riêng bước này
+      # VI: đã mất hơn 15 phút, nên cho phép 30 phút trước khi coi là bị treo.
       - name: Install browser test dependencies
-        timeout-minutes: 15
+        timeout-minutes: 30
         run: pnpm --filter @flowie/web exec playwright install --with-deps ${{ matrix.browser }}
       - name: Verify browser regression workflows
         run: |

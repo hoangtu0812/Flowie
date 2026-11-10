@@ -66,6 +66,8 @@ pull request and commit references, which are for us.
 
 ### Changed
 
+- The browser checks in `verify-mcp.yml` allow 30 minutes instead of 15 to install browser dependencies, so a slow Ubuntu package mirror no longer fails a run whose tests never started. CI only; nothing to rebuild. (#276)
+  VI: Các bài kiểm tra trình duyệt trong `verify-mcp.yml` được 30 phút thay vì 15 để cài dependency trình duyệt, nên mirror gói Ubuntu chậm không còn làm đỏ một lần chạy mà test chưa kịp bắt đầu. Chỉ đổi CI; không cần build lại.
 - The raw SQL of issues, documents, comments, workflow statuses, bulk changes and the rest of the work-item area now lives in `queries.py` (reads) or `commands.py` (writes) next to the code that runs it, so no `text(` SQL statement remains outside these files in the API. Every statement, its parameters and its transaction are unchanged; the route table is identical. Rebuild `api` and `worker`; no migration. (DTD-526, DTD-767, #274)
   VI: SQL thô của issue, tài liệu, comment, trạng thái workflow, sửa hàng loạt và phần còn lại của khu vực công việc nay nằm trong `queries.py` (đọc) hoặc `commands.py` (ghi) cạnh code chạy nó, nên trong API không còn câu SQL `text(` nào ngoài các file này. Mọi câu lệnh, tham số và transaction giữ nguyên; bảng route không đổi. Build lại `api` và `worker`; không có migration. (DTD-526, DTD-767)
 - The raw SQL of projects and initiatives now lives in `queries.py` (reads) or `commands.py` (writes) next to the code that runs it. Every statement, its parameters and its transaction are unchanged; the route table is identical. Rebuild `api`; no migration. (DTD-526, DTD-766, #273)
