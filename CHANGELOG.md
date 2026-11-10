@@ -33,7 +33,7 @@ pull request and commit references, which are for us.
 
 ### Fixed
 
-- The initiatives toolbar browser test no longer fails on WebKit when navigation cancels a page prefetch; WebKit reports those cancelled loads as page errors, and the test now ignores them as other specs already do. Test-only; nothing to rebuild. (DTD-572)
+- The initiatives toolbar browser test no longer fails on WebKit when navigation cancels a page prefetch; WebKit reports those cancelled loads as page errors, and the test now ignores them as other specs already do. Test-only; nothing to rebuild. (DTD-572, #246)
   VI: Test trình duyệt của toolbar initiatives không còn hỏng trên WebKit khi điều hướng huỷ một prefetch trang; WebKit báo các request bị huỷ đó thành page error, và test nay bỏ qua chúng như các spec khác đã làm. Chỉ đổi test; không cần build lại gì. (DTD-572)
 
 - A team's Views page shows that team's name and icon in its header and links back to its overview, instead of always showing the demo team "LNDev Core". Rebuild `web`; no migration. (DTD-569, #240)
