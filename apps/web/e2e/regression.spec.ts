@@ -667,6 +667,56 @@ test('account preferences synchronize on a separate browser context and home nav
    }
 });
 
+test('Inbox rows truncate long text and show at most two initials for an agent actor', async ({
+   page,
+}) => {
+   // A notification an MCP agent caused, with an unbroken preview and an actor whose
+   // picture is missing, reproduces both the horizontal overflow and the long fallback.
+   // VI: Thông báo do agent MCP tạo, có preview liền không khoảng trắng và actor không
+   // có ảnh, tái hiện cả lỗi tràn ngang lẫn fallback dài.
+   const title = `Long inbox title ${'x'.repeat(200)}`;
+   await page.route(
+      (url) => url.pathname.endsWith('/api/v1/notifications'),
+      (route) =>
+         route.request().method() === 'GET'
+            ? route.fulfill({
+                 json: {
+                    data: [
+                       {
+                          id: 'e2e-long-notification',
+                          type: 'issue.comment',
+                          entityType: 'issue',
+                          entityId: 'e2e-missing-issue',
+                          data: {
+                             title,
+                             body: 'y'.repeat(2000),
+                             actor: {
+                                id: 'e2e-missing-actor',
+                                name: 'Pham Hoang Tu',
+                                avatarUrl: null,
+                             },
+                             agent: { name: 'flowie-agent' },
+                          },
+                          readAt: null,
+                          createdAt: new Date().toISOString(),
+                       },
+                    ],
+                 },
+              })
+            : route.continue()
+   );
+   await page.goto(`/${fixture.slug}/inbox`);
+   const row = page.getByRole('button', { name: `Open notification: ${title}`, exact: true });
+   await expect(row).toBeVisible();
+   await expect(row.locator('[data-slot="avatar-fallback"]')).toHaveText('PT');
+   const overflow = await row.evaluate((element) => {
+      const list = element.parentElement as HTMLElement;
+      const line = element.firstElementChild as HTMLElement;
+      return [list.scrollWidth - list.clientWidth, line.scrollWidth - line.clientWidth];
+   });
+   expect(overflow).toEqual([0, 0]);
+});
+
 test('Inbox snooze persists and notification channel availability is real', async ({
    page,
    context,

@@ -33,6 +33,9 @@ pull request and commit references, which are for us.
 
 ### Fixed
 
+- Inbox rows no longer scroll sideways: long titles and previews, even without spaces, end in `…` and the status and time stay at the right edge. Notifications an MCP agent caused now show the person's picture, including older ones, and a missing picture falls back to at most two initials instead of text such as `PHT·f`. Rebuild `api` and `web`; no migration. (DTD-576)
+  VI: Dòng Inbox không còn cuộn ngang: tiêu đề và preview dài, kể cả không có khoảng trắng, được cắt bằng `…` và trạng thái cùng thời gian luôn ở mép phải. Thông báo do agent MCP tạo nay hiện ảnh của người thực hiện, kể cả thông báo cũ, và khi không có ảnh chỉ hiện tối đa hai chữ cái viết tắt thay vì chuỗi như `PHT·f`. Build lại `api` và `web`; không có migration. (DTD-576)
+
 - The browser test of tab titles no longer fails now and then on a project page: it waited for any "… - Overview" title and could capture the placeholder "Project - Overview" shown before the project's name loads, so going back later expected the wrong title. It now waits for the project's own name. Test-only; nothing to rebuild. (DTD-524, #249)
   VI: Test trình duyệt về title tab không còn thỉnh thoảng hỏng ở trang project: nó chờ bất kỳ title "… - Overview" nào nên có thể lưu nhầm title tạm "Project - Overview" hiện trước khi tên dự án tải xong, khiến bước Back sau đó chờ sai title. Nay nó chờ tên của chính dự án. Chỉ đổi test; không cần build lại gì. (DTD-524)
 

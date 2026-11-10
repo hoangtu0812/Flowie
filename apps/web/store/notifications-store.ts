@@ -136,6 +136,15 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => {
                   user: {
                      ...fallbackUser(),
                      ...actor,
+                     // Notifications stored before the API kept an MCP actor's picture have
+                     // no avatarUrl; the user's avatar endpoint still serves it, and a 404
+                     // there falls back to initials.
+                     // VI: Thông báo lưu trước khi API giữ ảnh của actor MCP không có
+                     // avatarUrl; endpoint avatar của user vẫn trả ảnh, còn 404 thì về
+                     // chữ viết tắt.
+                     ...(actor?.id && !actor.avatarUrl
+                        ? { avatarUrl: `/users/${encodeURIComponent(actor.id)}/avatar` }
+                        : {}),
                      ...(agent?.name && actor?.name
                         ? { name: `${actor.name} · ${agent.name}` }
                         : {}),

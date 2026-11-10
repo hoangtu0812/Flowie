@@ -10,7 +10,16 @@ from app.core.config import _async_database_url
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
 from app.modules.work_items.contracts import CreateIssueInput
 from app.modules.work_items.issues import create_issue
-from app.services.notification_events import create_notification_batch
+from app.services.notification_events import actor_payload, create_notification_batch
+
+
+def test_actor_payload_keeps_the_avatar_of_an_mcp_principal():
+    # MCP principals spell the key `avatarUrl`; session users spell it `avatar_url`.
+    # VI: Principal MCP dùng khoá `avatarUrl`; user phiên đăng nhập dùng `avatar_url`.
+    mcp_user = {"id": "u1", "name": "A", "avatarUrl": "avatars/u1/a.jpg"}
+    session_user = {"id": "u1", "name": "A", "avatar_url": "avatars/u1/a.jpg"}
+    assert actor_payload(mcp_user)["avatarUrl"] == "avatars/u1/a.jpg"
+    assert actor_payload(session_user)["avatarUrl"] == "avatars/u1/a.jpg"
 
 
 @pytest.mark.skipif(

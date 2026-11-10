@@ -2,6 +2,7 @@
 
 import { InboxItem } from '@/store/notifications-store';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { initials } from '@/lib/initials';
 import { cn } from '@/lib/utils';
 import { motion } from 'motion/react';
 import { getNotificationIcon } from '@/lib/notification-utils';
@@ -49,10 +50,7 @@ export default function IssueLine({
                <Avatar className="size-8">
                   <AvatarImage src={notification.user.avatarUrl} alt={notification.user.name} />
                   <AvatarFallback className="text-xs">
-                     {notification.user.name
-                        .split(' ')
-                        .map((n) => n[0])
-                        .join('')}
+                     {initials(notification.user.name)}
                   </AvatarFallback>
                </Avatar>
 
@@ -61,7 +59,11 @@ export default function IssueLine({
                </div>
             </div>
 
-            <div className="w-full">
+            {/* min-w-0 lets this flex item shrink below its text width, so long titles and
+                unbroken strings truncate and the status and time stay at the right edge.
+                VI: min-w-0 cho phép khối này co nhỏ hơn độ rộng chữ, nên tiêu đề dài và chuỗi
+                không khoảng trắng bị cắt, còn trạng thái và thời gian nằm ở mép phải. */}
+            <div className="min-w-0 flex-1">
                <div className="flex items-center gap-1.5">
                   {!notification.read && (
                      <div className="size-2 bg-blue-500 rounded-full flex-shrink-0" />
@@ -79,7 +81,7 @@ export default function IssueLine({
 
                   <h4
                      className={cn(
-                        'text-sm font-medium text-foreground line-clamp-1 flex-grow',
+                        'text-sm font-medium text-foreground truncate min-w-0 flex-1',
                         notification.read && 'opacity-50'
                      )}
                   >
@@ -99,7 +101,7 @@ export default function IssueLine({
                      notification.read && 'opacity-50'
                   )}
                >
-                  <p className="text-sm text-muted-foreground line-clamp-1">
+                  <p className="text-sm text-muted-foreground truncate min-w-0 flex-1">
                      {notification.content}
                   </p>
                   <span className="text-xs text-muted-foreground shrink-0">
