@@ -79,3 +79,64 @@ test('customize sidebar uses switches and keeps saved settings', async ({ page }
       'true'
    );
 });
+
+// Every row is one fixed-height line, including Inbox with its "Only when badged" checkbox, and a
+// keyboard reorder (Space, arrows, Space on the grip) is saved: the modal and the sidebar show the
+// new order, and both keep it after a reload.
+// VI: Mọi dòng là một hàng cao cố định, kể cả Inbox có checkbox "Only when badged", và đổi thứ tự
+// VI: bằng bàn phím (Space, mũi tên, Space trên grip) được lưu: modal và sidebar hiển thị thứ tự
+// VI: mới và vẫn giữ sau khi tải lại.
+test('customize sidebar rows share one height and reorder from the keyboard', async ({ page }) => {
+   await signIn(page);
+   await page.goto(`/${fixture.slug}/issues`);
+
+   let dialog = await openCustomize(page);
+   const rows = dialog.locator('[data-sidebar-pref-row]');
+   await expect(rows).toHaveCount(15);
+   await expect(
+      dialog.getByRole('checkbox', { name: 'Show Inbox only when badged' })
+   ).toBeVisible();
+   const heights = await rows.evaluateAll((elements) =>
+      elements.map((element) => element.getBoundingClientRect().height)
+   );
+   expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(1);
+
+   const personalKeys = () =>
+      rows.evaluateAll((elements) =>
+         elements.map((element) => element.getAttribute('data-sidebar-pref-row')).slice(0, 6)
+      );
+   expect(await personalKeys()).toEqual([
+      'inbox',
+      'reviews',
+      'approvals',
+      'service-desk',
+      'my-issues',
+      'agent',
+   ]);
+
+   await dialog.getByRole('button', { name: 'Reorder Agent' }).focus();
+   await page.keyboard.press('Space');
+   for (let step = 0; step < 5; step++) await page.keyboard.press('ArrowUp');
+   await page.keyboard.press('Space');
+   await expect
+      .poll(personalKeys)
+      .toEqual(['agent', 'inbox', 'reviews', 'approvals', 'service-desk', 'my-issues']);
+   await page.keyboard.press('Escape');
+   await expect(dialog).toHaveCount(0);
+
+   const agentAboveMyIssues = async () => {
+      const agent = await page.getByRole('link', { name: 'Agent', exact: true }).boundingBox();
+      const myIssues = await page
+         .getByRole('link', { name: 'My issues', exact: true })
+         .boundingBox();
+      return Boolean(agent && myIssues && agent.y < myIssues.y);
+   };
+   await expect.poll(agentAboveMyIssues).toBe(true);
+
+   await page.reload();
+   await expect.poll(agentAboveMyIssues).toBe(true);
+   dialog = await openCustomize(page);
+   await expect
+      .poll(personalKeys)
+      .toEqual(['agent', 'inbox', 'reviews', 'approvals', 'service-desk', 'my-issues']);
+});
