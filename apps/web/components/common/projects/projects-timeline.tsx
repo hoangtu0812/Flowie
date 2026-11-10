@@ -1,6 +1,6 @@
 'use client';
 
-import { CapacityRing } from '@/components/common/cycles/capacity-ring';
+import { CapacityRing } from '@/features/cycles/capacity-ring';
 import { IssuePeekPanel } from '@/components/common/issues/issue-peek-panel';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {

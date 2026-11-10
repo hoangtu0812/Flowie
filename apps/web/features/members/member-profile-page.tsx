@@ -2,7 +2,7 @@
 
 import MainLayout from '@/components/layout/main-layout';
 import Header from '@/components/layout/headers/profile/header';
-import MemberProfile from '@/components/common/members/member-profile';
+import MemberProfile from '@/features/members/member-profile';
 import { LoadingState } from '@/components/common/loading-state';
 import { QueryState } from '@/components/common/query-state';
 import { profileUser, useMemberProfile } from './use-member-profile';

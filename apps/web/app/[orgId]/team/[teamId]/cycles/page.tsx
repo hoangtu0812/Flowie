@@ -1,4 +1,4 @@
-import Cycles from '@/components/common/cycles/cycles';
+import Cycles from '@/features/cycles/cycles';
 import Header from '@/components/layout/headers/cycles/header';
 import MainLayout from '@/components/layout/main-layout';
 

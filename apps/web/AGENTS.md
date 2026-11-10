@@ -2,6 +2,24 @@
 
 Project-specific guidance for AI coding agents.
 
+## Where code goes
+
+- `features/<domain>/`: everything that belongs to one business domain
+  (issues, projects, cycles, views, members, reviews, …): pages' feature
+  components, domain hooks such as `use-live-*`, dialogs, panels, domain
+  helpers and messages. Create the folder when a domain has none yet.
+- `features/shared/`: cross-domain helpers with no UI of a domain (i18n,
+  dates, pagination, keyboard, error reporting).
+- `components/ui/`: primitives that know nothing about the business (shadcn).
+- `components/layout/`: the application frame (sidebar, headers, command
+  palette, main layout).
+- `components/common/` and other `components/<name>/`: only UI shared by
+  several domains and owned by none (query/loading states, image viewer,
+  sandboxed HTML frame, timeline/gantt, markdown).
+- `components/common/<domain>/` folders still exist for domains that have not
+  moved yet (DTD-524). Add new domain code under `features/<domain>/`, never
+  there. Moving a folder keeps file names, `data-testid` values and roles.
+
 <!-- ASTRYX:START -->
 
 Astryx v0.5.0 · 163 components
