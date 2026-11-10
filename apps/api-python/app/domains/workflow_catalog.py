@@ -1,8 +1,12 @@
 from __future__ import annotations
 
-# Circle's fixed Issue workflow catalog. The backend uses it as the default
-# workspace configuration so real data does not alter the original UI.
-DEFAULT_CIRCLE_ISSUE_STATUSES = (
+# Default Issue workflow catalog. The backend seeds it as the workspace
+# configuration so real data does not alter the web UI. The status names are
+# stored per workspace and must not change.
+# VI: Danh mục workflow Issue mặc định. Backend tạo sẵn nó làm cấu hình
+# workspace để dữ liệu thật không làm lệch giao diện web. Tên trạng thái được
+# lưu theo workspace nên không được đổi.
+DEFAULT_ISSUE_STATUSES = (
     ('In Progress', 'STARTED', '#facc15'),
     ('Technical Review', 'STARTED', '#22c55e'),
     ('Done', 'COMPLETED', '#5e6ad2'),

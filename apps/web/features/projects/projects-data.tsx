@@ -3,7 +3,7 @@
 import { health as healthOptions } from '@/lib/project-presentations';
 import { priorities } from '@/lib/priority-presentations';
 import type { Status } from '@/lib/status-presentations';
-import { status as circleStatuses } from '@/lib/status-presentations';
+import { status as statusPresentations } from '@/lib/status-presentations';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import type { Project } from '@/types/projects';
 import { projectIcon } from '@/features/projects/project-icon';
@@ -132,8 +132,8 @@ export const mapStatus = (value: string): Status => {
       .replace(/[_\s]+/g, '-');
    const identifier = projectStatusAliases[normalized] ?? normalized;
    return (
-      circleStatuses.find((candidate) => candidate.id === identifier) ??
-      circleStatuses.find((candidate) => candidate.id === 'to-do')!
+      statusPresentations.find((candidate) => candidate.id === identifier) ??
+      statusPresentations.find((candidate) => candidate.id === 'to-do')!
    );
 };
 

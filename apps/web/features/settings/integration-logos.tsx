@@ -459,7 +459,10 @@ function GoogleCalendarLogo({ className }: LogoProps) {
    );
 }
 
-/** Integration id -> logo component (see integrations-data.ts). */
+/**
+ * Integration id -> logo component.
+ * VI: Ánh xạ id integration -> component logo.
+ */
 export const INTEGRATION_LOGOS: Record<string, (props: LogoProps) => React.ReactNode> = {
    'github': GithubLogo,
    'slack': SlackLogo,

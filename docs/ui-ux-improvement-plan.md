@@ -116,13 +116,13 @@ Chạy lại hồi quy:
 ```powershell
 $env:MCP_TEST_DATABASE_URL = 'postgresql://flowie_test@127.0.0.1:55439/flowie_test_database'
 .venv/Scripts/python.exe -m pytest apps/api-python/tests -q
-pnpm --filter @circle/web test:unit
-pnpm --filter @circle/web build
+pnpm --filter @flowie/web test:unit
+pnpm --filter @flowie/web build
 $env:FLOWIE_E2E_DATABASE_URL = $env:MCP_TEST_DATABASE_URL
 $env:FLOWIE_E2E_PYTHON = '../../.venv/Scripts/python.exe'
 python scripts/seed-ui-regression.py
-pnpm --filter @circle/web exec playwright install chromium
-pnpm --filter @circle/web test:e2e
+pnpm --filter @flowie/web exec playwright install chromium
+pnpm --filter @flowie/web test:e2e
 ```
 
 Database trong ví dụ phải được tạo riêng và áp dụng Prisma migrations trước seed.

@@ -221,10 +221,10 @@ be addressed by bypassing the Compose migration dependency.
 ```powershell
 $env:DATABASE_URL = '<isolated-test-database-url>'
 $env:MCP_TEST_DATABASE_URL = $env:DATABASE_URL
-pnpm --filter @circle/database exec prisma validate --schema prisma/schema.prisma
-pnpm --filter @circle/database exec prisma migrate deploy --schema prisma/schema.prisma
+pnpm --filter @flowie/database exec prisma validate --schema prisma/schema.prisma
+pnpm --filter @flowie/database exec prisma migrate deploy --schema prisma/schema.prisma
 .\.venv\Scripts\python.exe -m pytest apps/api-python/tests -q
-pnpm --filter @circle/web build
+pnpm --filter @flowie/web build
 docker compose --profile app config --quiet
 ```
 

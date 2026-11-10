@@ -24,7 +24,7 @@
 
 ## 📌 Overview
 
-Flowie is a self-hosted workspace for planning, tracking and delivering work with teams. It preserves the refined Circle interface while progressively replacing fixture data with a native Python/FastAPI and PostgreSQL backend.
+Flowie is a self-hosted workspace for planning, tracking and delivering work with teams. Its Next.js web UI runs on a native Python/FastAPI and PostgreSQL backend.
 
 It supports more than software delivery: product, operations, research, marketing and other project-based work can be organised in the same workspace.
 
@@ -44,7 +44,7 @@ The implementation inventory and remaining adapter work are tracked in [implemen
 
 | Layer | Technology | Responsibility |
 | --- | --- | --- |
-| Web | Next.js 15, React 19, TypeScript, Tailwind | Circle UI presentation and live-data adapters |
+| Web | Next.js 15, React 19, TypeScript, Tailwind | Web UI and live-data adapters |
 | API | Python 3.12, FastAPI, SQLAlchemy | Authentication, RBAC, domain APIs and business logic |
 | Data | PostgreSQL 16 | Durable workspace, team, issue, project and activity data |
 | Services | MinIO | Object storage; background jobs run inside the API |
@@ -106,7 +106,7 @@ Never commit `.env`, credentials, tokens or webhook URLs.
 
 ## 🗺️ Development rules
 
-1. Preserve the original Circle UI structure, spacing and interaction model.
+1. Preserve the existing UI structure, spacing and interaction model.
 2. Replace mock reads/writes with Python/PostgreSQL, or add an explicitly approved feature.
 3. Verify persistence after refresh and workspace/RBAC isolation.
 4. Update [implement_plan.md](./implement_plan.md), commit and push every completed vertical slice.

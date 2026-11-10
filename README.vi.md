@@ -14,7 +14,7 @@
 
 ## 📌 Tổng quan
 
-Flowie là workspace tự host để lập kế hoạch, theo dõi và hoàn thành công việc cùng đội nhóm. Dự án giữ giao diện Circle gốc, đồng thời thay từng đường đọc/ghi mock bằng backend Python/FastAPI và PostgreSQL có dữ liệu bền vững.
+Flowie là workspace tự host để lập kế hoạch, theo dõi và hoàn thành công việc cùng đội nhóm. Giao diện web Next.js chạy trên backend Python/FastAPI và PostgreSQL có dữ liệu bền vững.
 
 Flowie không chỉ dành cho phần mềm: có thể quản lý sản phẩm, vận hành, nghiên cứu, marketing, chương trình nội bộ và các loại dự án khác trong cùng workspace.
 
@@ -33,7 +33,7 @@ Danh mục implementation, các phần còn mock và thứ tự tiếp tục n�
 
 | Lớp | Công nghệ | Trách nhiệm |
 | --- | --- | --- |
-| Web | Next.js 15, React 19, TypeScript, Tailwind | UI Circle gốc và adapter dữ liệu thật |
+| Web | Next.js 15, React 19, TypeScript, Tailwind | Giao diện web và adapter dữ liệu thật |
 | API | Python 3.12, FastAPI, SQLAlchemy | Xác thực, RBAC và business logic native |
 | Dữ liệu | PostgreSQL 16 | Dữ liệu workspace/team/issue/project bền vững |
 | Dịch vụ | MinIO | Object storage; job nền chạy trong API |
@@ -63,7 +63,7 @@ thất bại sẽ chặn deployment; không khởi động riêng API để bỏ
 
 ## 🗺️ Quy ước phát triển
 
-1. Giữ nguyên cấu trúc, spacing và tương tác của Circle UI gốc.
+1. Giữ nguyên cấu trúc, spacing và tương tác của giao diện hiện có.
 2. Chỉ thay mock bằng API Python/PostgreSQL hoặc bổ sung tính năng đã được duyệt.
 3. Kiểm tra persistence sau refresh và workspace/RBAC isolation.
 4. Mỗi lát hoàn chỉnh phải cập nhật [implement_plan.md](./implement_plan.md), commit và push.

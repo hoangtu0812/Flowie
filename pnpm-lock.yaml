@@ -26,9 +26,6 @@ importers:
       '@astryxdesign/theme-neutral':
         specifier: ^0.5.0
         version: 0.5.0(@astryxdesign/core@0.5.0(@stylexjs/stylex@0.19.0)(react-dom@19.0.1(react@19.0.1))(react@19.0.1))(react@19.0.1)
-      '@circle/contracts':
-        specifier: workspace:*
-        version: link:../../packages/contracts
       '@dnd-kit/collision':
         specifier: 0.5.3
         version: 0.5.3
@@ -38,6 +35,9 @@ importers:
       '@dnd-kit/react':
         specifier: ^0.5.3
         version: 0.5.3(react-dom@19.0.1(react@19.0.1))(react@19.0.1)
+      '@flowie/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@hookform/resolvers':
         specifier: ^4.1.2
         version: 4.1.2(react-hook-form@7.54.2(react@19.0.1))

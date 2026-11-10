@@ -1,4 +1,4 @@
-# Circle — AI Guide
+# Flowie web — AI Guide
 
 > This document is written for AI assistants (and humans) working on this codebase.
 > It explains how the project is structured, where every kind of logic lives, how to
@@ -107,7 +107,7 @@ fake data in the app: the template's `mock-data/` folder was removed, and ESLint
 | `lib/status-presentations.tsx` | `Status`, `StatusCategory`, status icons and ordering helpers |
 | `lib/priority-presentations.tsx` | `Priority`, priority icons and colours |
 | `lib/project-presentations.ts` | project `health` levels |
-| `@circle/contracts` | `ContentBlock` and other types shared with the API |
+| `@flowie/contracts` | `ContentBlock` and other types shared with the API |
 
 ## State management (`store/`)
 
@@ -220,8 +220,7 @@ Each feature is self-contained under `features/<feature>` + its header under
   from the issues API), `issue-templates`, `project-statuses` (project counts grouped
   by status category), `teams/[teamId]` (per-team settings incl. danger zone) and
   `teams/new`. Toggles are uncontrolled `ui/switch`; selects are local-state dropdowns.
-  `integrations` is a full directory page (search, "Enabled" carousel, categorized cards)
-  driven by `settings/integrations-data.ts`. Sections without a dedicated UI yet (`slas`,
+  `integrations` lists the workspace's integration connections, MCP first. Sections without a dedicated UI yet (`slas`,
   `project-labels`, `project-templates`, `project-updates`, `initiatives`, `documents`,
   `customer-requests`, `releases`, `pulse`, `asks`, `emojis`) render the generic
   `settings/settings-placeholder.tsx` empty state configured by
@@ -313,7 +312,7 @@ fraction)`, `StatusGearIcon`, `StatusCheckIcon`, `StatusXIcon`, …) and a categ
 - Filters/sorting belong in the URL: use a nuqs hook (see `store/filter-store.ts`
   as the template) instead of a new Zustand store when adding one.
 - Issue detail content is data, not markup: extend the `ContentBlock` union in
-  `@circle/contracts` + one case in `content-blocks.tsx` to add a block type.
+  `@flowie/contracts` + one case in `content-blocks.tsx` to add a block type.
 - Charts must be deterministic across SSR/CSR — never use `Math.random()`/`Date.now()`
   when generating chart data.
 - ⚠️ Never pass objects that contain **component functions** (`Project.icon`,

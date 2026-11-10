@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...core.clock import _utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import _cuid
-from ...domains.workflow_catalog import DEFAULT_CIRCLE_ISSUE_STATUSES
+from ...domains.workflow_catalog import DEFAULT_ISSUE_STATUSES
 
 
 def _validate_schedule_dates(
@@ -63,7 +63,7 @@ async def _enforce_start_gate(
         )
 
 
-async def _ensure_circle_issue_statuses(db: AsyncSession, workspace_id: str) -> None:
+async def _ensure_default_issue_statuses(db: AsyncSession, workspace_id: str) -> None:
     """Seed an empty workflow without overwriting administrator customizations."""
     existing_workflow = (await db.execute(text(
         'SELECT 1 FROM issue_statuses WHERE workspace_id=:workspace AND team_id IS NULL LIMIT 1'
@@ -71,7 +71,7 @@ async def _ensure_circle_issue_statuses(db: AsyncSession, workspace_id: str) -> 
     if existing_workflow:
         return
     now = _utcnow()
-    for position, (name, category, color) in enumerate(DEFAULT_CIRCLE_ISSUE_STATUSES):
+    for position, (name, category, color) in enumerate(DEFAULT_ISSUE_STATUSES):
         existing = await db.execute(
             text(
                 """SELECT id FROM issue_statuses

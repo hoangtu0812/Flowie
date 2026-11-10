@@ -6,7 +6,12 @@ import { NextRequest, NextResponse } from 'next/server';
  * from the 30-day refresh cookie. Checking both here prevents a browser
  * refresh from sending a signed-in user back to login unnecessarily.
  *
- * This file deliberately does not alter any Circle presentation route.
+ * This file deliberately does not alter any page route.
+ *
+ * VI: Request trang chỉ cần cookie phiên bền. API kiểm tra JWT ở thao tác được
+ * bảo vệ và có thể làm mới cookie access ngắn hạn từ cookie refresh 30 ngày.
+ * Kiểm tra cả hai ở đây tránh việc refresh trình duyệt đưa người đã đăng nhập
+ * về trang login không cần thiết. File này cố ý không đổi route trang nào.
  */
 export function middleware(request: NextRequest) {
    const { pathname, search } = request.nextUrl;

@@ -9,7 +9,10 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useLiveTeam } from './use-live-team';
 
-/** Team Home with the unchanged Circle presentation backed by Team/Documents APIs. */
+/**
+ * Team Home backed by the Team and Documents APIs.
+ * VI: Trang chủ team lấy dữ liệu từ API Team và Documents.
+ */
 export default function TeamOverview() {
    const { orgId, teamId } = useParams<{ orgId: string; teamId: string }>();
    const { team, documents, loading, error } = useLiveTeam(teamId);

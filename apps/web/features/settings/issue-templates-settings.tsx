@@ -39,7 +39,10 @@ type Template = {
 type Draft = { name: string; title: string; description: string; issueDescription: string };
 const emptyDraft: Draft = { name: '', title: '', description: '', issueDescription: '' };
 
-/** Original Circle templates presentation, hydrated from persisted FastAPI records. */
+/**
+ * Issue templates settings, hydrated from persisted FastAPI records.
+ * VI: Cài đặt mẫu issue, nạp từ bản ghi FastAPI đã lưu.
+ */
 export default function IssueTemplatesSettings() {
    const [workspaceId, setWorkspaceId] = useState<string>();
    const [templates, setTemplates] = useState<Template[]>([]);

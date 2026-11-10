@@ -26,7 +26,7 @@ COPY packages/thinking-orbs packages/thinking-orbs
 # next.config.ts reads the release version and date from here; without it the
 # built image cannot tell anyone which release it is running.
 COPY CHANGELOG.md ./CHANGELOG.md
-RUN pnpm --filter @circle/web build
+RUN pnpm --filter @flowie/web build
 
 FROM node:22-alpine AS runtime
 WORKDIR /app

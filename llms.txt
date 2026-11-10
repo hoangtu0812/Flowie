@@ -1,6 +1,6 @@
-# Circle
+# Flowie web
 
-> Linear-inspired project management UI template (issues + issue detail pages, projects + project detail pages, a projects table/timeline, teams, cycles, members + member profiles, inbox, documents, and a mock Agent chat) built with Next.js 15 (App Router), React 19, TypeScript, Tailwind CSS v4, shadcn/ui, Zustand and nuqs. Pure front-end: all data is fake and lives in `mock-data/`; mutations are in-memory via Zustand stores; filters/sorting are URL state via nuqs. No backend, no auth.
+> Next.js 15 (App Router) web client of Flowie, a self-hosted project management workspace (issues, projects, teams, cycles, members, inbox, documents, agent chat), built with React 19, TypeScript, Tailwind CSS v4, shadcn/ui, Zustand and nuqs. Data comes from the Flowie Python/FastAPI API at `/api/v1`; filters/sorting are URL state via nuqs. The UI started from the MIT-licensed Circle template by ln-dev7.
 
 Key facts for coding agents:
 

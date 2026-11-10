@@ -1,5 +1,5 @@
 {
-   "name": "@circle/web",
+   "name": "@flowie/web",
    "version": "0.1.0",
    "private": true,
    "scripts": {
@@ -16,7 +16,7 @@
       "@astryxdesign/cli": "^0.5.0",
       "@astryxdesign/core": "^0.5.0",
       "@astryxdesign/theme-neutral": "^0.5.0",
-      "@circle/contracts": "workspace:*",
+      "@flowie/contracts": "workspace:*",
       "@dnd-kit/collision": "0.5.3",
       "@dnd-kit/dom": "0.5.3",
       "@dnd-kit/react": "^0.5.3",

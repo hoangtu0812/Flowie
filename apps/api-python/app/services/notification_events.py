@@ -8,8 +8,15 @@ Discord outage can never make an Inbox event disappear.
 
 The current deployment runs one public API container.  ``NotificationHub`` is
 therefore intentionally process-local.  When the API is scaled horizontally,
-the same interface can be backed by Redis pub/sub without changing event
-producers or the Circle UI contract.
+the same interface can be backed by a shared pub/sub broker without changing
+event producers or the web UI contract.
+
+VI: Sự kiện thông báo bền vững, phát qua WebSocket trong cùng tiến trình. Dòng
+thông báo luôn được ghi vào PostgreSQL trước; WebSocket và Discord chỉ là kênh
+giao, nên trình duyệt kết nối lại hay Discord lỗi tạm thời không làm mất sự kiện
+Inbox. Hiện chỉ có một container API public nên ``NotificationHub`` cố ý chỉ
+nằm trong tiến trình; khi scale ngang, có thể thay bằng một broker pub/sub dùng
+chung mà không đổi nơi phát sự kiện hay contract của giao diện web.
 """
 
 import asyncio

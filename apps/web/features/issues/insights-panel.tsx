@@ -79,8 +79,10 @@ function ValueGlyph({ value }: { value: DimensionValue }) {
 }
 
 /**
- * Analytics based exclusively on live issues supplied by the current Circle page.
+ * Analytics based exclusively on live issues supplied by the current page.
  * Custom workspace statuses and real user/project assignments are calculated at runtime.
+ * VI: Thống kê chỉ dựa trên issue thật do trang hiện tại cung cấp. Trạng thái tuỳ biến
+ * của workspace và người/dự án được gán thật được tính lúc chạy.
  */
 export function InsightsPanel({ query }: InsightsPanelProps) {
    const { closePanel } = useRightPanelStore();

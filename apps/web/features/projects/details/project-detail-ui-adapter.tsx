@@ -1,6 +1,6 @@
 'use client';
 
-import type { ContentBlock } from '@circle/contracts';
+import type { ContentBlock } from '@flowie/contracts';
 import type { Issue } from '@/types/issues';
 import type { SubIssueSort } from '@/features/manual-order/sub-issue-sort';
 import { priorities } from '@/lib/priority-presentations';
@@ -8,7 +8,7 @@ import { health as projectHealth } from '@/lib/project-presentations';
 import type { Project } from '@/types/projects';
 import type { ProjectDetail, ProjectUpdateHealth } from '@/types/project-details';
 import {
-   status as circleStatuses,
+   status as statusPresentations,
    type Status,
    type StatusCategory,
 } from '@/lib/status-presentations';
@@ -60,10 +60,10 @@ const statusCategory = (value: string): StatusCategory => {
 
 export const projectStatusPresentation = (name: string, category?: string): Status => {
    const normalizedName = name.trim().toLowerCase().replace(/[ _]+/g, '-');
-   const circleStatus = circleStatuses.find(
+   const knownStatus = statusPresentations.find(
       (item) => item.id === normalizedName || item.name.toLowerCase() === name.trim().toLowerCase()
    );
-   if (circleStatus) return { ...circleStatus, id: name };
+   if (knownStatus) return { ...knownStatus, id: name };
    const mappedCategory = statusCategory(category ?? name);
    const Icon =
       mappedCategory === 'completed'
