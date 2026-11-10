@@ -25,7 +25,7 @@ import { toast } from 'sonner';
 import {
    priorityPresentation,
    projectStatusPresentation,
-} from '@/components/common/projects/details/project-detail-ui-adapter';
+} from '@/features/projects/details/project-detail-ui-adapter';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 

@@ -1,4 +1,4 @@
-import { ProjectRoute } from '@/components/common/projects/project-route';
+import { ProjectRoute } from '@/features/projects/project-route';
 
 interface ProjectPageProps {
    params: Promise<{ projectId: string }>;

@@ -1,6 +1,6 @@
 import MainLayout from '@/components/layout/main-layout';
 import Header from '@/components/layout/headers/projects/header';
-import Projects from '@/components/common/projects/projects';
+import Projects from '@/features/projects/projects';
 import { ProjectsDataProvider } from '@/features/projects/projects-data';
 
 export default function ProjectsPage() {

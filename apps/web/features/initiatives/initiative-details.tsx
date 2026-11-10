@@ -1,11 +1,11 @@
 'use client';
 
-import ProjectsTimeline from '@/components/common/projects/projects-timeline';
+import ProjectsTimeline from '@/features/projects/projects-timeline';
 import { RecoveryScreen } from '@/features/shared/recovery-screen';
 import { InitiativeActivity } from '@/features/initiatives/activity/initiative-activity';
 import { LoadingState } from '@/components/common/loading-state';
 import { IconPicker } from '@/components/common/icon-picker';
-import { ProjectGroup } from '@/components/common/projects/projects';
+import { ProjectGroup } from '@/features/projects/projects';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {

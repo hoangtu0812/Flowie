@@ -1,6 +1,6 @@
 'use client';
 
-import { projectIcon } from '@/components/common/projects/project-icon';
+import { projectIcon } from '@/features/projects/project-icon';
 import { SidebarMenuSub, SidebarMenuSubButton, SidebarMenuSubItem } from '@/components/ui/sidebar';
 import { responseData } from '@/lib/http';
 import { projectPath } from '@/lib/project-route';

@@ -20,7 +20,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { appPathname, withBasePath } from '@/lib/base-path';
 import { withWorkspaceSegment } from '@/lib/workspace-route';
-import { projectSlugError } from '@/components/common/projects/details/project-settings-dialog';
+import { projectSlugError } from '@/features/projects/details/project-settings-dialog';
 import { SettingsCard, SettingsSection, SettingsShell } from './shared';
 import { WorkspaceNameSetting } from './workspace-name-setting';
 

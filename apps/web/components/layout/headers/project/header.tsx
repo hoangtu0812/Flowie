@@ -2,9 +2,9 @@
 import { useMessages } from '@/features/shared/use-messages';
 import { messages } from '@/features/navigation/messages.vi';
 
-import { AiScheduleDialog } from '@/components/common/projects/details/ai-schedule-dialog';
-import { ProjectSettingsDialog } from '@/components/common/projects/details/project-settings-dialog';
-import { projectIcon } from '@/components/common/projects/project-icon';
+import { AiScheduleDialog } from '@/features/projects/details/ai-schedule-dialog';
+import { ProjectSettingsDialog } from '@/features/projects/details/project-settings-dialog';
+import { projectIcon } from '@/features/projects/project-icon';
 import { IssueListActions } from '@/features/issues/issue-list-actions';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,7 +14,7 @@ import {
    DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { SidebarTrigger } from '@/components/ui/sidebar';
-import { useLiveProjectData } from '@/components/common/projects/details/use-live-project';
+import { useLiveProjectData } from '@/features/projects/details/use-live-project';
 import { cn } from '@/lib/utils';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import { DisplayOptions } from '../display-options';

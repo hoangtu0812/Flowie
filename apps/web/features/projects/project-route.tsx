@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import ProjectActivity from '@/components/common/projects/details/project-activity';
-import ProjectIssues from '@/components/common/projects/details/project-issues';
-import ProjectOverview from '@/components/common/projects/details/project-overview';
-import ProjectTimeline from '@/components/common/projects/details/project-timeline';
+import ProjectActivity from '@/features/projects/details/project-activity';
+import ProjectIssues from '@/features/projects/details/project-issues';
+import ProjectOverview from '@/features/projects/details/project-overview';
+import ProjectTimeline from '@/features/projects/details/project-timeline';
 import {
    LiveProjectProvider,
    useLiveProjectData,
-} from '@/components/common/projects/details/use-live-project';
+} from '@/features/projects/details/use-live-project';
 import { usePageEntity } from '@/features/shared/document-title';
 import Header from '@/components/layout/headers/project/header';
 import MainLayout from '@/components/layout/main-layout';
