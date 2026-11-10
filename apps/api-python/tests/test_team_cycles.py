@@ -3,8 +3,8 @@ VI: Tiến độ cycle suy ra từ timestamp đã lưu và không bao giờ bị
 """
 from datetime import datetime, timedelta
 
-from app.domains import native_cycles
-from app.domains.native_cycles import _cycle_progress
+from app.modules.cycles import api as native_cycles
+from app.modules.cycles.api import _cycle_progress
 
 START = datetime(2026, 11, 2)
 
@@ -19,7 +19,7 @@ def link(created, *, completed=None, started=False, updated=None):
 
 
 def test_scope_growth_and_completion_come_from_timestamps(monkeypatch):
-    monkeypatch.setattr(native_cycles, "_utcnow", lambda: START + timedelta(days=10))
+    monkeypatch.setattr(native_cycles, "utcnow", lambda: START + timedelta(days=10))
     cycle = {"start_date": START, "end_date": START + timedelta(days=2), "created_at": START, "status": "COMPLETED"}
     # One issue from day 0, completed on day 1; one added on day 1 and started on day 2.
     # VI: Một issue từ ngày 0, xong ở ngày 1; một issue thêm vào ngày 1 và bắt đầu ở ngày 2.
@@ -33,7 +33,7 @@ def test_scope_growth_and_completion_come_from_timestamps(monkeypatch):
 
 
 def test_an_active_cycle_stops_at_today(monkeypatch):
-    monkeypatch.setattr(native_cycles, "_utcnow", lambda: START + timedelta(days=1, hours=12))
+    monkeypatch.setattr(native_cycles, "utcnow", lambda: START + timedelta(days=1, hours=12))
     cycle = {"start_date": START, "end_date": START + timedelta(days=13), "created_at": START, "status": "ACTIVE"}
     progress = _cycle_progress(cycle, [link(0)])
     assert progress["burnup"][-1]["date"] == "2026-11-03"

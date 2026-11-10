@@ -14,10 +14,7 @@ from .core.errors import ApiError, api_error_handler, validation_error_handler
 from .core.readiness import dependency_status
 from .db.session import create_session_factory
 from .domains.agent import router as agent_router
-from .domains.approvals import router as approvals_router
 from .domains.auth import router as auth_router
-from .domains.native_activities import public_router as activities_router
-from .domains.native_activities import router as native_activities_router
 from .domains.native_admin import router as admin_router
 from .domains.native_asks import router as asks_router
 from .domains.native_attachments import public_router as attachments_router
@@ -25,8 +22,6 @@ from .domains.native_attachments import router as native_attachments_router
 from .domains.native_comments import public_router as comments_router
 from .domains.native_comments import router as native_comments_router
 from .domains.native_customer_requests import router as customer_requests_router
-from .domains.native_cycles import public_router as cycles_router
-from .domains.native_cycles import router as native_cycles_router
 from .domains.native_documents import router as native_documents_router
 from .domains.native_initiatives import public_router as initiatives_router
 from .domains.native_initiatives import router as native_initiatives_router
@@ -37,10 +32,7 @@ from .domains.native_notifications import router as notifications_router
 from .domains.native_projects import public_router as projects_router
 from .domains.native_projects import router as native_projects_router
 from .domains.native_pulse import router as pulse_router
-from .domains.native_releases import router as releases_router
 from .domains.native_slas import router as slas_router
-from .domains.native_views import router as views_router
-from .domains.reviews import router as reviews_router
 from .domains.scm.router import router as scm_router
 from .domains.scm.router import webhook_router as scm_webhook_router
 from .domains.team_dispatcher import router as team_dispatcher_router
@@ -55,6 +47,8 @@ from .jobs.reminders import reminder_loop
 from .jobs.scm_deliveries import scm_delivery_loop
 from .jobs.scm_sync import scm_sync_loop
 from .modules.agent_runs.api import router as agent_runs_router
+from .modules.cycles.api import public_router as cycles_router
+from .modules.cycles.api import router as native_cycles_router
 from .modules.emojis.api import router as emojis_router
 from .modules.identity.api import router as password_reset_router
 from .modules.labels.api import router as labels_router
@@ -64,6 +58,12 @@ from .modules.mcp.maintenance import maintenance_loop
 from .modules.mcp.uploads import router as mcp_upload_router
 from .modules.notifications.outbox import outbox_loop
 from .modules.operations.heartbeats import supervise
+from .modules.releases.api import router as releases_router
+from .modules.reviews.api import router as reviews_router
+from .modules.views.api import router as views_router
+from .modules.work_items.activity_api import public_router as activities_router
+from .modules.work_items.activity_api import router as native_activities_router
+from .modules.work_items.approvals_api import router as approvals_router
 from .modules.work_items.manual_order import router as manual_order_router
 
 

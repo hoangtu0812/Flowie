@@ -7,8 +7,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.domains.approvals import list_approvals
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.modules.work_items.approvals_api import list_approvals
 from app.modules.work_items.contracts import CreateDocumentInput, UpdateDocumentInput
 from app.modules.work_items.document_review import (
     DecisionInput,

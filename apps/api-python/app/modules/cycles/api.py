@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime, timedelta
 from typing import Any, Literal
 
@@ -8,12 +9,15 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.errors import ApiError
-from ..core.utc_responses import UtcAPIRouter as APIRouter
-from ..db.session import get_session
-from .auth import _cuid, _utcnow, current_user
-from .native_issues import _issue_row
-from .native_projects import _date, _team_access, _workspace_access
+from ...core.clock import utcnow
+from ...core.dates import parse_date
+from ...core.errors import ApiError
+from ...core.identifiers import cuid
+from ...core.utc_responses import UtcAPIRouter as APIRouter
+from ...db.session import get_session
+from ...domains.auth import current_user
+from ..access.projects import team_access, workspace_access
+from ..work_items.issue_queries import issue_row
 
 router = APIRouter(prefix='/api/v1/_native/cycles', tags=['native-cycles'])
 # The active/upcoming cycle views already consume this exact read shape. Keep
@@ -55,10 +59,10 @@ def _iso_day(value: datetime) -> str:
     return _day(value).date().isoformat()
 
 
-def _cycle_progress(cycle: dict[str, Any], links: list[dict[str, Any]]) -> dict[str, Any]:
+def _cycle_progress(cycle: Mapping[Any, Any], links: list[dict[str, Any]]) -> dict[str, Any]:
     start = _day(cycle['start_date'] or cycle['created_at'])
-    requested_end = _day(cycle['end_date'] or _utcnow())
-    today = _day(_utcnow())
+    requested_end = _day(cycle['end_date'] or utcnow())
+    today = _day(utcnow())
     end = min(requested_end, today) if cycle['status'] == 'ACTIVE' else requested_end
     final_day = max(start, end)
     if cycle['status'] in {'UPCOMING', 'CANCELED'}:
@@ -68,7 +72,7 @@ def _cycle_progress(cycle: dict[str, Any], links: list[dict[str, Any]]) -> dict[
     days = [start + timedelta(days=offset) for offset in range(0, total_days + 1, step)]
     if not days or days[-1] != final_day:
         days.append(final_day)
-    burnup = []
+    burnup: list[dict[str, Any]] = []
     for day in days:
         cutoff = day + timedelta(days=1) - timedelta(microseconds=1)
         linked = [link for link in links if link['created_at'] <= cutoff]
@@ -107,7 +111,7 @@ async def _cycle(
     cycle = result.mappings().first()
     if not cycle:
         raise ApiError(404, 'Cycle not found.', 'Not Found')
-    await _team_access(db, workspace_id, cycle['team_id'], user_id)
+    await team_access(db, workspace_id, cycle['team_id'], user_id)
     links = await db.execute(
         text(
             '''SELECT ic.issue_id, ic.created_at, i.updated_at, i.completed_at, s.category AS status_category
@@ -149,7 +153,7 @@ def _scheduled_status(
     """Resolve a non-terminal cycle state from its calendar boundaries."""
     if status == 'CANCELED':
         return status
-    today = _day(_utcnow())
+    today = _day(utcnow())
     if end_date and _day(end_date) < today:
         return 'COMPLETED'
     if start_date and _day(start_date) <= today:
@@ -174,7 +178,7 @@ async def _reconcile_schedule_statuses(
     for cycle in result.mappings().all():
         resolved = _scheduled_status(cycle['status'], cycle['start_date'], cycle['end_date'])
         if resolved != cycle['status']:
-            updates.append({'id': cycle['id'], 'status': resolved, 'updated_at': _utcnow()})
+            updates.append({'id': cycle['id'], 'status': resolved, 'updated_at': utcnow()})
     if updates:
         await db.execute(
             text('UPDATE cycles SET status = :status, updated_at = :updated_at WHERE id = :id'),
@@ -192,8 +196,8 @@ async def list_cycles(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, list[dict[str, Any]]]:
-    await _workspace_access(db, workspaceId, user['id'])
-    await _team_access(db, workspaceId, teamId, user['id'])
+    await workspace_access(db, workspaceId, user['id'])
+    await team_access(db, workspaceId, teamId, user['id'])
     await _reconcile_schedule_statuses(db, workspaceId, teamId)
     query = '''SELECT id FROM cycles WHERE workspace_id = :workspace_id AND team_id = :team_id'''
     params: dict[str, Any] = {'workspace_id': workspaceId, 'team_id': teamId}
@@ -215,11 +219,11 @@ async def create_cycle(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _workspace_access(db, payload.workspaceId, user['id'])
-    await _team_access(db, payload.workspaceId, payload.teamId, user['id'])
-    start_date, end_date = _date(payload.startDate), _date(payload.endDate)
+    await workspace_access(db, payload.workspaceId, user['id'])
+    await team_access(db, payload.workspaceId, payload.teamId, user['id'])
+    start_date, end_date = parse_date(payload.startDate), parse_date(payload.endDate)
     _validate_dates(start_date, end_date)
-    cycle_id, now = _cuid(), _utcnow()
+    cycle_id, now = cuid(), utcnow()
     status = _scheduled_status(payload.status, start_date, end_date)
     await db.execute(
         text(
@@ -247,8 +251,8 @@ async def update_cycle(
 ) -> dict[str, dict[str, Any]]:
     current = await _cycle(db, cycle_id, workspaceId, user['id'])
     values = payload.model_dump(exclude_unset=True)
-    start_date = _date(values['startDate']) if 'startDate' in values else current['startDate']
-    end_date = _date(values['endDate']) if 'endDate' in values else current['endDate']
+    start_date = parse_date(values['startDate']) if 'startDate' in values else current['startDate']
+    end_date = parse_date(values['endDate']) if 'endDate' in values else current['endDate']
     _validate_dates(start_date, end_date)
     requested_status = values.get('status', current['status'])
     schedule_changed = 'startDate' in values or 'endDate' in values
@@ -260,10 +264,11 @@ async def update_cycle(
         else _scheduled_status(requested_status, start_date, end_date)
     )
     columns = {'name': 'name', 'description': 'description', 'startDate': 'start_date', 'endDate': 'end_date'}
-    sets, params = [], {'cycle_id': cycle_id, 'now': _utcnow()}
+    sets: list[str] = []
+    params: dict[str, Any] = {'cycle_id': cycle_id, 'now': utcnow()}
     for field, column in columns.items():
         if field in values:
-            params[field] = _date(values[field]) if field in {'startDate', 'endDate'} else values[field]
+            params[field] = parse_date(values[field]) if field in {'startDate', 'endDate'} else values[field]
             if field == 'name' and isinstance(params[field], str):
                 params[field] = params[field].strip()
             sets.append(f'{column} = :{field}')
@@ -285,7 +290,7 @@ async def add_issue(
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
     cycle = await _cycle(db, cycle_id, payload.workspaceId, user['id'])
-    issue = await _issue_row(db, payload.issueId, payload.workspaceId, user['id'])
+    issue = await issue_row(db, payload.issueId, payload.workspaceId, user['id'])
     if issue['teamId'] != cycle['teamId']:
         raise ApiError(404, 'Issue not found for this team.', 'Not Found')
     await db.execute(
@@ -310,7 +315,7 @@ async def cycle_issues(
         text('''SELECT issue_id FROM issue_cycles WHERE cycle_id = :cycle_id ORDER BY created_at DESC'''),
         {'cycle_id': cycle_id},
     )
-    return {'data': [await _issue_row(db, row['issue_id'], workspaceId, user['id']) for row in result.mappings().all()]}
+    return {'data': [await issue_row(db, row['issue_id'], workspaceId, user['id']) for row in result.mappings().all()]}
 
 
 @router.delete('/{cycle_id}/issues/{issue_id}')

@@ -9,12 +9,14 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.errors import ApiError
-from ..core.utc_responses import UtcAPIRouter as APIRouter
-from ..db.session import get_session
-from .auth import _cuid, _utcnow, current_user
-from .native_projects import _workspace_access
-from .scm.contracts import read_only_capabilities
+from ...core.clock import utcnow
+from ...core.errors import ApiError
+from ...core.identifiers import cuid
+from ...core.utc_responses import UtcAPIRouter as APIRouter
+from ...db.session import get_session
+from ...domains.auth import current_user
+from ...domains.scm.contracts import read_only_capabilities
+from ..access.projects import workspace_access
 
 router = APIRouter(prefix='/api/v1/reviews', tags=['reviews'])
 ReviewView = Literal['assigned', 'created', 'all']
@@ -194,7 +196,7 @@ async def list_reviews(
     db: AsyncSession = Depends(get_session),
     issueId: str | None = None,
 ) -> dict[str, Any]:
-    await _workspace_access(db, workspaceId, user['id'])
+    await workspace_access(db, workspaceId, user['id'])
     filters = [
         'review.workspace_id = :workspace_id',
         'repository.enabled = true',
@@ -362,7 +364,7 @@ async def mark_review_viewed(
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
     review = await _accessible_review(db, review_id, workspaceId, user['id'])
-    now = _utcnow()
+    now = utcnow()
     await db.execute(
         text(
             '''INSERT INTO code_review_view_states (
@@ -402,13 +404,13 @@ async def _audit_link(
                )'''
         ),
         {
-            'id': _cuid(),
+            'id': cuid(),
             'workspace_id': workspace_id,
             'actor_id': actor_id,
             'action': action,
             'review_id': review_id,
             'metadata': json.dumps({'issueId': issue_id}),
-            'now': _utcnow(),
+            'now': utcnow(),
         },
     )
 
@@ -439,7 +441,7 @@ async def link_issue(
         raise ApiError(404, 'Issue not found.', 'Not Found')
     if issue['team_id'] != review['team_id']:
         raise ApiError(400, 'A Review can only link to an Issue in its mapped Flowie team.', 'Bad Request')
-    linked_at = _utcnow()
+    linked_at = utcnow()
     try:
         await db.execute(
             text(

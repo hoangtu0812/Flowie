@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.domains.workflow_catalog import DEFAULT_ISSUE_STATUSES
+from app.modules.work_items.workflow_catalog import DEFAULT_ISSUE_STATUSES
 
 
 class DefaultWorkflowTests(unittest.TestCase):

@@ -9,11 +9,14 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.errors import ApiError
-from ..core.utc_responses import UtcAPIRouter as APIRouter
-from ..db.session import get_session
-from .auth import _cuid, _utcnow, current_user
-from .native_projects import _date, _workspace_access, _workspace_manager
+from ...core.clock import utcnow
+from ...core.dates import parse_date
+from ...core.errors import ApiError
+from ...core.identifiers import cuid
+from ...core.utc_responses import UtcAPIRouter as APIRouter
+from ...db.session import get_session
+from ...domains.auth import current_user
+from ..access.projects import workspace_access, workspace_manager
 
 router = APIRouter(prefix='/api/v1/releases', tags=['releases'])
 ReleaseStatus = Literal['planned', 'in-progress', 'released', 'canceled']
@@ -53,9 +56,9 @@ async def _audit(
                        CAST(:metadata AS jsonb), :created_at)'''
         ),
         {
-            'id': _cuid(), 'workspace_id': workspace_id, 'actor_id': actor_id,
+            'id': cuid(), 'workspace_id': workspace_id, 'actor_id': actor_id,
             'action': action, 'entity_id': release_id,
-            'metadata': json.dumps(metadata or {}), 'created_at': _utcnow(),
+            'metadata': json.dumps(metadata or {}), 'created_at': utcnow(),
         },
     )
 
@@ -137,7 +140,7 @@ async def list_releases(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, list[dict[str, Any]]]:
-    await _workspace_access(db, workspaceId, user['id'])
+    await workspace_access(db, workspaceId, user['id'])
     result = await db.execute(
         text(
             '''SELECT id FROM releases
@@ -155,9 +158,9 @@ async def create_release(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _workspace_manager(db, payload.workspaceId, user['id'])
+    await workspace_manager(db, payload.workspaceId, user['id'])
     project_ids = await _project_ids(db, payload.workspaceId, payload.projectIds)
-    release_id, now = _cuid(), _utcnow()
+    release_id, now = cuid(), utcnow()
     try:
         await db.execute(
             text(
@@ -171,7 +174,7 @@ async def create_release(
                 'id': release_id, 'workspace_id': payload.workspaceId, 'name': payload.name.strip(),
                 'version': payload.version.strip(),
                 'description': payload.description.strip() if payload.description else None,
-                'status': payload.status, 'target_date': _date(payload.targetDate),
+                'status': payload.status, 'target_date': parse_date(payload.targetDate),
                 'released_at': now if payload.status == 'released' else None,
                 'created_by': user['id'], 'now': now,
             },
@@ -199,7 +202,7 @@ async def update_release(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _workspace_manager(db, workspaceId, user['id'])
+    await workspace_manager(db, workspaceId, user['id'])
     existing = await _release(db, release_id, workspaceId)
     values = payload.model_dump(exclude_unset=True)
     project_ids = None
@@ -210,7 +213,7 @@ async def update_release(
         'targetDate': 'target_date',
     }
     sets: list[str] = []
-    params: dict[str, Any] = {'release_id': release_id, 'now': _utcnow()}
+    params: dict[str, Any] = {'release_id': release_id, 'now': utcnow()}
     for field, column in column_map.items():
         if field not in values:
             continue
@@ -220,11 +223,11 @@ async def update_release(
         elif field == 'description' and isinstance(value, str):
             value = value.strip() or None
         elif field == 'targetDate':
-            value = _date(value)
+            value = parse_date(value)
         params[field] = value
         sets.append(f'{column} = :{field}')
     if 'status' in values:
-        params['released_at'] = existing['releasedAt'] or _utcnow() if values['status'] == 'released' else None
+        params['released_at'] = existing['releasedAt'] or utcnow() if values['status'] == 'released' else None
         sets.append('released_at = :released_at')
     try:
         if sets:
@@ -237,7 +240,7 @@ async def update_release(
             for project_id in project_ids:
                 await db.execute(
                     text('INSERT INTO release_projects (release_id, project_id, created_at) VALUES (:release_id, :project_id, :now)'),
-                    {'release_id': release_id, 'project_id': project_id, 'now': _utcnow()},
+                    {'release_id': release_id, 'project_id': project_id, 'now': utcnow()},
                 )
         if sets or project_ids is not None:
             await _audit(db, workspaceId, user['id'], 'release.updated', release_id, {
@@ -257,9 +260,9 @@ async def archive_release(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _workspace_manager(db, workspaceId, user['id'])
+    await workspace_manager(db, workspaceId, user['id'])
     release = await _release(db, release_id, workspaceId)
-    now = _utcnow()
+    now = utcnow()
     await db.execute(
         text('UPDATE releases SET archived_at = :now, updated_at = :now WHERE id = :release_id'),
         {'release_id': release_id, 'now': now},

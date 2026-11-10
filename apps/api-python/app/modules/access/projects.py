@@ -30,7 +30,7 @@ async def workspace_manager(db: AsyncSession, workspace_id: str, user_id: str) -
         raise ApiError(403, "Workspace administrator access is required.", "Forbidden")
 
 
-async def _team_access(
+async def team_access(
     db: AsyncSession, workspace_id: str, team_id: str, user_id: str
 ) -> None:
     await workspace_access(db, workspace_id, user_id)
@@ -50,3 +50,4 @@ async def _team_access(
 # VI: chuyển mọi nơi gọi sang tên công khai.
 _workspace_access = workspace_access
 _workspace_manager = workspace_manager
+_team_access = team_access

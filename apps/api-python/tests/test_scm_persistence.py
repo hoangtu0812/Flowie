@@ -14,7 +14,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.core.config import _async_database_url
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
-from app.domains.reviews import list_reviews
 from app.domains.scm.contracts import (
     ProviderRepository,
     ProviderReview,
@@ -22,6 +21,7 @@ from app.domains.scm.contracts import (
     ProviderRevision,
 )
 from app.domains.scm.service import upsert_repository, upsert_review
+from app.modules.reviews.api import list_reviews
 
 
 class ScmPersistenceIntegrationTests(unittest.TestCase):

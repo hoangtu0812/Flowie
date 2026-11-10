@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from .errors import ApiError
 
 
-def _date(value: str | None) -> datetime | None:
+def parse_date(value: str | None) -> datetime | None:
     if value is None:
         return None
     try:
@@ -19,3 +19,10 @@ def _date(value: str | None) -> datetime | None:
         if parsed.tzinfo
         else parsed
     )
+
+
+# shortcut: private alias kept for callers not yet moved out of app/domains; delete it once DTD-523
+# has switched every caller to `parse_date`.
+# VI: shortcut: alias nội bộ giữ cho các nơi gọi chưa chuyển khỏi app/domains; xoá khi DTD-523 đã
+# VI: chuyển mọi nơi gọi sang `parse_date`.
+_date = parse_date

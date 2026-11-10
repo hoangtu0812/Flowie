@@ -4,7 +4,7 @@ VI: Dữ liệu release được kiểm trước khi ghi bất cứ thứ gì.
 import pytest
 from pydantic import ValidationError
 
-from app.domains.native_releases import CreateReleaseInput, UpdateReleaseInput
+from app.modules.releases.api import CreateReleaseInput, UpdateReleaseInput
 
 
 def test_a_well_formed_release_is_accepted():
