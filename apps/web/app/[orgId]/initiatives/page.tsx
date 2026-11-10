@@ -1,4 +1,4 @@
-import Initiatives from '@/components/common/initiatives/initiatives';
+import Initiatives from '@/features/initiatives/initiatives';
 import Header from '@/components/layout/headers/initiatives/header';
 import MainLayout from '@/components/layout/main-layout';
 

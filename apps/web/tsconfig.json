@@ -34,8 +34,6 @@
       "components/auth/**",
       "components/brand/**",
       "components/common/feature-unavailable.tsx",
-      "components/common/initiatives/initiative-ui-adapter.ts",
-      "components/common/initiatives/use-live-initiatives.ts",
       "components/common/issues/details/issue-reactions.tsx",
       "components/common/issues/details/issue-relations.tsx",
       "components/common/issues/details/issue-sub-issues.tsx",

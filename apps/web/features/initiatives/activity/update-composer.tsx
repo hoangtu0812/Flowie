@@ -13,8 +13,8 @@ import { authenticatedFetch } from '@/lib/workspaces';
 import { responseData } from '@/lib/http';
 import { useMessages } from '@/features/shared/use-messages';
 import { useDateFormatter } from '@/features/shared/account-time';
-import type { Initiative } from '@/components/common/initiatives/initiative-ui-adapter';
-import type { LiveInitiative } from '@/components/common/initiatives/use-live-initiatives';
+import type { Initiative } from '@/features/initiatives/initiative-ui-adapter';
+import type { LiveInitiative } from '@/features/initiatives/use-live-initiatives';
 import { HealthBadge, healthOptions } from './health-badge';
 import { messages } from './messages.vi';
 

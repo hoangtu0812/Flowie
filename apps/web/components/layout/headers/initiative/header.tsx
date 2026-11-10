@@ -2,8 +2,8 @@
 
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
-import { adaptInitiatives } from '@/components/common/initiatives/initiative-ui-adapter';
-import { useLiveInitiatives } from '@/components/common/initiatives/use-live-initiatives';
+import { adaptInitiatives } from '@/features/initiatives/initiative-ui-adapter';
+import { useLiveInitiatives } from '@/features/initiatives/use-live-initiatives';
 import { ChevronRight, MoreHorizontal, Star } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
