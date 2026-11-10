@@ -12,8 +12,8 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...core.clock import _utcnow
-from ...core.identifiers import _cuid
+from ...core.clock import utcnow
+from ...core.identifiers import cuid
 from ...services.microsoft_teams import teams_message
 from ...services.notification_events import NotificationBatch, notification_hub
 from ..operations.heartbeats import progress
@@ -32,7 +32,7 @@ async def stage_notifications(
                     "INSERT INTO notification_outbox (id,workspace_id,payload) VALUES (:id,:workspace,CAST(:payload AS jsonb))"
                 ),
                 {
-                    "id": _cuid(),
+                    "id": cuid(),
                     "workspace": workspace_id,
                     "payload": json.dumps(jsonable_encoder(asdict(batch))),
                 },
@@ -75,7 +75,7 @@ async def deliver(payload: dict) -> None:
 
 
 async def process_one(factory, outbox_id: str | None = None) -> bool:
-    token, now = _cuid(), _utcnow()
+    token, now = cuid(), utcnow()
     async with factory() as db:
         result = await db.execute(
             text("""
@@ -113,7 +113,7 @@ async def process_one(factory, outbox_id: str | None = None) -> bool:
             row["attempts"],
         )
     async with factory() as db:
-        now = _utcnow()
+        now = utcnow()
         await db.execute(
             text("""
             UPDATE notification_outbox SET delivered_at=:delivered,failed_at=:failed,

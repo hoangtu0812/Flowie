@@ -14,11 +14,11 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.errors import ApiError
 from ...modules.notifications.outbox import stage_notifications
 from ...services.notification_events import create_notification_batch
-from ..access.membership import _workspace_role
+from ..access.membership import workspace_role
 from ..audit.write import record_change
 from .document_repository import _team_access
 
@@ -168,7 +168,7 @@ async def review_state(
     names = {person["id"]: person for person in people}
     block = approval_block(
         dict(row), approvers, reviewers, user_id,
-        allow_own_approval=await _workspace_role(db, workspace_id, user_id) in ("OWNER", "ADMIN"),
+        allow_own_approval=await workspace_role(db, workspace_id, user_id) in ("OWNER", "ADMIN"),
     )
     in_review = row["status"] == "IN_REVIEW"
     can_assign = in_review and user_id in approvers
@@ -245,7 +245,7 @@ async def check_status_change(db: AsyncSession, before: dict, status: str, user:
     if status == "APPROVED":
         block = approval_block(
             before, approvers, await _reviewers(db, before["id"]), user["id"],
-            allow_own_approval=await _workspace_role(db, before["workspace_id"], user["id"]) in ("OWNER", "ADMIN"),
+            allow_own_approval=await workspace_role(db, before["workspace_id"], user["id"]) in ("OWNER", "ADMIN"),
         )
         if block:
             raise ApiError(block[0], block[1], "Forbidden" if block[0] == 403 else "Conflict")
@@ -304,7 +304,7 @@ async def set_reviewers(
         await db.execute(
             text("""INSERT INTO document_reviewers (document_id,reviewer_id,assigned_by,assigned_at)
             VALUES (:id,:reviewer,:by,:now)"""),
-            {"id": document_id, "reviewer": reviewer, "by": user["id"], "now": _utcnow()},
+            {"id": document_id, "reviewer": reviewer, "by": user["id"], "now": utcnow()},
         )
     if added or len(current - set(wanted)):
         await record_change(
@@ -327,7 +327,7 @@ async def decide(
         await db.execute(
             text("""UPDATE document_reviewers SET decision=:decision,note=:note,decided_at=:now
             WHERE document_id=:id AND reviewer_id=:user RETURNING reviewer_id"""),
-            {"decision": payload.decision, "note": note, "now": _utcnow(), "id": document_id, "user": user["id"]},
+            {"decision": payload.decision, "note": note, "now": utcnow(), "id": document_id, "user": user["id"]},
         )
     ).first()
     if not updated:
@@ -342,7 +342,7 @@ async def decide(
         # VI: Tác giả sửa bản nháp; yêu cầu sửa vẫn hiển thị cho tới lần gửi duyệt kế tiếp.
         await db.execute(
             text("UPDATE documents SET status='DRAFT',updated_by=:user,updated_at=:now WHERE id=:id"),
-            {"id": document_id, "user": user["id"], "now": _utcnow()},
+            {"id": document_id, "user": user["id"], "now": utcnow()},
         )
         await _notify(
             db, document, approvers | {document["created_by"]}, user,

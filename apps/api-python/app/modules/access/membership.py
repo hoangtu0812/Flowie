@@ -27,14 +27,6 @@ async def manager(db: AsyncSession, workspace_id: str, user_id: str) -> None:
         raise ApiError(403, "Workspace administrator access is required.", "Forbidden")
 
 
-
-# shortcut: private alias kept for callers not yet moved out of app/domains; delete it once DTD-523
-# has switched every caller to `manager` / `workspace_role`.
-# VI: shortcut: alias nội bộ giữ cho các nơi gọi chưa chuyển khỏi app/domains; xoá khi DTD-523 đã
-# VI: chuyển mọi nơi gọi sang `manager` / `workspace_role`.
-_manager = manager
-_workspace_role = workspace_role
-
 async def _owner(db: AsyncSession, workspace_id: str, user_id: str) -> None:
     # Keep ownership stable until the protected membership write commits.
     result = await db.execute(

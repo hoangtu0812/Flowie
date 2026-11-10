@@ -1,18 +1,18 @@
 from sqlalchemy import text
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.pagination import CursorCodec
 from ..access.project_scope import project_read_scope
-from ..access.projects import _workspace_access
+from ..access.projects import workspace_access
 from .history_sql import history_ctes, scoped_sql
 
 
 async def change_page(
     db, workspace, user, query, secret, *, cursor=None, limit=50, now=None
 ):
-    await _workspace_access(db, workspace, user["id"])
+    await workspace_access(db, workspace, user["id"])
     scope, params = scoped_sql(workspace, user["id"], query.selection.options())
-    params.update(query.parameters(now or _utcnow()))
+    params.update(query.parameters(now or utcnow()))
     ctes = (
         history_ctes(scope)
         + """, changes AS (
@@ -90,9 +90,9 @@ async def change_page(
 async def project_page(
     db, workspace, user, query, secret, *, cursor=None, limit=50, now=None
 ):
-    await _workspace_access(db, workspace, user["id"])
+    await workspace_access(db, workspace, user["id"])
     scope, params = scoped_sql(workspace, user["id"], query.selection.options())
-    params.update(query.parameters(now or _utcnow()))
+    params.update(query.parameters(now or utcnow()))
     ctes = (
         history_ctes(scope)
         + """, completion_counts AS (

@@ -4,9 +4,9 @@ from datetime import timedelta
 
 from sqlalchemy import text
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.errors import ApiError
-from ...core.identifiers import _cuid
+from ...core.identifiers import cuid
 from ..operations.heartbeats import progress
 from ..work_items.contracts import CreateIssueInput
 from ..work_items.issues import create_issue
@@ -16,7 +16,7 @@ from .service import run_snapshot
 
 
 async def process_schedule(factory, *, now=None):
-    now = now or _utcnow()
+    now = now or utcnow()
     async with factory() as db:
         schedule = (
             (
@@ -44,7 +44,7 @@ async def process_schedule(factory, *, now=None):
             .mappings()
             .first()
         )
-        identifier = manual["id"] if manual else _cuid()
+        identifier = manual["id"] if manual else cuid()
         snapshot = manual["snapshot"] if manual else run_snapshot(schedule)
         if not manual:
             inserted = (

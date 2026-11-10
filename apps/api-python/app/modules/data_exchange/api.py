@@ -7,7 +7,7 @@ from ...core.downloads import private_download
 from ...core.utc_responses import UtcAPIRouter
 from ...db.session import get_session
 from ...storage.minio import MinioStorage
-from ..access.projects import _team_access, _workspace_access
+from ..access.projects import team_access, workspace_access
 from ..audit.write import record_change
 from ..identity.auth import current_user
 from ..identity.password_reset import limit_request
@@ -26,7 +26,7 @@ async def document_options(
     user=Depends(current_user),
     db=Depends(get_session),
 ):
-    await _workspace_access(db, workspaceId, user["id"])
+    await workspace_access(db, workspaceId, user["id"])
     rows = (
         (
             await db.execute(
@@ -51,7 +51,7 @@ async def document_options(
 async def inspect(
     payload: CsvInput, user=Depends(current_user), db=Depends(get_session)
 ):
-    await _team_access(db, payload.workspaceId, payload.teamId, user["id"])
+    await team_access(db, payload.workspaceId, payload.teamId, user["id"])
     headers, rows = parse_csv(payload.csv)
     return {"data": {"columns": headers, "rowCount": len(rows)}}
 
@@ -83,7 +83,7 @@ async def preview(
 async def history(
     workspaceId: str, user=Depends(current_user), db=Depends(get_session)
 ):
-    await _workspace_access(db, workspaceId, user["id"])
+    await workspace_access(db, workspaceId, user["id"])
     rows = (
         (
             await db.execute(

@@ -5,7 +5,7 @@ from fastapi import Depends
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import text
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.errors import ApiError
 from ...core.timezones import time_zone
 from ...core.utc_responses import UtcAPIRouter
@@ -117,7 +117,7 @@ async def write_preferences(db, user_id, payload):
         "user": user_id,
         "values": json.dumps(payload.values.model_dump(exclude_unset=True)),
         "expected": payload.expectedVersion,
-        "now": _utcnow(),
+        "now": utcnow(),
     }
     query = (
         "INSERT INTO user_ui_preferences(user_id,preferences,updated_at) VALUES (:user,CAST(:values AS jsonb),:now) ON CONFLICT(user_id) DO NOTHING RETURNING version,preferences"

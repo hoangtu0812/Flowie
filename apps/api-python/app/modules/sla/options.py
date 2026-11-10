@@ -1,12 +1,12 @@
 from sqlalchemy import text
 
-from ..access.projects import _team_access, _workspace_manager
+from ..access.projects import team_access, workspace_manager
 
 
 async def policy_options(db, workspace, user, team):
-    await _workspace_manager(db, workspace, user["id"])
+    await workspace_manager(db, workspace, user["id"])
     if team:
-        await _team_access(db, workspace, team, user["id"])
+        await team_access(db, workspace, team, user["id"])
     params = {"workspace": workspace, "team": team}
     statuses = (
         (

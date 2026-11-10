@@ -3,7 +3,7 @@ import asyncio
 from sqlalchemy import text
 
 from ...core.audit_context import audit_source
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ..operations.heartbeats import progress
 from .alerts import process_alerts
 from .cycles import consume, save_cycle
@@ -12,7 +12,7 @@ from .synchronization import locked_issue, sync_issue
 
 
 async def process_sla_job(factory, *, now=None, issue_id=None):
-    now = now or _utcnow()
+    now = now or utcnow()
     identifier, generation = None, None
     token = audit_source.set("SYSTEM")
     try:

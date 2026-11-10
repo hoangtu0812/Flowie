@@ -9,9 +9,9 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.core.clock import _utcnow
+from app.core.clock import utcnow
 from app.core.config import Settings, _async_database_url
-from app.core.identifiers import _cuid, _hash_token
+from app.core.identifiers import cuid, hash_token
 from app.db.session import get_session
 from app.main import create_app
 from app.modules.identity.auth import create_workspace_bootstrap
@@ -94,8 +94,8 @@ def test_teams_channels_are_gated_permissioned_and_routed_by_project():
 async def verify_teams_channels():
     engine = create_async_engine(_async_database_url(os.environ['MCP_TEST_DATABASE_URL']))
     factory = async_sessionmaker(engine)
-    owner, member = _cuid(), _cuid()
-    sessions = {owner: _cuid(), member: _cuid()}
+    owner, member = cuid(), cuid()
+    sessions = {owner: cuid(), member: cuid()}
     seed = None
     base = replace(
         Settings.from_environment(),
@@ -108,7 +108,7 @@ async def verify_teams_channels():
     project_hook = 'https://prod-01.westus.logic.azure.com:443/workflows/project/triggers/manual/paths/invoke'
     try:
         async with factory() as db:
-            now = _utcnow()
+            now = utcnow()
             for identifier in [owner, member]:
                 await db.execute(
                     text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,'Teams fixture',:email,'ACTIVE',:now,:now)"),
@@ -116,15 +116,15 @@ async def verify_teams_channels():
                 )
                 await db.execute(
                     text('INSERT INTO sessions(id,user_id,refresh_token_hash,expires_at,created_at,last_used_at) VALUES (:id,:user,:hash,:expires,:now,:now)'),
-                    {'id': sessions[identifier], 'user': identifier, 'hash': _hash_token(_cuid()), 'expires': now + timedelta(days=1), 'now': now},
+                    {'id': sessions[identifier], 'user': identifier, 'hash': hash_token(cuid()), 'expires': now + timedelta(days=1), 'now': now},
                 )
-            seed = await create_workspace_bootstrap(db, user_id=owner, organization_name='Teams', workspace_name=_cuid(), now=now)
+            seed = await create_workspace_bootstrap(db, user_id=owner, organization_name='Teams', workspace_name=cuid(), now=now)
             workspace = seed['workspace_id']
             await db.execute(
                 text("INSERT INTO workspace_members(id,workspace_id,user_id,role,status,created_at,updated_at) VALUES (:id,:workspace,:user,'MEMBER','ACTIVE',:now,:now)"),
-                {'id': _cuid(), 'workspace': workspace, 'user': member, 'now': now},
+                {'id': cuid(), 'workspace': workspace, 'user': member, 'now': now},
             )
-            project, other_project, issue = _cuid(), _cuid(), _cuid()
+            project, other_project, issue = cuid(), cuid(), cuid()
             for identifier in [project, other_project]:
                 await db.execute(
                     text("INSERT INTO projects(id,workspace_id,name,identifier,created_at,updated_at) VALUES (:id,:workspace,'Teams target',:id,:now,:now)"),

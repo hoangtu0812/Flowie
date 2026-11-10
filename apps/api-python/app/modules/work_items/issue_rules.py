@@ -6,9 +6,9 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.errors import ApiError
-from ...core.identifiers import _cuid
+from ...core.identifiers import cuid
 from .workflow_catalog import DEFAULT_ISSUE_STATUSES
 
 
@@ -70,7 +70,7 @@ async def _ensure_default_issue_statuses(db: AsyncSession, workspace_id: str) ->
     ), {'workspace':workspace_id})).first()
     if existing_workflow:
         return
-    now = _utcnow()
+    now = utcnow()
     for position, (name, category, color) in enumerate(DEFAULT_ISSUE_STATUSES):
         existing = await db.execute(
             text(
@@ -107,7 +107,7 @@ async def _ensure_default_issue_statuses(db: AsyncSession, workspace_id: str) ->
                    VALUES (:id, :workspace_id, :name, :category, :color, :position, :now, :now)"""
             ),
             {
-                "id": _cuid(),
+                "id": cuid(),
                 "workspace_id": workspace_id,
                 "name": name,
                 "category": category,

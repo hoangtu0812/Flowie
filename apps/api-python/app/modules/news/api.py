@@ -7,9 +7,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.errors import ApiError
-from ...core.identifiers import _cuid
+from ...core.identifiers import cuid
 from ...core.utc_responses import UtcAPIRouter
 from ...db.session import get_session
 from ...domains.native_integrations import _send_teams_test
@@ -90,8 +90,8 @@ async def create_category(
                    ON CONFLICT (workspace_id, name) DO NOTHING RETURNING id'''
             ),
             {
-                'id': _cuid(), 'workspace_id': workspaceId, 'name': _name(payload.name),
-                'webhook_url': _webhook(payload.webhookUrl), 'now': _utcnow(),
+                'id': cuid(), 'workspace_id': workspaceId, 'name': _name(payload.name),
+                'webhook_url': _webhook(payload.webhookUrl), 'now': utcnow(),
             },
         )
     ).first()
@@ -116,7 +116,7 @@ async def update_category(
                 '''UPDATE news_categories SET webhook_url = :webhook_url, updated_at = :now
                    WHERE id = :id AND workspace_id = :workspace_id RETURNING id'''
             ),
-            {'webhook_url': _webhook(payload.webhookUrl), 'now': _utcnow(), 'id': category_id, 'workspace_id': workspaceId},
+            {'webhook_url': _webhook(payload.webhookUrl), 'now': utcnow(), 'id': category_id, 'workspace_id': workspaceId},
         )
     ).first()
     result = _found(row, 'News group')
@@ -186,8 +186,8 @@ async def create_source(
                    WHERE id = :category_id AND workspace_id = :workspace_id RETURNING id'''
             ),
             {
-                'id': _cuid(), 'name': _name(payload.name), 'feed_url': feed_url(payload.feedUrl),
-                'now': _utcnow(), 'category_id': payload.categoryId, 'workspace_id': workspaceId,
+                'id': cuid(), 'name': _name(payload.name), 'feed_url': feed_url(payload.feedUrl),
+                'now': utcnow(), 'category_id': payload.categoryId, 'workspace_id': workspaceId,
             },
         )
     ).first()

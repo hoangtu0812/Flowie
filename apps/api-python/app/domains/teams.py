@@ -16,9 +16,7 @@ from ..core.errors import ApiError
 from ..core.identifiers import cuid
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
-from ..modules.access.membership import _manager as _manager
-from ..modules.access.membership import _owner
-from ..modules.access.membership import _workspace_role as _workspace_role
+from ..modules.access.membership import _owner, manager, workspace_role
 from ..modules.identity.auth import current_user
 
 router = APIRouter(prefix='/api/v1/teams', tags=['teams'])
@@ -75,13 +73,6 @@ def team_record(row: Any) -> dict[str, Any]:
     }
 
 
-# shortcut: private alias kept for callers not yet moved out of app/domains; delete it once DTD-523
-# has switched every caller to `team_record`.
-# VI: shortcut: alias nội bộ giữ cho các nơi gọi chưa chuyển khỏi app/domains; xoá khi DTD-523 đã
-# VI: chuyển mọi nơi gọi sang `team_record`.
-_team = team_record
-
-
 async def _team_row(db: AsyncSession, team_id: str, workspace_id: str, *, include_archived: bool = False) -> Any | None:
     condition = '' if include_archived else 'AND archived_at IS NULL'
     result = await db.execute(text(f'SELECT * FROM teams WHERE id = :team_id AND workspace_id = :workspace_id {condition} LIMIT 1'), {'team_id': team_id, 'workspace_id': workspace_id})
@@ -103,7 +94,7 @@ async def _detail(db: AsyncSession, team_id: str, workspace_id: str) -> dict[str
     row = await _team_row(db, team_id, workspace_id)
     if not row:
         raise ApiError(404, 'Team not found.', 'Not Found')
-    record = _team(row)
+    record = team_record(row)
     record['members'] = await _members(db, team_id)
     record['_count'] = await _counts(db, team_id)
     return record
@@ -115,11 +106,11 @@ async def _audit(db: AsyncSession, workspace_id: str, actor_id: str, action: str
 
 @router.get('')
 async def list_teams(workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
-    await _workspace_role(db, workspaceId, user['id'])
+    await workspace_role(db, workspaceId, user['id'])
     result = await db.execute(text('SELECT * FROM teams WHERE workspace_id = :workspace_id AND archived_at IS NULL ORDER BY name ASC'), {'workspace_id': workspaceId})
     teams = []
     for row in result.mappings().all():
-        record = _team(row)
+        record = team_record(row)
         record['members'] = await _members(db, row['id'])
         counts = await _counts(db, row['id'])
         record['_count'] = {'projects': counts['projects'], 'cycles': counts['cycles']}
@@ -130,7 +121,7 @@ async def list_teams(workspaceId: str = Query(min_length=1), user: Any = Depends
 
 @router.post('')
 async def create_team(payload: CreateTeamInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    await _manager(db, payload.workspaceId, user['id'])
+    await manager(db, payload.workspaceId, user['id'])
     name, identifier = payload.name.strip(), payload.identifier.strip().upper()
     if not identifier:
         raise ApiError(400, 'identifier must not be empty', 'Bad Request')
@@ -138,7 +129,7 @@ async def create_team(payload: CreateTeamInput, user: Any = Depends(current_user
     try:
         await db.execute(text('''INSERT INTO teams (id, workspace_id, name, identifier, description, icon, color, created_at, updated_at) VALUES (:id, :workspace_id, :name, :identifier, :description, :icon, :color, :now, :now)'''), {'id': team_id, 'workspace_id': payload.workspaceId, 'name': name, 'identifier': identifier, 'description': payload.description, 'icon': payload.icon or '👥', 'color': payload.color or '#6366f1', 'now': now})
         # Administrators may create teams, but only an owner can grant membership.
-        if await _workspace_role(db, payload.workspaceId, user['id']) == 'OWNER':
+        if await workspace_role(db, payload.workspaceId, user['id']) == 'OWNER':
             await _owner(db, payload.workspaceId, user['id'])
             await db.execute(text("INSERT INTO team_members (team_id, user_id, role) VALUES (:team_id, :user_id, 'LEAD')"), {'team_id': team_id, 'user_id': user['id']})
         await db.execute(text("INSERT INTO document_folders (id, workspace_id, team_id, name, icon, position, created_at, updated_at) VALUES (:id, :workspace_id, :team_id, 'Team documents', '📁', 0, :now, :now)"), {'id': cuid(), 'workspace_id': payload.workspaceId, 'team_id': team_id, 'now': now})
@@ -151,7 +142,7 @@ async def create_team(payload: CreateTeamInput, user: Any = Depends(current_user
 
 @router.get('/deleted')
 async def list_deleted(workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
-    await _manager(db, workspaceId, user['id'])
+    await manager(db, workspaceId, user['id'])
     since = utcnow() - timedelta(days=RESTORE_WINDOW_DAYS)
     result = await db.execute(text('SELECT id, name, identifier, icon, deleted_at FROM teams WHERE workspace_id = :workspace_id AND deleted_at >= :since ORDER BY deleted_at DESC'), {'workspace_id': workspaceId, 'since': since})
     return {'data': [{'id': row['id'], 'name': row['name'], 'identifier': row['identifier'], 'icon': row['icon'], 'deletedAt': row['deleted_at']} for row in result.mappings().all()]}
@@ -159,7 +150,7 @@ async def list_deleted(workspaceId: str = Query(min_length=1), user: Any = Depen
 
 @router.get('/{team_id}')
 async def get_team(team_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    await _workspace_role(db, workspaceId, user['id'])
+    await workspace_role(db, workspaceId, user['id'])
     membership = await db.execute(text('SELECT 1 FROM team_members WHERE team_id = :team_id AND user_id = :user_id'), {'team_id': team_id, 'user_id': user['id']})
     if membership.scalar_one_or_none() is None:
         raise ApiError(404, 'Team not found.', 'Not Found')
@@ -168,7 +159,7 @@ async def get_team(team_id: str, workspaceId: str = Query(min_length=1), user: A
 
 @router.patch('/{team_id}')
 async def update_team(team_id: str, payload: UpdateTeamInput, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    await _manager(db, workspaceId, user['id'])
+    await manager(db, workspaceId, user['id'])
     current = await _team_row(db, team_id, workspaceId)
     if not current:
         raise ApiError(404, 'Team not found.', 'Not Found')
@@ -247,24 +238,24 @@ async def _retire(db: AsyncSession, team_id: str, workspace_id: str, user_id: st
     if not row: raise ApiError(404, 'Team not found.', 'Not Found')
     await _audit(db, workspace_id, user_id, action, team_id, metadata)
     await db.commit()
-    return _team(row)
+    return team_record(row)
 
 
 @router.delete('/{team_id}')
 async def archive_team(team_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    await _manager(db, workspaceId, user['id'])
+    await manager(db, workspaceId, user['id'])
     return {'data': await _retire(db, team_id, workspaceId, user['id'], deletion=False)}
 
 
 @router.post('/{team_id}/schedule-deletion')
 async def schedule_deletion(team_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    await _manager(db, workspaceId, user['id'])
+    await manager(db, workspaceId, user['id'])
     return {'data': await _retire(db, team_id, workspaceId, user['id'], deletion=True)}
 
 
 @router.post('/{team_id}/restore')
 async def restore_team(team_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    await _manager(db, workspaceId, user['id'])
+    await manager(db, workspaceId, user['id'])
     row = await _team_row(db, team_id, workspaceId, include_archived=True)
     if not row or not row['deleted_at']: raise ApiError(404, 'Deleted team not found.', 'Not Found')
     if row['deleted_at'] + timedelta(days=RESTORE_WINDOW_DAYS) <= utcnow(): raise ApiError(400, 'The 30-day restoration window has expired.', 'Bad Request')
@@ -272,7 +263,7 @@ async def restore_team(team_id: str, workspaceId: str = Query(min_length=1), use
     restored = result.mappings().one()
     await _audit(db, workspaceId, user['id'], 'team.restored', team_id)
     await db.commit()
-    return {'data': _team(restored)}
+    return {'data': team_record(restored)}
 
 
 @router.post('/{team_id}/members')
@@ -302,7 +293,7 @@ async def join_team(team_id: str, workspaceId: str = Query(min_length=1), user: 
 
 @router.post('/{team_id}/leave')
 async def leave_team(team_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    await _workspace_role(db, workspaceId, user['id'])
+    await workspace_role(db, workspaceId, user['id'])
     result = await db.execute(text('DELETE FROM team_members WHERE team_id = :team_id AND user_id = :user_id AND EXISTS (SELECT 1 FROM teams WHERE id = :team_id AND workspace_id = :workspace_id AND archived_at IS NULL) RETURNING team_id'), {'team_id': team_id, 'user_id': user['id'], 'workspace_id': workspaceId})
     if not result.scalar_one_or_none(): raise ApiError(404, 'Team membership not found.', 'Not Found')
     await _audit(db, workspaceId, user['id'], 'team.member.left', team_id, json.dumps({'userId': user['id']}))
@@ -311,7 +302,7 @@ async def leave_team(team_id: str, workspaceId: str = Query(min_length=1), user:
 
 
 async def _change_member(team_id: str, target_id: str, workspace_id: str, actor_id: str, *, role: str | None, db: AsyncSession) -> dict[str, Any]:
-    await _manager(db, workspace_id, actor_id)
+    await manager(db, workspace_id, actor_id)
     if not await _team_row(db, team_id, workspace_id): raise ApiError(404, 'Team not found.', 'Not Found')
     if role:
         result = await db.execute(text('UPDATE team_members SET role = :role WHERE team_id = :team_id AND user_id = :user_id RETURNING user_id'), {'role': role, 'team_id': team_id, 'user_id': target_id})

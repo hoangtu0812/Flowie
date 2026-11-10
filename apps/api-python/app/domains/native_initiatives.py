@@ -16,10 +16,10 @@ from ..core.errors import ApiError
 from ..core.identifiers import cuid
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
+from ..modules.access.membership import manager
 from ..modules.access.project_scope import project_read_scope
 from ..modules.access.projects import workspace_access
 from ..modules.identity.auth import current_user
-from .teams import _manager
 
 router = APIRouter(prefix='/api/v1/_native/initiatives', tags=['native-initiatives'])
 public_router = APIRouter(prefix='/api/v1/initiatives', tags=['initiatives'])
@@ -195,7 +195,7 @@ async def list_initiatives(workspaceId: str = Query(min_length=1), user: Any = D
 @router.post('')
 @public_router.post('')
 async def create_initiative(payload: CreateInitiativeInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    await _manager(db, payload.workspaceId, user['id'])
+    await manager(db, payload.workspaceId, user['id'])
     owner_id = payload.ownerId or user['id']
     await _active_member(db, payload.workspaceId, owner_id)
     initiative_id, now = cuid(), utcnow()
@@ -218,7 +218,7 @@ async def get_initiative(initiative_id: str, workspaceId: str = Query(min_length
 @router.patch('/{initiative_id}')
 @public_router.patch('/{initiative_id}')
 async def update_initiative(initiative_id: str, payload: UpdateInitiativeInput, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    await _manager(db, workspaceId, user['id'])
+    await manager(db, workspaceId, user['id'])
     await _initiative(db, initiative_id, workspaceId, user['id'])
     values = payload.model_dump(exclude_unset=True)
     if 'ownerId' in values and values['ownerId']:
@@ -241,7 +241,7 @@ async def update_initiative(initiative_id: str, payload: UpdateInitiativeInput, 
 @router.delete('/{initiative_id}')
 @public_router.delete('/{initiative_id}')
 async def archive_initiative(initiative_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    await _manager(db, workspaceId, user['id'])
+    await manager(db, workspaceId, user['id'])
     await _initiative(db, initiative_id, workspaceId, user['id'])
     now = utcnow()
     await db.execute(text('UPDATE initiatives SET archived_at = :now, updated_at = :now WHERE id = :initiative_id'), {'initiative_id': initiative_id, 'now': now})
@@ -253,7 +253,7 @@ async def archive_initiative(initiative_id: str, workspaceId: str = Query(min_le
 @router.post('/{initiative_id}/projects')
 @public_router.post('/{initiative_id}/projects')
 async def link_project(initiative_id: str, payload: ProjectLinkInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    await _manager(db, payload.workspaceId, user['id'])
+    await manager(db, payload.workspaceId, user['id'])
     await _initiative(db, initiative_id, payload.workspaceId, user['id'])
     project = await db.execute(text(f'SELECT p.id,p.name FROM projects p WHERE p.id=:project_id AND {project_read_scope()}'), {'project_id': payload.projectId, 'workspace': payload.workspaceId, 'user': user['id']})
     row = project.mappings().first()
@@ -268,7 +268,7 @@ async def link_project(initiative_id: str, payload: ProjectLinkInput, user: Any 
 @router.delete('/{initiative_id}/projects/{project_id}')
 @public_router.delete('/{initiative_id}/projects/{project_id}')
 async def unlink_project(initiative_id: str, project_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    await _manager(db, workspaceId, user['id'])
+    await manager(db, workspaceId, user['id'])
     await _initiative(db, initiative_id, workspaceId, user['id'])
     await db.execute(text('DELETE FROM initiative_projects WHERE initiative_id = :initiative_id AND project_id = :project_id'), {'initiative_id': initiative_id, 'project_id': project_id})
     await _audit(db, workspaceId, user['id'], 'initiative.project.unlinked', initiative_id, {'projectId': project_id})
@@ -279,7 +279,7 @@ async def unlink_project(initiative_id: str, project_id: str, workspaceId: str =
 @router.post('/{initiative_id}/labels')
 @public_router.post('/{initiative_id}/labels')
 async def link_label(initiative_id: str, payload: InitiativeLabelLinkInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    await _manager(db, payload.workspaceId, user['id'])
+    await manager(db, payload.workspaceId, user['id'])
     await _initiative(db, initiative_id, payload.workspaceId, user['id'])
     result = await db.execute(
         text('SELECT id, name FROM labels WHERE id = :label_id AND workspace_id = :workspace_id'),
@@ -300,7 +300,7 @@ async def link_label(initiative_id: str, payload: InitiativeLabelLinkInput, user
 @router.delete('/{initiative_id}/labels/{label_id}')
 @public_router.delete('/{initiative_id}/labels/{label_id}')
 async def unlink_label(initiative_id: str, label_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    await _manager(db, workspaceId, user['id'])
+    await manager(db, workspaceId, user['id'])
     await _initiative(db, initiative_id, workspaceId, user['id'])
     await db.execute(
         text('DELETE FROM initiative_label_links WHERE initiative_id = :initiative_id AND label_id = :label_id'),
@@ -334,7 +334,7 @@ async def initiative_updates(initiative_id: str,workspaceId: str = Query(min_len
 @router.post('/{initiative_id}/updates')
 @public_router.post('/{initiative_id}/updates')
 async def create_update(initiative_id: str, payload: InitiativeUpdateInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    await _manager(db, payload.workspaceId, user['id'])
+    await manager(db, payload.workspaceId, user['id'])
     initiative = await _initiative(db, initiative_id, payload.workspaceId, user['id'])
     update_id, now = cuid(), utcnow()
     health = payload.health or initiative['health']
@@ -350,7 +350,7 @@ async def create_update(initiative_id: str, payload: InitiativeUpdateInput, user
 @router.post('/{initiative_id}/resources')
 @public_router.post('/{initiative_id}/resources')
 async def add_resource(initiative_id: str, payload: InitiativeResourceInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    await _manager(db, payload.workspaceId, user['id'])
+    await manager(db, payload.workspaceId, user['id'])
     await _initiative(db, initiative_id, payload.workspaceId, user['id'])
     parsed = urlparse(payload.url.strip())
     if parsed.scheme not in {'http', 'https'} or not parsed.netloc:

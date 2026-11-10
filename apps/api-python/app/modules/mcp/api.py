@@ -5,11 +5,11 @@ from typing import Literal
 from fastapi import Depends, Query, Request
 from sqlalchemy import text
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.pagination import CursorCodec
 from ...core.utc_responses import UtcAPIRouter as APIRouter
 from ...db.session import get_session
-from ..access.membership import _workspace_role
+from ..access.membership import workspace_role
 from ..identity.auth import current_user
 from . import connections, instructions
 from .contracts import ConnectionInput, ConnectionUpdateInput, InstructionsInput
@@ -25,7 +25,7 @@ async def resources(
     user=Depends(current_user),
     db=Depends(get_session),
 ):
-    await _workspace_role(db, workspaceId, user["id"])
+    await workspace_role(db, workspaceId, user["id"])
     policy = AccessPolicy(db, Principal("", workspaceId, user, frozenset(), (), ()))
     teams = (
         await db.execute(
@@ -168,13 +168,13 @@ AUDIT_SCOPE = """a.workspace_id=:workspace AND a.action LIKE 'mcp.%'
 
 
 async def _audit_params(db, workspace_id, user, window):
-    role = await _workspace_role(db, workspace_id, user["id"])
+    role = await workspace_role(db, workspace_id, user["id"])
     return {
         "workspace": workspace_id,
         "manager": role in {"OWNER", "ADMIN"},
         "user": user["id"],
         "span": AUDIT_WINDOWS.get(window),
-        "now": _utcnow(),
+        "now": utcnow(),
     }
 
 

@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.errors import ApiError
 from ...domains.agent import configured_provider
 from ..ai.calls import call_provider
@@ -151,7 +151,7 @@ async def analyze_workspace(db: AsyncSession, workspace_id: str, settings: Any) 
                              AND (i.analyzed_at IS NULL OR i.published_at >= :since)
                            ORDER BY (i.analyzed_at IS NULL) DESC, i.published_at DESC LIMIT :limit'''
                     ),
-                    {'category_id': category['id'], 'since': _utcnow() - timedelta(hours=24), 'limit': BATCH_ITEMS},
+                    {'category_id': category['id'], 'since': utcnow() - timedelta(hours=24), 'limit': BATCH_ITEMS},
                 )
             ).mappings().all()
             await db.commit()
@@ -161,7 +161,7 @@ async def analyze_workspace(db: AsyncSession, workspace_id: str, settings: Any) 
             except Exception as failure:  # Any AI failure leaves the items for the next fetch.
                 logger.warning('News AI failed for category %s: %s', category['id'], getattr(failure, 'message', failure))
                 break
-            now = _utcnow()
+            now = utcnow()
             batch_labelled = 0
             for index, result in results.items():
                 if items[index]['analyzed_at'] is None:

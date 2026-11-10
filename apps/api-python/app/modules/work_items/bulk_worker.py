@@ -3,9 +3,9 @@ import json
 
 from sqlalchemy import text
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.errors import ApiError
-from ...core.identifiers import _cuid
+from ...core.identifiers import cuid
 from ..operations.heartbeats import progress
 from .contracts import UpdateIssueInput
 from .issue_search import issue_scope
@@ -130,20 +130,20 @@ async def process_bulk_item(factory):
                     if len(changes) == 1:
                         await db.execute(
                             text("UPDATE issues SET updated_at=:now WHERE id=:id"),
-                            {"now": _utcnow(), "id": issue["id"]},
+                            {"now": utcnow(), "id": issue["id"]},
                         )
                 await db.execute(
                     text("""INSERT INTO activities(id,workspace_id,issue_id,actor_id,type,data,created_at)
                     VALUES (:id,:workspace,:issue,:user,'issue.bulk_changed',CAST(:data AS jsonb),:now)"""),
                     {
-                        "id": _cuid(),
+                        "id": cuid(),
                         "workspace": operation["workspace_id"],
                         "issue": issue["id"],
                         "user": user["id"],
                         "data": json.dumps(
                             {"operationId": operation["id"], "fields": list(changes)}
                         ),
-                        "now": _utcnow(),
+                        "now": utcnow(),
                     },
                 )
         except ApiError as error:

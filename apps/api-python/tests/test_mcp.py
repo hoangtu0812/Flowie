@@ -552,7 +552,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(denied.status_code, 401)
 
     async def test_password_reset_expires_is_single_use_and_revokes_credentials(self):
-        from app.core.identifiers import _hash_token
+        from app.core.identifiers import hash_token
         from app.modules.identity.auth import password_hasher
         from app.modules.identity.password_reset import (
             consume_reset,
@@ -579,7 +579,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                     {"id": self.user["id"]},
                 )
             ).scalar_one()
-            self.assertEqual(stored, _hash_token(token))
+            self.assertEqual(stored, hash_token(token))
             self.assertNotEqual(stored, token)
             await db.execute(
                 text(

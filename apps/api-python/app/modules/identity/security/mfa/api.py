@@ -131,10 +131,10 @@ async def verify(payload: Verification, request: Request, db=Depends(get_session
     raw = request.cookies.get(COOKIE)
     if not raw:
         raise ApiError(401, "Sign in again to start verification.", "Unauthorized")
-    from .....core.identifiers import _hash_token
+    from .....core.identifiers import hash_token
 
     await limit_request(
-        db, settings.auth_jwt_secret, "mfa-challenge", _hash_token(raw), 20
+        db, settings.auth_jwt_secret, "mfa-challenge", hash_token(raw), 20
     )
     user, tokens, next_path = await finish_login(
         db, raw, payload.code, payload.kind, request, settings

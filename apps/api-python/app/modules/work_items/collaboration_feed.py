@@ -6,7 +6,7 @@ from sqlalchemy import text
 
 from ...core.errors import ApiError
 from ...core.pagination import CursorCodec
-from .issue_queries import _issue_row
+from .issue_queries import issue_row
 
 
 async def comment_rows(
@@ -94,7 +94,7 @@ async def comment_page(
     threaded=False,
     parent_id=None,
 ):
-    await _issue_row(db, issue_id, workspace_id, user_id)
+    await issue_row(db, issue_id, workspace_id, user_id)
     filters = {
         "workspace": workspace_id,
         "issue": issue_id,
@@ -175,11 +175,11 @@ async def activity_page(
     limit=50,
     cursor=None,
 ):
-    from ..access.projects import _team_access, _workspace_access
+    from ..access.projects import team_access, workspace_access
 
-    await _workspace_access(db, workspace_id, user_id)
+    await workspace_access(db, workspace_id, user_id)
     if issue_id:
-        await _issue_row(db, issue_id, workspace_id, user_id)
+        await issue_row(db, issue_id, workspace_id, user_id)
         clause, entity = "a.issue_id=:entity", issue_id
     elif project_id:
         project = (
@@ -197,7 +197,7 @@ async def activity_page(
         if not project:
             raise ApiError(404, "Project not found.", "Not Found")
         if project["team_id"]:
-            await _team_access(db, workspace_id, project["team_id"], user_id)
+            await team_access(db, workspace_id, project["team_id"], user_id)
         clause, entity = "a.project_id=:entity", project_id
     else:
         raise ApiError(404, "An issue or project is required.", "Not Found")

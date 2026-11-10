@@ -2,9 +2,9 @@ from copy import deepcopy
 
 from sqlalchemy import text
 
-from ...core.clock import _utcnow
-from ..access.projects import _workspace_access
-from ..work_items.issue_queries import _issue_row
+from ...core.clock import utcnow
+from ..access.projects import workspace_access
+from ..work_items.issue_queries import issue_row
 from ..work_items.issue_search import issue_scope
 from .cycles import consume
 
@@ -41,7 +41,7 @@ def public_cycle(row, now):
 
 
 async def issue_sla(db, workspace, user, identifier, *, before=None, limit=20):
-    issue = await _issue_row(db, identifier, workspace, user["id"])
+    issue = await issue_row(db, identifier, workspace, user["id"])
     params = {"id": identifier, "workspace": workspace, "user": user["id"]}
     predicate = "c.issue_id=:id AND " + cycle_scope()
     total = (
@@ -118,7 +118,7 @@ async def issue_sla(db, workspace, user, identifier, *, before=None, limit=20):
         .mappings()
         .first()
     )
-    now = _utcnow()
+    now = utcnow()
     return {
         "data": {
             "issueVersion": issue["version"],
@@ -143,9 +143,9 @@ async def issue_sla(db, workspace, user, identifier, *, before=None, limit=20):
 
 
 async def sla_report(db, workspace, user, options):
-    await _workspace_access(db, workspace, user["id"])
+    await workspace_access(db, workspace, user["id"])
     scope, params = issue_scope(workspace, user["id"], options)
-    params["now"] = _utcnow()
+    params["now"] = utcnow()
     # Select the latest cycle before checking historical team visibility.
     query = (
         """WITH scoped AS (SELECT i.id,i.sla_opt_out """

@@ -10,9 +10,9 @@ from fastapi.encoders import jsonable_encoder
 from pydantic import ValidationError
 from sqlalchemy import text
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.errors import ApiError
-from ...core.identifiers import _cuid
+from ...core.identifiers import cuid
 from ...domains.team_insights import hcm_today
 from .commands import CommandService
 from .compact import compact_comment, compact_issue
@@ -46,7 +46,7 @@ class ToolApplication:
         return role == "ADMIN_VIEWER"
 
     async def call(self, principal, name: str, arguments: dict) -> dict:
-        correlation, started = _cuid(), monotonic()
+        correlation, started = cuid(), monotonic()
         tool = TOOLS.get(name)
         try:
             if not tool:
@@ -272,12 +272,12 @@ class ToolApplication:
             text("""INSERT INTO audit_logs (id,workspace_id,actor_id,action,entity_type,entity_id,metadata,created_at)
             VALUES (:id,:workspace,:actor,:action,'mcp-tool',:entity,CAST(:metadata AS jsonb),:now)"""),
             {
-                "id": _cuid(),
+                "id": cuid(),
                 "workspace": principal.workspace_id,
                 "actor": principal.user["id"],
                 "action": f"mcp.{name}.{outcome}",
                 "entity": entity_id,
-                "now": _utcnow(),
+                "now": utcnow(),
                 "metadata": json.dumps(
                     {
                         "connectionId": principal.connection_id,

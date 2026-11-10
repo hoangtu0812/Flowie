@@ -3,10 +3,10 @@ from hashlib import sha256
 
 from sqlalchemy import text
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.errors import ApiError
-from ...core.identifiers import _cuid
-from ..access.projects import _team_access, _workspace_manager
+from ...core.identifiers import cuid
+from ..access.projects import team_access, workspace_manager
 from ..audit.write import record_change
 from ..work_items.issue_rules import _validate_references
 from .calendar import next_occurrence
@@ -20,8 +20,8 @@ async def validate_template(db, workspace, team, template):
 
 
 async def create_schedule(db, user, payload):
-    await _workspace_manager(db, payload.workspaceId, user["id"])
-    await _team_access(db, payload.workspaceId, payload.teamId, user["id"])
+    await workspace_manager(db, payload.workspaceId, user["id"])
+    await team_access(db, payload.workspaceId, payload.teamId, user["id"])
     fingerprint = sha256(
         json.dumps(payload.model_dump(mode="json"), sort_keys=True).encode()
     ).hexdigest()
@@ -62,7 +62,7 @@ async def create_schedule(db, user, payload):
     template = await validate_template(
         db, payload.workspaceId, payload.teamId, payload.template
     )
-    identifier, now = _cuid(), _utcnow()
+    identifier, now = cuid(), utcnow()
     await db.execute(
         text("""INSERT INTO recurring_schedules(id,workspace_id,team_id,created_by,request_key,fingerprint,name,rule,template,due_after_minutes,next_run_at,created_at,updated_at)
         VALUES (:id,:workspace,:team,:actor,:key,:fingerprint,:name,CAST(:rule AS jsonb),CAST(:template AS jsonb),:due,:next,:now,:now)"""),
@@ -105,11 +105,11 @@ def check_version(row, expected):
 
 
 async def update_schedule(db, user, workspace, identifier, payload):
-    await _workspace_manager(db, workspace, user["id"])
+    await workspace_manager(db, workspace, user["id"])
     row = await schedule_row(db, workspace, user, identifier, lock=True)
     check_version(row, payload.expectedVersion)
     template = await validate_template(db, workspace, row["team_id"], payload.template)
-    now = _utcnow()
+    now = utcnow()
     await db.execute(
         text("""UPDATE recurring_schedules SET name=:name,rule=CAST(:rule AS jsonb),template=CAST(:template AS jsonb),due_after_minutes=:due,
         next_run_at=:next,version=version+1,updated_at=:now WHERE id=:id"""),
@@ -147,7 +147,7 @@ def run_snapshot(row):
 
 
 async def schedule_command(db, user, workspace, identifier, command, payload):
-    await _workspace_manager(db, workspace, user["id"])
+    await workspace_manager(db, workspace, user["id"])
     row = await schedule_row(db, workspace, user, identifier, lock=True)
     if command == "run-now" and payload.requestKey:
         existing = (
@@ -161,7 +161,7 @@ async def schedule_command(db, user, workspace, identifier, command, payload):
         if existing:
             return await public_schedule(db, workspace, user, row)
     check_version(row, payload.expectedVersion)
-    now = _utcnow()
+    now = utcnow()
     if command == "run-now":
         if not payload.requestKey:
             raise ApiError(400, "Run now requires an idempotency key.", "Bad Request")
@@ -181,7 +181,7 @@ async def schedule_command(db, user, workspace, identifier, command, payload):
             text("""INSERT INTO recurring_runs(id,schedule_id,occurrence_key,scheduled_for,state,snapshot,created_at)
             VALUES (:run,:id,:key,:now,'QUEUED',CAST(:snapshot AS jsonb),:now)"""),
             {
-                "run": _cuid(),
+                "run": cuid(),
                 "id": identifier,
                 "key": "manual:" + payload.requestKey,
                 "now": now,

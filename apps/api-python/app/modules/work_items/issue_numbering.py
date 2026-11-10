@@ -1,6 +1,6 @@
 from sqlalchemy import text
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.errors import ApiError
 
 
@@ -10,7 +10,7 @@ async def allocate_issue_number(db, workspace_id: str, team_id: str | None):
             text("""UPDATE teams SET issue_sequence=issue_sequence+1, updated_at=:now
                 WHERE id=:team AND workspace_id=:workspace AND archived_at IS NULL
                 RETURNING id, identifier, issue_sequence"""),
-            {"team": team_id, "workspace": workspace_id, "now": _utcnow()},
+            {"team": team_id, "workspace": workspace_id, "now": utcnow()},
         )
     else:
         result = await db.execute(

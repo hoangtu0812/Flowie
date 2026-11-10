@@ -7,9 +7,9 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.core.clock import _utcnow
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
-from app.core.identifiers import _cuid
+from app.core.identifiers import cuid
 from app.jobs.reminders import deliver_due_reminders
 from app.modules.identity.auth import create_workspace_bootstrap
 
@@ -43,12 +43,12 @@ async def verify_reminders():
         _async_database_url(os.environ["MCP_TEST_DATABASE_URL"])
     )
     factory = async_sessionmaker(engine)
-    user = _cuid()
-    due, future, archived, delivered = _cuid(), _cuid(), _cuid(), _cuid()
+    user = cuid()
+    due, future, archived, delivered = cuid(), cuid(), cuid(), cuid()
     seed = None
     try:
         async with factory() as db:
-            now = _utcnow()
+            now = utcnow()
             await db.execute(
                 text(
                     "INSERT INTO users(id,name,email,status,email_verified_at,created_at,updated_at) VALUES (:id,'Reminder fixture',:email,'ACTIVE',:now,:now,:now)"
@@ -59,7 +59,7 @@ async def verify_reminders():
                 db,
                 user_id=user,
                 organization_name="Reminders",
-                workspace_name=_cuid(),
+                workspace_name=cuid(),
                 now=now,
             )
             status = (
@@ -115,7 +115,7 @@ async def verify_reminders():
                         " VALUES (:id,:issue,:user,:remind_at,:delivered_at,:now,:now)"
                     ),
                     {
-                        "id": _cuid(),
+                        "id": cuid(),
                         "issue": issue_id,
                         "user": user,
                         "remind_at": at,

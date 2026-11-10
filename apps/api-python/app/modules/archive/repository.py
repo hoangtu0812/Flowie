@@ -2,7 +2,7 @@ from sqlalchemy import text
 
 from ...core.errors import ApiError
 from ...core.pagination import CursorCodec
-from ..access.projects import _workspace_access, _workspace_manager
+from ..access.projects import workspace_access, workspace_manager
 
 TABLES = {
     "issue": ("issues", "title"),
@@ -23,9 +23,9 @@ def scope(kind):
 
 
 async def access(db, workspace, user, kind):
-    await _workspace_access(db, workspace, user)
+    await workspace_access(db, workspace, user)
     if kind == "initiative":
-        await _workspace_manager(db, workspace, user)
+        await workspace_manager(db, workspace, user)
 
 
 async def record(db, workspace, user, kind, identifier, *, lock=False):

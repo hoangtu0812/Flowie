@@ -2,7 +2,7 @@ from typing import Annotated, Literal
 
 from fastapi import Depends, Query, Request
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.utc_responses import UtcAPIRouter
 from ...db.session import get_session
 from ..identity.auth import current_user
@@ -17,7 +17,7 @@ router = UtcAPIRouter(prefix="/api/v1/recurring-schedules", tags=["recurring-iss
 
 @router.post("/preview")
 async def preview(payload: ScheduleRule, user=Depends(current_user)):
-    return {"data": {"occurrences": upcoming(payload, _utcnow())}}
+    return {"data": {"occurrences": upcoming(payload, utcnow())}}
 
 
 @router.get("")

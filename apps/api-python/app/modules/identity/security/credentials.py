@@ -1,6 +1,6 @@
 from sqlalchemy import text
 
-from ....core.clock import _utcnow
+from ....core.clock import utcnow
 from ....core.errors import ApiError
 from ...audit.write import record_change
 from .events import record_event
@@ -23,7 +23,7 @@ async def revoke_credential(db, user, request, kind, identifier):
                 text(
                     "UPDATE mcp_connections SET revoked_at=:now WHERE id=:id AND user_id=:user AND revoked_at IS NULL RETURNING workspace_id"
                 ),
-                {"id": identifier, "user": user["id"], "now": _utcnow()},
+                {"id": identifier, "user": user["id"], "now": utcnow()},
             )
         ).scalar_one_or_none()
         if workspace is None:
@@ -42,7 +42,7 @@ async def revoke_credential(db, user, request, kind, identifier):
                 text(
                     "UPDATE personal_api_keys SET revoked_at=:now WHERE id=:id AND user_id=:user AND revoked_at IS NULL RETURNING id"
                 ),
-                {"id": identifier, "user": user["id"], "now": _utcnow()},
+                {"id": identifier, "user": user["id"], "now": utcnow()},
             )
         ).scalar_one_or_none()
         if row is None:

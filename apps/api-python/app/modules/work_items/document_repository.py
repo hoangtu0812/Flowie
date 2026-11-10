@@ -7,13 +7,13 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.errors import ApiError
-from ..access.membership import _workspace_role
+from ..access.membership import workspace_role
 
 
 async def _team_access(
     db: AsyncSession, workspace_id: str, team_id: str | None, user_id: str
 ) -> None:
-    await _workspace_role(db, workspace_id, user_id)
+    await workspace_role(db, workspace_id, user_id)
     if not team_id:
         return
     member = await db.execute(

@@ -8,8 +8,8 @@ from datetime import timedelta
 import pytest
 from sqlalchemy import text
 
-from app.core.clock import _utcnow
-from app.core.identifiers import _cuid
+from app.core.clock import utcnow
+from app.core.identifiers import cuid
 from app.domains.native_pulse import pulse
 from tests.seeded_workspace import seeded_workspace
 
@@ -30,11 +30,11 @@ async def verify():
             # In the workspace but not in its only team.
             # VI: Ở trong workspace nhưng không ở trong team duy nhất của nó.
             outsider = await member(db, ws, name="Outsider")
-            now = _utcnow()
+            now = utcnow()
             status = (await db.execute(
                 text("SELECT id FROM issue_statuses WHERE workspace_id=:ws ORDER BY position LIMIT 1"), {"ws": ws}
             )).scalar_one()
-            issue, project = _cuid(), _cuid()
+            issue, project = cuid(), cuid()
             await db.execute(
                 text("""INSERT INTO issues(id,workspace_id,team_id,status_id,identifier,number,title,creator_id,created_at,updated_at)
                 VALUES (:id,:ws,:team,:status,'PUL-1',1,'Team only',:user,:now,:now)"""),
@@ -52,10 +52,10 @@ async def verify():
                 await db.execute(
                     text("""INSERT INTO activities(id,workspace_id,issue_id,project_id,actor_id,type,created_at)
                     VALUES (:id,:ws,:issue,:project,:user,:type,:at)"""),
-                    {"id": _cuid(), "ws": ws, "issue": issue_id, "project": project_id,
+                    {"id": cuid(), "ws": ws, "issue": issue_id, "project": project_id,
                      "user": owner["id"], "type": kind, "at": at},
                 )
-            update = _cuid()
+            update = cuid()
             await db.execute(
                 text("""INSERT INTO project_updates(id,workspace_id,project_id,author_id,body,health,created_at,updated_at)
                 VALUES (:id,:ws,:project,:user,'On track',:health,:at,:at)"""),

@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.errors import ApiError
 from ...core.utc_responses import UtcAPIRouter as APIRouter
 from ...db.session import get_session
@@ -128,7 +128,7 @@ async def put_project_folder(
                 """UPDATE projects SET sharepoint_folder_url = :url, updated_at = :now
                    WHERE id = :id AND workspace_id = :workspace AND archived_at IS NULL RETURNING id"""
             ),
-            {"url": checked_folder_url(payload.folderUrl), "now": _utcnow(), "id": projectId, "workspace": workspaceId},
+            {"url": checked_folder_url(payload.folderUrl), "now": utcnow(), "id": projectId, "workspace": workspaceId},
         )
     ).scalar_one_or_none()
     if not updated:

@@ -7,10 +7,10 @@ from pydantic import ValidationError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.core.clock import _utcnow
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.core.identifiers import _cuid
+from app.core.identifiers import cuid
 from app.modules.agent_runs.operations import LimitsInput, overview, put_limits
 from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.mcp.quotas import consume_quota, update_limits
@@ -36,10 +36,10 @@ def test_workspace_quota_is_atomic_and_management_is_restricted():
             _async_database_url(os.environ["MCP_TEST_DATABASE_URL"])
         )
         factory = async_sessionmaker(engine)
-        user, member, seed = _cuid(), _cuid(), None
+        user, member, seed = cuid(), cuid(), None
         try:
             async with factory() as db:
-                now = _utcnow()
+                now = utcnow()
                 for identifier in [user, member]:
                     await db.execute(
                         text(
@@ -55,7 +55,7 @@ def test_workspace_quota_is_atomic_and_management_is_restricted():
                     db,
                     user_id=user,
                     organization_name="Quota",
-                    workspace_name=_cuid(),
+                    workspace_name=cuid(),
                     now=now,
                 )
                 await db.execute(
@@ -63,7 +63,7 @@ def test_workspace_quota_is_atomic_and_management_is_restricted():
                         "INSERT INTO workspace_members(id,workspace_id,user_id,role,status,created_at,updated_at) VALUES (:id,:workspace,:user,'MEMBER','ACTIVE',:now,:now)"
                     ),
                     {
-                        "id": _cuid(),
+                        "id": cuid(),
                         "workspace": seed["workspace_id"],
                         "user": member,
                         "now": now,
@@ -118,8 +118,8 @@ def test_overview_sums_provider_calls_by_feature_and_lists_failures():
         )
         try:
             async with async_sessionmaker(engine)() as db:
-                now = _utcnow()
-                user = _cuid()
+                now = utcnow()
+                user = cuid()
                 await db.execute(
                     text(
                         "INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,'Usage fixture',:email,'ACTIVE',:now,:now)"
@@ -131,7 +131,7 @@ def test_overview_sums_provider_calls_by_feature_and_lists_failures():
                         db,
                         user_id=user,
                         organization_name="Usage",
-                        workspace_name=_cuid(),
+                        workspace_name=cuid(),
                         now=now,
                     )
                 )["workspace_id"]
@@ -149,7 +149,7 @@ def test_overview_sums_provider_calls_by_feature_and_lists_failures():
                                VALUES (:id,:w,:f,'OPENAI','m',:o,:s,:i,:t,1,100,:at)"""
                         ),
                         {
-                            "id": _cuid(), "w": workspace, "f": feature, "o": outcome, "s": status,
+                            "id": cuid(), "w": workspace, "f": feature, "o": outcome, "s": status,
                             "i": tokens_in, "t": tokens_out, "at": now - timedelta(days=days),
                         },
                     )

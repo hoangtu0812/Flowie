@@ -3,9 +3,9 @@ from datetime import timedelta
 
 from sqlalchemy import text
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.errors import ApiError
-from ..access.projects import _team_access
+from ..access.projects import team_access
 from ..operations.heartbeats import progress
 from ..work_items.contracts import CreateIssueInput
 from ..work_items.issues import create_issue
@@ -18,13 +18,13 @@ async def process_import_row(factory):
             text(
                 "UPDATE issue_import_batches SET state='EXPIRED' WHERE state='PREVIEW' AND expires_at<=:now"
             ),
-            {"now": _utcnow()},
+            {"now": utcnow()},
         )
         await db.execute(
             text(
                 "DELETE FROM issue_import_batches WHERE state NOT IN ('RUNNING','QUEUED') AND created_at<:old"
             ),
-            {"old": _utcnow() - timedelta(days=30)},
+            {"old": utcnow() - timedelta(days=30)},
         )
         batch = (
             (
@@ -74,7 +74,7 @@ async def process_import_row(factory):
         state, code, issue = "SUCCEEDED", None, None
         try:
             async with db.begin_nested():
-                await _team_access(
+                await team_access(
                     db, batch["workspace_id"], batch["team_id"], user["id"]
                 )
                 # Serialize external keys across batches so creation and deduplication commit atomically.

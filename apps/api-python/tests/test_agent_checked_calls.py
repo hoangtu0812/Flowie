@@ -9,10 +9,10 @@ from pydantic import ValidationError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.core.clock import _utcnow
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.core.identifiers import _cuid
+from app.core.identifiers import cuid
 from app.domains import agent
 from app.modules.identity.auth import create_workspace_bootstrap
 
@@ -92,7 +92,7 @@ def _request():
 
 
 async def _user(db, now):
-    user = _cuid()
+    user = cuid()
     await db.execute(
         text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,'Agent',:email,'ACTIVE',:now,:now)"),
         {'id': user, 'email': user + '@example.test', 'now': now},
@@ -106,7 +106,7 @@ async def _member(db, workspace, user, now):
             """INSERT INTO workspace_members(id,workspace_id,user_id,role,status,created_at,updated_at)
                VALUES (:id,:w,:u,'MEMBER','ACTIVE',:now,:now)"""
         ),
-        {'id': _cuid(), 'w': workspace, 'u': user, 'now': now},
+        {'id': cuid(), 'w': workspace, 'u': user, 'now': now},
     )
 
 
@@ -117,7 +117,7 @@ async def _provider(db, workspace, enabled=True):
                VALUES (:id,:w,'OPENAI','https://api.openai.com/v1','m',:key,:enabled,:now)"""
         ),
         {
-            'id': _cuid(), 'w': workspace, 'enabled': enabled, 'now': _utcnow(),
+            'id': cuid(), 'w': workspace, 'enabled': enabled, 'now': utcnow(),
             'key': Fernet(KEY.encode('ascii')).encrypt(b'secret').decode('ascii'),
         },
     )
@@ -128,10 +128,10 @@ def _with_workspace(verify):
         engine = create_async_engine(_async_database_url(os.environ['MCP_TEST_DATABASE_URL']))
         try:
             async with async_sessionmaker(engine)() as db:
-                now = _utcnow()
+                now = utcnow()
                 owner = await _user(db, now)
                 seed = await create_workspace_bootstrap(
-                    db, user_id=owner, organization_name='Agent', workspace_name=_cuid(), now=now
+                    db, user_id=owner, organization_name='Agent', workspace_name=cuid(), now=now
                 )
                 await db.commit()
                 await verify(db, owner, seed, *args)
@@ -149,7 +149,7 @@ async def verify_limit(db, owner, seed, monkeypatch):
     monkeypatch.setattr(agent, 'AGENT_HOURLY_LIMIT', 2)
     workspace = seed['workspace_id']
     await _provider(db, workspace)
-    other = await _user(db, _utcnow())
+    other = await _user(db, utcnow())
     await db.commit()
     request = _request()
     for _ in range(2):
@@ -188,8 +188,8 @@ async def verify_check(db, owner, seed, monkeypatch):
     # A disabled provider can be tested, because that is how it is checked before activation.
     # VI: Provider đang tắt vẫn thử được, vì đó là cách kiểm tra trước khi kích hoạt.
     await _provider(db, workspace, enabled=False)
-    member = await _user(db, _utcnow())
-    await _member(db, workspace, member, _utcnow())
+    member = await _user(db, utcnow())
+    await _member(db, workspace, member, utcnow())
     await db.commit()
     with pytest.raises(ApiError) as denied:
         await agent.check_provider('OPENAI', request, workspace, {'id': member}, db)
@@ -220,11 +220,11 @@ def test_mentioned_issues_are_limited_to_the_askers_teams():
 
 async def verify_mentions(db, owner, seed):
     workspace = seed['workspace_id']
-    now = _utcnow()
+    now = utcnow()
     status = (
         await db.execute(text('SELECT id FROM issue_statuses WHERE workspace_id = :w LIMIT 1'), {'w': workspace})
     ).scalar_one()
-    prefix = 'M' + _cuid()[:6].upper().replace('-', 'X')
+    prefix = 'M' + cuid()[:6].upper().replace('-', 'X')
     for number, archived in ((1, None), (2, now)):
         await db.execute(
             text(
@@ -232,7 +232,7 @@ async def verify_mentions(db, owner, seed):
                    VALUES (:id,:w,:t,:s,:identifier,:n,:title,:description,:u,:archived,:now,:now)"""
             ),
             {
-                'id': _cuid(), 'w': workspace, 't': seed['team_id'], 's': status, 'identifier': f'{prefix}-{number}',
+                'id': cuid(), 'w': workspace, 't': seed['team_id'], 's': status, 'identifier': f'{prefix}-{number}',
                 'n': number, 'title': f'Issue {number}', 'description': 'x' * 2000, 'u': owner, 'archived': archived, 'now': now,
             },
         )

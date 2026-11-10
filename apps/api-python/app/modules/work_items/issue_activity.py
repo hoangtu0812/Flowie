@@ -7,8 +7,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.audit_context import audit_agent, audit_source
-from ...core.clock import _utcnow
-from ...core.identifiers import _cuid
+from ...core.clock import utcnow
+from ...core.identifiers import cuid
 
 
 async def _write_activity(
@@ -25,7 +25,7 @@ async def _write_activity(
                VALUES (:id, :workspace_id, :issue_id, :actor_id, :action, CAST(:data AS jsonb), :now)"""
         ),
         {
-            "id": _cuid(),
+            "id": cuid(),
             "workspace_id": workspace_id,
             "issue_id": issue_id,
             "actor_id": user_id,
@@ -37,7 +37,7 @@ async def _write_activity(
                     **({"agent": agent} if (agent := audit_agent.get()) else {}),
                 }
             ),
-            "now": _utcnow(),
+            "now": utcnow(),
         },
     )
 

@@ -5,7 +5,7 @@ import unicodedata
 from sqlalchemy import text
 
 from ...core.pagination import CursorCodec, literal_search
-from ..access.membership import _workspace_role
+from ..access.membership import workspace_role
 from ..access.project_scope import project_read_scope
 from ..work_items.issue_search import NORMALIZED, VIETNAMESE
 
@@ -29,7 +29,7 @@ FROM workspace_members wm JOIN users u ON u.id=wm.user_id WHERE wm.workspace_id=
 async def search(
     db, workspace, user, secret, query, *, kind=None, limit=25, cursor=None
 ):
-    await _workspace_role(db, workspace, user)
+    await workspace_role(db, workspace, user)
     normalized = "".join(
         "d" if char == "đ" else char
         for char in unicodedata.normalize("NFD", query.lower())

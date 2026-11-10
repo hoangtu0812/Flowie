@@ -42,12 +42,3 @@ async def team_access(
     )
     if result.scalar_one_or_none() is None:
         raise ApiError(403, "You do not have access to this team.", "Forbidden")
-
-
-# shortcut: private aliases kept for callers not yet moved out of app/domains; delete them once
-# DTD-523 has switched every caller to the public names.
-# VI: shortcut: alias nội bộ giữ cho các nơi gọi chưa chuyển khỏi app/domains; xoá khi DTD-523 đã
-# VI: chuyển mọi nơi gọi sang tên công khai.
-_workspace_access = workspace_access
-_workspace_manager = workspace_manager
-_team_access = team_access

@@ -12,7 +12,7 @@ from ...core.errors import ApiError
 from ...core.utc_responses import UtcAPIRouter
 from ...db.session import get_session
 from ..access.project_scope import project_read_scope
-from ..access.projects import _workspace_access
+from ..access.projects import workspace_access
 from ..identity.auth import current_user
 
 router = UtcAPIRouter(prefix="/api/v1/manual-order", tags=["manual-order"])
@@ -56,7 +56,7 @@ async def reorder(
 ):
     from .issue_search import issue_scope
 
-    await _workspace_access(db, payload.workspaceId, user["id"])
+    await workspace_access(db, payload.workspaceId, user["id"])
     if payload.sourceId == payload.targetId:
         raise ApiError(400, "Choose a different target.", "Bad Request")
     await db.execute(

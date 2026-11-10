@@ -18,9 +18,9 @@ from typing import Any, Literal
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.errors import ApiError
-from ...core.identifiers import _cuid
+from ...core.identifiers import cuid
 from ..sharepoint.graph import viewer_url
 from .document_repository import _document_by_id, _documents, _team_access
 
@@ -96,13 +96,13 @@ async def default_folder(db: AsyncSession, workspace_id: str, team_id: str) -> A
     folder = (await db.execute(query, params)).mappings().first()
     if folder:
         return folder
-    now = _utcnow()
+    now = utcnow()
     await db.execute(
         text(
             """INSERT INTO document_folders (id, workspace_id, team_id, kind, name, icon, position, created_at, updated_at)
                VALUES (:id, :workspace, :team, 'general', :name, '📁', 0, :now, :now)"""
         ),
-        {"id": _cuid(), **params, "name": DEFAULT_FOLDER_NAME, "now": now},
+        {"id": cuid(), **params, "name": DEFAULT_FOLDER_NAME, "now": now},
     )
     return (await db.execute(query, params)).mappings().first()
 
@@ -312,7 +312,7 @@ async def create_folder(
             {"team": team_id, "parent": parent_id},
         )
     ).scalar_one()
-    folder_id, now = _cuid(), _utcnow()
+    folder_id, now = cuid(), utcnow()
     await db.execute(
         text(
             """INSERT INTO document_folders
@@ -396,7 +396,7 @@ async def update_folder(
             "kind": values.get("kind") or folder["kind"],
             "parent": parent_id,
             "number": number,
-            "now": _utcnow(),
+            "now": utcnow(),
         },
     )
     if (name, number, parent_id) != (folder["name"], folder["number"], folder["parent_id"]):
@@ -660,9 +660,9 @@ async def issue_documents(
     db: AsyncSession, *, workspace_id: str, user_id: str, issue_id: str
 ) -> list[dict[str, Any]]:
     """Documents linked to an issue the caller can read. VI: Tài liệu liên kết với issue."""
-    from .issue_queries import _issue_row
+    from .issue_queries import issue_row
 
-    issue = await _issue_row(db, issue_id, workspace_id, user_id)
+    issue = await issue_row(db, issue_id, workspace_id, user_id)
     linked = set(
         (
             await db.execute(
@@ -730,10 +730,10 @@ async def link_issue_document(
     đó, cùng quy tắc với tool MCP `link_document`. Một tài liệu liên kết nhiều issue và một issue
     liên kết nhiều tài liệu (`document_links` duy nhất theo cặp tài liệu và issue).
     """
-    from .issue_queries import _issue_row
+    from .issue_queries import issue_row
 
     document = await _readable_document(db, workspace_id, user_id, document_id)
-    issue = await _issue_row(db, issue_id, workspace_id, user_id)
+    issue = await issue_row(db, issue_id, workspace_id, user_id)
     if not linked:
         await db.execute(
             text(
@@ -749,5 +749,5 @@ async def link_issue_document(
             """INSERT INTO document_links (id, document_id, workspace_id, issue_id)
                VALUES (:id, :document, :workspace, :issue) ON CONFLICT DO NOTHING"""
         ),
-        {"id": _cuid(), "document": document_id, "workspace": workspace_id, "issue": issue["id"]},
+        {"id": cuid(), "document": document_id, "workspace": workspace_id, "issue": issue["id"]},
     )

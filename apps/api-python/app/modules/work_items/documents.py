@@ -5,9 +5,9 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.errors import ApiError
-from ...core.identifiers import _cuid
+from ...core.identifiers import cuid
 from ..audit.write import record_change
 from .contracts import CreateDocumentInput, UpdateDocumentInput
 from .document_repository import (
@@ -48,7 +48,7 @@ async def create_document(
                 {"folder_id": folder["id"]},
             )
         ).scalar_one()
-    document_id, now = _cuid(), _utcnow()
+    document_id, now = cuid(), utcnow()
     await db.execute(
         text("""INSERT INTO documents (id, workspace_id, team_id, folder_id, title, content, icon, source_type, source_url, doc_type, status, pinned, position, created_by, updated_by, created_at, updated_at)
                             VALUES (:id, :workspace_id, :team_id, :folder_id, :title, :content, :icon, :source_type, :source_url, :doc_type, :status, :pinned, :position, :user_id, :user_id, :now, :now)"""),
@@ -164,7 +164,7 @@ async def update_document(
                     current["source_url"] if source_type == "link" else None,
                 ),
             )
-        params = {"id": document_id, "updated_by": user["id"], "now": _utcnow()}
+        params = {"id": document_id, "updated_by": user["id"], "now": utcnow()}
         sets = []
         for field, column in columns.items():
             if field in values:
@@ -221,7 +221,7 @@ async def archive_document(document_id, workspaceId, user, db, expected_version=
         text(
             "UPDATE documents SET archived_at=:now,updated_at=:now,updated_by=:actor WHERE id=:id"
         ),
-        {"id": document_id, "actor": user["id"], "now": _utcnow()},
+        {"id": document_id, "actor": user["id"], "now": utcnow()},
     )
     await record_change(
         db, workspaceId, user["id"], "document.archived", "document", document_id

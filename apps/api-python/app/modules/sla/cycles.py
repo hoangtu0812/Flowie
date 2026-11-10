@@ -2,7 +2,7 @@ import json
 
 from sqlalchemy import text
 
-from ...core.identifiers import _cuid
+from ...core.identifiers import cuid
 from .calendar import add_working_seconds, working_seconds_between
 from .contracts import BusinessCalendar
 
@@ -74,7 +74,7 @@ async def insert_cycle(
     clock=None,
 ):
     clock = clock or initial_clock(policy, status, category, now)
-    identifier = _cuid()
+    identifier = cuid()
     snapshot = {
         **policy["values"],
         "issueTeamId": issue["team_id"],

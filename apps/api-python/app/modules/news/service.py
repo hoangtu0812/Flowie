@@ -9,9 +9,9 @@ import httpx
 from sqlalchemy import CursorResult, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.errors import ApiError
-from ...core.identifiers import _cuid
+from ...core.identifiers import cuid
 from ...services.microsoft_teams import masked_webhook
 from ..access.read_only import ADMIN_READ_ROLES
 from .ai import analyze_workspace
@@ -172,7 +172,7 @@ async def refresh_workspace(
         timeout=10, follow_redirects=False, headers={'User-Agent': 'FlowieNews/1.0'}
     ) as client:
         for source in sources:
-            now, error, entries = _utcnow(), None, []
+            now, error, entries = utcnow(), None, []
             try:
                 entries = parse_feed(await fetch_feed(source['feed_url'], client), now)
             except Exception as failure:  # Any feed failure is recorded on the source, never raised.
@@ -185,7 +185,7 @@ async def refresh_workspace(
                            ON CONFLICT (workspace_id, url) DO NOTHING'''
                     ),
                     {
-                        'id': _cuid(), 'workspace_id': workspace_id, 'source_id': source['id'],
+                        'id': cuid(), 'workspace_id': workspace_id, 'source_id': source['id'],
                         'title': entry['title'], 'url': entry['url'], 'summary': entry['summary'],
                         'published_at': entry['publishedAt'], 'now': now,
                     },
@@ -266,9 +266,9 @@ async def notify_workspace(
     for row in rows:
         groups.setdefault(row['category_id'], []).append(row)
     base = (getenv('APP_URL') or getenv('NEXT_PUBLIC_APP_URL') or '').rstrip('/')
-    recent = _utcnow() - timedelta(hours=24)
+    recent = utcnow() - timedelta(hours=24)
     delivered = 0
-    hold_after = _utcnow() - NEWS_AI_GRACE
+    hold_after = utcnow() - NEWS_AI_GRACE
     for items in groups.values():
         if await_labels and any(i['analyzed_at'] is None and i['created_at'] >= hold_after for i in items):
             continue
@@ -294,7 +294,7 @@ async def notify_workspace(
         if handled:
             await db.execute(
                 text('UPDATE news_items SET notified_at = :now WHERE id = ANY(:ids)'),
-                {'now': _utcnow(), 'ids': [item['id'] for item in items]},
+                {'now': utcnow(), 'ids': [item['id'] for item in items]},
             )
             await db.commit()
     return delivered

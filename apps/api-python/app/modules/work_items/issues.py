@@ -5,17 +5,17 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...core.clock import _utcnow
-from ...core.dates import _date
+from ...core.clock import utcnow
+from ...core.dates import parse_date
 from ...core.errors import ApiError
-from ...core.identifiers import _cuid
+from ...core.identifiers import cuid
 from ...modules.notifications.outbox import stage_notifications
 from ...services.notification_events import (
     create_notification_batch,
     issue_recipient_ids,
     team_recipient_ids,
 )
-from ..access.projects import _team_access, _workspace_access
+from ..access.projects import team_access, workspace_access
 from ..sla.policies import select_policy
 from ..sla.synchronization import initialize_cycle, locked_issue, safe_clock, sync_issue
 from .bug_contracts import BUG_COLUMNS
@@ -23,7 +23,7 @@ from .contracts import CreateIssueInput, UpdateIssueInput
 from .issue_activity import _transition, _write_activity
 from .issue_hierarchy import validate_parent
 from .issue_numbering import allocate_issue_number
-from .issue_queries import _issue_row, _person_name, _project_name, _status_name
+from .issue_queries import _person_name, _project_name, _status_name, issue_row
 from .issue_rules import (
     _enforce_start_gate,
     _validate_references,
@@ -38,20 +38,20 @@ async def create_issue(
     user: Any,
     db: AsyncSession,
 ) -> dict[str, dict[str, Any]]:
-    await _workspace_access(db, payload.workspaceId, user["id"])
+    await workspace_access(db, payload.workspaceId, user["id"])
     if payload.teamId:
-        await _team_access(db, payload.workspaceId, payload.teamId, user["id"])
+        await team_access(db, payload.workspaceId, payload.teamId, user["id"])
     await actor_context(db, user["id"])
     values = payload.model_dump()
     category = await _validate_references(
         db, payload.workspaceId, payload.teamId, values, creating=True
     )
     _validate_schedule_dates(
-        _date(values.get("startDate")), _date(values.get("targetDate"))
+        parse_date(values.get("startDate")), parse_date(values.get("targetDate"))
     )
     await _enforce_start_gate(
         db, payload.workspaceId, payload.teamId, None, category,
-        _date(values.get("targetDate")),
+        parse_date(values.get("targetDate")),
     )
     explicit_due = bool(values.get("dueDate"))
     sla_policy = (
@@ -75,7 +75,7 @@ async def create_issue(
             )
     sequence = await allocate_issue_number(db, payload.workspaceId, payload.teamId)
     identifier = sequence["issue_identifier"]
-    issue_id, now = _cuid(), _utcnow()
+    issue_id, now = cuid(), utcnow()
     sla_clock = (
         safe_clock(sla_policy, values["statusId"], category, now)
         if sla_policy
@@ -109,9 +109,9 @@ async def create_issue(
             "priority": values["priority"],
             "estimated_effort": values.get("estimatedEffort"),
             "actual_effort": values.get("actualEffort"),
-            "start_date": _date(values.get("startDate")),
-            "target_date": _date(values.get("targetDate")),
-            "due_date": _date(values.get("dueDate")),
+            "start_date": parse_date(values.get("startDate")),
+            "target_date": parse_date(values.get("targetDate")),
+            "due_date": parse_date(values.get("dueDate")),
             "creator_id": user["id"],
             "reporter_id": values.get("reporterId") or user["id"],
             "assignee_id": values.get("assigneeId"),
@@ -205,7 +205,7 @@ async def create_issue(
     await stage_notifications(
         db, created_batch, assignment_batch, workspace_id=payload.workspaceId
     )
-    return {"data": await _issue_row(db, issue_id, payload.workspaceId, user["id"])}
+    return {"data": await issue_row(db, issue_id, payload.workspaceId, user["id"])}
 
 
 async def update_issue(
@@ -221,7 +221,7 @@ async def update_issue(
         ),
         {"id": issue_id, "workspace": workspaceId},
     )
-    issue = await _issue_row(db, issue_id, workspaceId, user["id"])
+    issue = await issue_row(db, issue_id, workspaceId, user["id"])
     await actor_context(db, user["id"])
     values = payload.model_dump(exclude_unset=True)
     expected_version = values.pop("expectedVersion", None)
@@ -234,8 +234,8 @@ async def update_issue(
     if "statusId" in values and values["statusId"] is None:
         raise ApiError(400, "statusId cannot be empty.", "Bad Request")
     _validate_schedule_dates(
-        _date(values["startDate"]) if "startDate" in values else issue.get("startDate"),
-        _date(values["targetDate"])
+        parse_date(values["startDate"]) if "startDate" in values else issue.get("startDate"),
+        parse_date(values["targetDate"])
         if "targetDate" in values
         else issue.get("targetDate"),
     )
@@ -244,7 +244,7 @@ async def update_issue(
     )
     await _enforce_start_gate(
         db, workspaceId, issue["teamId"], previous_status_id, category,
-        _date(values["targetDate"]) if "targetDate" in values else issue.get("targetDate"),
+        parse_date(values["targetDate"]) if "targetDate" in values else issue.get("targetDate"),
     )
     if "releaseIds" in values:
         values["releaseIds"] = await _validate_release_ids(
@@ -291,11 +291,11 @@ async def update_issue(
         "subIssueSort": "sub_issue_sort",
     }
     sets: list[str] = []
-    params: dict[str, Any] = {"issue_id": issue_id, "now": _utcnow()}
+    params: dict[str, Any] = {"issue_id": issue_id, "now": utcnow()}
     for field, column in columns.items():
         if field in values:
             params[field] = (
-                _date(values[field])
+                parse_date(values[field])
                 if field in {"startDate", "targetDate", "dueDate"}
                 else values[field]
             )
@@ -304,8 +304,8 @@ async def update_issue(
             sets.append(f"{column} = :{field}")
     if category and values.get("statusId") != previous_status_id:
         sets.extend(["completed_at = :completed_at", "canceled_at = :canceled_at"])
-        params["completed_at"] = _utcnow() if category == "COMPLETED" else None
-        params["canceled_at"] = _utcnow() if category == "CANCELED" else None
+        params["completed_at"] = utcnow() if category == "COMPLETED" else None
+        params["canceled_at"] = utcnow() if category == "CANCELED" else None
     if values:
         await db.execute(
             text(
@@ -406,7 +406,7 @@ async def update_issue(
         before = (
             issue["startDate"].date().isoformat() if issue.get("startDate") else None
         )
-        after = _date(values["startDate"])
+        after = parse_date(values["startDate"])
         after_text = after.date().isoformat() if after else None
         if before != after_text:
             changes.append(("Start date", _transition(before, after_text)))
@@ -414,13 +414,13 @@ async def update_issue(
         before = (
             issue["targetDate"].date().isoformat() if issue.get("targetDate") else None
         )
-        after = _date(values["targetDate"])
+        after = parse_date(values["targetDate"])
         after_text = after.date().isoformat() if after else None
         if before != after_text:
             changes.append(("Target end date", _transition(before, after_text)))
     if "dueDate" in values:
         before = issue["dueDate"].date().isoformat() if issue.get("dueDate") else None
-        after = _date(values["dueDate"])
+        after = parse_date(values["dueDate"])
         after_text = after.date().isoformat() if after else None
         if before != after_text:
             changes.append(("Due date", _transition(before, after_text)))
@@ -502,4 +502,4 @@ async def update_issue(
     await stage_notifications(
         db, change_batch, assignment_batch, workspace_id=workspaceId
     )
-    return {"data": await _issue_row(db, issue_id, workspaceId, user["id"])}
+    return {"data": await issue_row(db, issue_id, workspaceId, user["id"])}

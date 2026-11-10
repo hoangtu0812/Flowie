@@ -13,7 +13,7 @@ from typing import Any
 from sqlalchemy import text
 
 from ...core.errors import ApiError
-from ...core.identifiers import _cuid
+from ...core.identifiers import cuid
 from ..work_items import documents
 from ..work_items.contracts import CreateDocumentInput, UpdateDocumentInput
 from ..work_items.document_tree import create_folder, scaffold_project_tree
@@ -234,7 +234,7 @@ async def upsert_feature_doc(db, principal, issue: dict, payload) -> dict[str, A
             """INSERT INTO document_links (id,document_id,workspace_id,project_id,issue_id)
             VALUES (:id,:document,:workspace,NULL,:issue) ON CONFLICT DO NOTHING"""
         ),
-        {"id": _cuid(), "document": result["id"], "workspace": workspace_id, "issue": issue["id"]},
+        {"id": cuid(), "document": result["id"], "workspace": workspace_id, "issue": issue["id"]},
     )
     return {
         "id": result["id"],

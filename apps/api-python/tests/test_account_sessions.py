@@ -10,10 +10,10 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from starlette.requests import Request
 
-from app.core.clock import _utcnow
+from app.core.clock import utcnow
 from app.core.config import Settings, _async_database_url
 from app.core.errors import ApiError
-from app.core.identifiers import _cuid, _hash_token
+from app.core.identifiers import cuid, hash_token
 from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.identity.security.realtime import serve_notifications
 from app.modules.identity.security.sessions import (
@@ -49,24 +49,24 @@ async def verify_sessions():
             "client": ("127.0.0.1", 50000),
         }
     )
-    user = {"id": _cuid(), "auth_version": 0, "name": "Session owner"}
-    other = {"id": _cuid(), "auth_version": 0, "name": "Another owner"}
+    user = {"id": cuid(), "auth_version": 0, "name": "Session owner"}
+    other = {"id": cuid(), "auth_version": 0, "name": "Another owner"}
     workspace = None
     try:
         async with factory() as db:
-            now = _utcnow()
+            now = utcnow()
             for actor in [user, other]:
                 await db.execute(
                     text(
                         "INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"
                     ),
-                    {**actor, "email": _cuid() + "@example.test", "now": now},
+                    {**actor, "email": cuid() + "@example.test", "now": now},
                 )
             seed = await create_workspace_bootstrap(
                 db,
                 user_id=user["id"],
                 organization_name="Session security",
-                workspace_name=_cuid(),
+                workspace_name=cuid(),
                 now=now,
             )
             workspace = seed["workspace_id"]
@@ -91,7 +91,7 @@ async def verify_sessions():
             )
             await db.commit()
         legacy = jwt.encode(
-            {"sub": user["id"], "ver": 0, "exp": _utcnow() + timedelta(minutes=5)},
+            {"sub": user["id"], "ver": 0, "exp": utcnow() + timedelta(minutes=5)},
             settings.auth_jwt_secret,
             algorithm="HS256",
         )
@@ -138,7 +138,7 @@ async def verify_sessions():
         async with factory() as db:
             with pytest.raises(ApiError):
                 await rotate_session(db, second_refresh, request, settings)
-            legacy_id, legacy_refresh = _cuid(), _cuid()
+            legacy_id, legacy_refresh = cuid(), cuid()
             await db.execute(
                 text(
                     "INSERT INTO sessions(id,user_id,refresh_token_hash,expires_at,created_at,last_used_at) VALUES (:id,:user,:hash,:expires,:now,:now)"
@@ -146,9 +146,9 @@ async def verify_sessions():
                 {
                     "id": legacy_id,
                     "user": user["id"],
-                    "hash": _hash_token(legacy_refresh),
-                    "expires": _utcnow() + timedelta(days=1),
-                    "now": _utcnow(),
+                    "hash": hash_token(legacy_refresh),
+                    "expires": utcnow() + timedelta(days=1),
+                    "now": utcnow(),
                 },
             )
             upgraded, _, _ = await rotate_session(db, legacy_refresh, request, settings)
@@ -191,7 +191,7 @@ async def verify_sessions():
             async with factory() as db:
                 await db.execute(
                     text("UPDATE sessions SET revoked_at=:now WHERE id=:id"),
-                    {"id": claims["sid"], "now": _utcnow()},
+                    {"id": claims["sid"], "now": utcnow()},
                 )
                 await db.commit()
             await asyncio.wait_for(socket.closed.wait(), 2)

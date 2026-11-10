@@ -1,17 +1,17 @@
 from sqlalchemy import text
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.errors import ApiError
 from ..audit.write import record_change
-from ..work_items.issue_queries import _issue_row
+from ..work_items.issue_queries import issue_row
 from ..work_items.lifecycle import actor_context
 from .synchronization import latest_cycle, locked_issue, reapply_policy
 
 
 async def apply_current_policy(db, workspace, user, identifier, payload):
-    await _issue_row(db, identifier, workspace, user["id"])
+    await issue_row(db, identifier, workspace, user["id"])
     await locked_issue(db, identifier)
-    issue = await _issue_row(db, identifier, workspace, user["id"])
+    issue = await issue_row(db, identifier, workspace, user["id"])
     cycle = await latest_cycle(db, identifier)
     if (
         issue["version"] != payload.expectedVersion
@@ -28,9 +28,9 @@ async def apply_current_policy(db, workspace, user, identifier, payload):
 
 
 async def retry_job(db, workspace, user, identifier, payload):
-    await _issue_row(db, identifier, workspace, user["id"])
+    await issue_row(db, identifier, workspace, user["id"])
     await locked_issue(db, identifier)
-    await _issue_row(db, identifier, workspace, user["id"])
+    await issue_row(db, identifier, workspace, user["id"])
     job = (
         (
             await db.execute(
@@ -55,7 +55,7 @@ async def retry_job(db, workspace, user, identifier, payload):
         text(
             "UPDATE issue_sla_jobs SET generation=generation+1,attempts=0,failed_at=NULL,last_error_code=NULL,next_attempt_at=:now WHERE issue_id=:id"
         ),
-        {"id": identifier, "now": _utcnow()},
+        {"id": identifier, "now": utcnow()},
     )
     await record_change(
         db, workspace, user["id"], "issue.sla_retry_requested", "issue", identifier

@@ -4,9 +4,9 @@ from secrets import token_urlsafe
 import jwt
 from sqlalchemy import text
 
-from ....core.clock import _utcnow
+from ....core.clock import utcnow
 from ....core.errors import ApiError
-from ....core.identifiers import _cuid, _hash_token
+from ....core.identifiers import cuid, hash_token
 from .events import record_event, request_metadata
 
 
@@ -39,7 +39,7 @@ def decode_access(token, settings):
 
 
 def access_token(user, session, settings):
-    now = _utcnow()
+    now = utcnow()
     return jwt.encode(
         {
             "sub": user["id"],
@@ -70,7 +70,7 @@ async def active_identity(db, claims):
                     "session": claims["sid"],
                     "user": claims["sub"],
                     "version": claims["ver"],
-                    "now": _utcnow(),
+                    "now": utcnow(),
                 },
             )
         )
@@ -117,7 +117,7 @@ async def create_session(
         and (mfa_verified_at is None or mfa_verified_at < configured["enabled_at"])
     ):
         raise expired()
-    identifier, refresh, now = _cuid(), token_urlsafe(48), _utcnow()
+    identifier, refresh, now = cuid(), token_urlsafe(48), utcnow()
     await db.execute(
         text(
             """INSERT INTO sessions(id,user_id,refresh_token_hash,ip_address,user_agent,expires_at,created_at,last_used_at,authenticated_at,auth_method,mfa_verified_at)
@@ -126,7 +126,7 @@ async def create_session(
         {
             "id": identifier,
             "user": user["id"],
-            "hash": _hash_token(refresh),
+            "hash": hash_token(refresh),
             **request_metadata(request),
             "expires": now + timedelta(days=settings.auth_refresh_token_ttl_days),
             "now": now,
@@ -144,20 +144,20 @@ async def rotate_session(db, refresh, request, settings):
     owner = (
         await db.execute(
             text("SELECT user_id FROM sessions WHERE refresh_token_hash=:hash"),
-            {"hash": _hash_token(refresh)},
+            {"hash": hash_token(refresh)},
         )
     ).scalar_one_or_none()
     if owner is None:
         raise expired()
     user = await lock_account(db, owner)
-    now = _utcnow()
+    now = utcnow()
     row = (
         (
             await db.execute(
                 text(
                     "SELECT * FROM sessions WHERE refresh_token_hash=:hash AND user_id=:user AND revoked_at IS NULL AND expires_at>:now FOR UPDATE"
                 ),
-                {"hash": _hash_token(refresh), "user": owner, "now": now},
+                {"hash": hash_token(refresh), "user": owner, "now": now},
             )
         )
         .mappings()
@@ -184,7 +184,7 @@ async def rotate_session(db, refresh, request, settings):
         ),
         {
             "id": row["id"],
-            "hash": _hash_token(replacement),
+            "hash": hash_token(replacement),
             "now": now,
             "expires": now + timedelta(days=settings.auth_refresh_token_ttl_days),
         },
@@ -219,7 +219,7 @@ async def revoke_sessions(db, user, request, *, identifier=None):
                     "id": identifier,
                     "session": user["session_id"],
                     "user": user["id"],
-                    "now": _utcnow(),
+                    "now": utcnow(),
                 },
             )
         )
@@ -261,7 +261,7 @@ async def logout_session(db, request, settings):
                     text(
                         "SELECT id,user_id FROM sessions WHERE refresh_token_hash=:hash AND revoked_at IS NULL AND expires_at>:now"
                     ),
-                    {"hash": _hash_token(refresh), "now": _utcnow()},
+                    {"hash": hash_token(refresh), "now": utcnow()},
                 )
             )
             .mappings()
@@ -278,7 +278,7 @@ async def logout_session(db, request, settings):
             text(
                 "UPDATE sessions SET revoked_at=:now WHERE id=:id AND user_id=:user AND revoked_at IS NULL RETURNING id"
             ),
-            {"id": row["id"], "user": row["user_id"], "now": _utcnow()},
+            {"id": row["id"], "user": row["user_id"], "now": utcnow()},
         )
     ).scalar_one_or_none()
     if changed:

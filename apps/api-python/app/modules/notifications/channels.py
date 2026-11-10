@@ -4,12 +4,12 @@ from fastapi import Depends, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.errors import ApiError
 from ...core.utc_responses import UtcAPIRouter
 from ...db.session import get_session
 from ...services.microsoft_teams import teams_available
-from ..access.membership import _workspace_role
+from ..access.membership import workspace_role
 from ..identity.auth import current_user
 from ..identity.reset_delivery import delivery_enabled
 from .access import notification_scope
@@ -41,7 +41,7 @@ async def channels(
     user=Depends(current_user),
     db=Depends(get_session),
 ):
-    await _workspace_role(db, workspaceId, user["id"])
+    await workspace_role(db, workspaceId, user["id"])
     row = (
         (
             await db.execute(
@@ -76,7 +76,7 @@ async def update_channels(
     user=Depends(current_user),
     db=Depends(get_session),
 ):
-    await _workspace_role(db, workspaceId, user["id"])
+    await workspace_role(db, workspaceId, user["id"])
     if payload.emailEnabled and not delivery_enabled(request.app.state.settings):
         raise ApiError(409, "Private email delivery is not configured.", "Conflict")
     if payload.emailEnabled and not user["email_verified_at"]:
@@ -95,7 +95,7 @@ async def update_channels(
             "desktop": payload.desktopEnabled,
             "teams": payload.teamsEnabled,
             "tickets": payload.ticketEmailEnabled,
-            "now": _utcnow(),
+            "now": utcnow(),
         },
     )
     await db.commit()
@@ -110,8 +110,8 @@ async def snooze(
     user=Depends(current_user),
     db=Depends(get_session),
 ):
-    await _workspace_role(db, workspaceId, user["id"])
-    until = _utcnow() + timedelta(minutes=payload.minutes) if payload.minutes else None
+    await workspace_role(db, workspaceId, user["id"])
+    until = utcnow() + timedelta(minutes=payload.minutes) if payload.minutes else None
     found = (
         await db.execute(
             text(
@@ -137,7 +137,7 @@ async def delivery_status(
     user=Depends(current_user),
     db=Depends(get_session),
 ):
-    await _workspace_role(db, workspaceId, user["id"])
+    await workspace_role(db, workspaceId, user["id"])
     rows = (
         await db.execute(
             text(f"""SELECT n.id AS "notificationId",e.attempts,e.delivered_at AS "deliveredAt",e.failed_at AS "failedAt",

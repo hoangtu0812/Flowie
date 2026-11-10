@@ -24,9 +24,9 @@ import jwt
 from fastapi import File, Request, UploadFile
 from sqlalchemy import text
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.errors import ApiError
-from ...core.identifiers import _cuid
+from ...core.identifiers import cuid
 from ...core.utc_responses import UtcAPIRouter as APIRouter
 from ...domains.native_attachments import (
     MAX_ATTACHMENT_BYTES,
@@ -61,13 +61,13 @@ def upload_link(settings, principal, issue: dict, filename: str) -> dict:
     """Signs an upload URL for `filename` on `issue`, which the caller has already authorized.
     VI: Ký URL upload cho `filename` vào `issue`, issue mà bên gọi đã kiểm tra quyền.
     """
-    now = _utcnow()
+    now = utcnow()
     expires = now + UPLOAD_TTL
     token = jwt.encode(
         {
             "iss": "flowie",
             "aud": UPLOAD_AUDIENCE,
-            "jti": _cuid(),
+            "jti": cuid(),
             "cid": principal.connection_id,
             "sub": principal.user["id"],
             "wid": principal.workspace_id,
@@ -172,7 +172,7 @@ async def upload_attachment(token: str, request: Request, file: UploadFile = Fil
             db, settings, principal.workspace_id, principal.user["id"], "issue",
             issue["id"], claims["name"], mime, body,
         )
-        correlation = _cuid()
+        correlation = cuid()
         result = {"data": data, "correlationId": correlation}
         await application.audit(
             db, principal, UPLOAD_TOOL, correlation, "succeeded", data["id"],

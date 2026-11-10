@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy import text
 
 from ...core.errors import ApiError
-from ...core.identifiers import _cuid
+from ...core.identifiers import cuid
 from ..work_items import comments, documents, issues
 from ..work_items.contracts import (
     CommentInput,
@@ -309,7 +309,7 @@ class CommandService:
             text("""INSERT INTO document_links (id,document_id,workspace_id,project_id,issue_id)
             VALUES (:id,:document,:workspace,:project,:issue) ON CONFLICT DO NOTHING"""),
             {
-                "id": _cuid(),
+                "id": cuid(),
                 "document": document_id,
                 "workspace": self.principal.workspace_id,
                 "project": project_id,

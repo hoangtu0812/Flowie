@@ -6,10 +6,10 @@ from pydantic import ValidationError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.core.clock import _utcnow
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.core.identifiers import _cuid
+from app.core.identifiers import cuid
 from app.modules.identity.preferences import (
     PreferencesUpdate,
     UiValues,
@@ -32,7 +32,7 @@ async def verify_preferences():
     )
     try:
         async with async_sessionmaker(engine)() as db:
-            user, other, now = _cuid(), _cuid(), _utcnow()
+            user, other, now = cuid(), cuid(), utcnow()
             for identifier in [user, other]:
                 await db.execute(
                     text(

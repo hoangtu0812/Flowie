@@ -26,8 +26,8 @@ from typing import Any, cast
 from sqlalchemy import CursorResult, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from ..core.clock import _utcnow
-from ..core.identifiers import _cuid
+from ..core.clock import utcnow
+from ..core.identifiers import cuid
 from ..modules.operations.heartbeats import progress
 
 logger = logging.getLogger(__name__)
@@ -249,7 +249,7 @@ async def _apply_auto_close(db: AsyncSession, team: dict[str, Any], now: datetim
             text('''INSERT INTO activities (id, workspace_id, issue_id, actor_id, type, data, created_at)
                     VALUES (:id, :workspace_id, :issue_id, NULL, 'issue.auto_closed',
                             CAST(:data AS jsonb), :now)'''),
-            {'id': _cuid(), 'workspace_id': issue['workspace_id'], 'issue_id': issue['id'],
+            {'id': cuid(), 'workspace_id': issue['workspace_id'], 'issue_id': issue['id'],
              'data': json.dumps({'previousStatusId': issue['status_id'], 'statusId': canceled_status,
                                  'inactivityDays': team['auto_close_days']}), 'now': now},
         )
@@ -271,7 +271,7 @@ async def _apply_auto_close(db: AsyncSession, team: dict[str, Any], now: datetim
                         (id, workspace_id, user_id, type, entity_type, entity_id, data, created_at)
                         VALUES (:id, :workspace_id, :user_id, 'issue.auto_closed', 'issue', :issue_id,
                                 CAST(:data AS jsonb), :now)'''),
-                {'id': _cuid(), 'workspace_id': issue['workspace_id'], 'user_id': user_id,
+                {'id': cuid(), 'workspace_id': issue['workspace_id'], 'user_id': user_id,
                  'issue_id': issue['id'],
                  'data': json.dumps({'identifier': issue['identifier'], 'title': issue['title'],
                                      'inactivityDays': team['auto_close_days']}), 'now': now},
@@ -319,7 +319,7 @@ async def _apply_auto_archive(db: AsyncSession, team: dict[str, Any], now: datet
             text('''INSERT INTO activities (id, workspace_id, issue_id, actor_id, type, data, created_at)
                     VALUES (:id, :workspace_id, :issue_id, NULL, 'issue.auto_archived',
                             CAST(:data AS jsonb), :now)'''),
-            {'id': _cuid(), 'workspace_id': issue['workspace_id'], 'issue_id': issue['id'],
+            {'id': cuid(), 'workspace_id': issue['workspace_id'], 'issue_id': issue['id'],
              'data': json.dumps({'inactivityDays': team['auto_archive_days']}), 'now': now},
         )
         # Archiving tells the creator only, and does not consult the completion
@@ -331,7 +331,7 @@ async def _apply_auto_archive(db: AsyncSession, team: dict[str, Any], now: datet
                     (id, workspace_id, user_id, type, entity_type, entity_id, data, created_at)
                     VALUES (:id, :workspace_id, :user_id, 'issue.auto_archived', 'issue', :issue_id,
                             CAST(:data AS jsonb), :now)'''),
-            {'id': _cuid(), 'workspace_id': issue['workspace_id'], 'user_id': issue['creator_id'],
+            {'id': cuid(), 'workspace_id': issue['workspace_id'], 'user_id': issue['creator_id'],
              'issue_id': issue['id'],
              'data': json.dumps({'identifier': issue['identifier'], 'title': issue['title'],
                                  'inactivityDays': team['auto_archive_days']}), 'now': now},
@@ -356,7 +356,7 @@ async def run_team_policies(factory: async_sessionmaker[AsyncSession], now: date
     nó định xử lý trong ``planned``, không đổi dòng nào. Đó là cách đối chiếu
     bản port với worker mà nó thay thế, trước khi cho phép nó ghi.
     """
-    moment = now or _utcnow()
+    moment = now or utcnow()
     planned_closed: list[str] = []
     planned_archived: list[str] = []
     closed = archived = 0

@@ -15,7 +15,7 @@ from app.modules.portfolio.projects_api import _project, _project_issue_rows
 from app.modules.sla.alerts import escalation_actor
 from app.modules.work_items.bug_reports import report
 from app.modules.work_items.contracts import CreateIssueInput, UpdateIssueInput
-from app.modules.work_items.issue_queries import _issue_row
+from app.modules.work_items.issue_queries import issue_row
 from app.modules.work_items.issue_search import search_page
 from app.modules.work_items.issues import create_issue, update_issue
 from app.modules.work_items.issues_api import (
@@ -146,7 +146,7 @@ async def verify_workspace_issues():
             assert (await report(db, workspace, member["id"], None, None))["total"] == 1
             for user, identifier in [(member, private["id"]), (outsider, task["id"])]:
                 with pytest.raises(ApiError):
-                    await _issue_row(db, identifier, workspace, user["id"])
+                    await issue_row(db, identifier, workspace, user["id"])
             child = (
                 await create_issue(
                     CreateIssueInput(
@@ -193,7 +193,7 @@ async def verify_workspace_issues():
             await update_issue(
                 task["id"], UpdateIssueInput(statusId=completed), workspace, member, db
             )
-            assert (await _issue_row(db, task["id"], workspace, member["id"]))[
+            assert (await issue_row(db, task["id"], workspace, member["id"]))[
                 "completedAt"
             ]
             moved = (
@@ -206,7 +206,7 @@ async def verify_workspace_issues():
             )["data"]
             assert moved["teamId"] == team and moved["issueType"] == "BUG"
             with pytest.raises(ApiError):
-                await _issue_row(db, bug["id"], workspace, member["id"])
+                await issue_row(db, bug["id"], workspace, member["id"])
             returned = (
                 await move_issue(
                     bug["id"], MoveIssueInput(workspaceId=workspace), owner, db
@@ -216,7 +216,7 @@ async def verify_workspace_issues():
                 returned["teamId"] is None
                 and returned["status"]["category"] == "BACKLOG"
             )
-            assert (await _issue_row(db, bug["id"], workspace, member["id"]))[
+            assert (await issue_row(db, bug["id"], workspace, member["id"]))[
                 "id"
             ] == bug["id"]
             events = (

@@ -13,10 +13,10 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from starlette.requests import Request
 
-from app.core.clock import _utcnow
+from app.core.clock import utcnow
 from app.core.config import Settings, _async_database_url
 from app.core.errors import ApiError
-from app.core.identifiers import _cuid, _hash_token
+from app.core.identifiers import cuid, hash_token
 from app.db.session import get_session
 from app.main import create_app
 from app.modules.identity import auth
@@ -52,11 +52,11 @@ async def verify_boundaries(monkeypatch):
         auth_mfa_encryption_keys=Fernet.generate_key().decode(),
     )
     request = Request({"type": "http", "headers": [], "client": ("127.0.0.1", 4321)})
-    identifier, secret, recovery = _cuid(), new_secret(), "abc123ff" * 4
+    identifier, secret, recovery = cuid(), new_secret(), "abc123ff" * 4
     email = identifier + "@example.test"
     try:
         async with factory() as db:
-            now = _utcnow()
+            now = utcnow()
             await db.execute(
                 text(
                     "INSERT INTO users(id,email,name,password_hash,status,created_at,updated_at) VALUES (:id,:email,'MFA boundary',:hash,'ACTIVE',:now,:now)"
@@ -110,7 +110,7 @@ async def verify_boundaries(monkeypatch):
             assert (
                 await db.execute(
                     text("SELECT attempts FROM mfa_challenges WHERE token_hash=:hash"),
-                    {"hash": _hash_token(raw)},
+                    {"hash": hash_token(raw)},
                 )
             ).scalar_one() == 5
             expired = await login.begin_login(db, user, request, method="PASSWORD")
@@ -119,8 +119,8 @@ async def verify_boundaries(monkeypatch):
                     "UPDATE mfa_challenges SET expires_at=:past WHERE token_hash=:hash"
                 ),
                 {
-                    "past": _utcnow() - timedelta(seconds=1),
-                    "hash": _hash_token(expired),
+                    "past": utcnow() - timedelta(seconds=1),
+                    "hash": hash_token(expired),
                 },
             )
             stale = await login.begin_login(db, user, request, method="PASSWORD")
@@ -150,7 +150,7 @@ async def verify_boundaries(monkeypatch):
                 for _ in range(2)
             ]
             await db.commit()
-        counter = int(_utcnow().replace(tzinfo=UTC).timestamp()) // 30
+        counter = int(utcnow().replace(tzinfo=UTC).timestamp()) // 30
         results = await asyncio.gather(
             *(attempt(raw, totp(secret, counter), "AUTHENTICATOR") for raw in raws)
         )
@@ -176,7 +176,7 @@ async def verify_boundaries(monkeypatch):
                     text(
                         "SELECT consumed_at FROM mfa_challenges WHERE token_hash=:hash"
                     ),
-                    {"hash": _hash_token(raw)},
+                    {"hash": hash_token(raw)},
                 )
             ).scalar_one() is None
             assert (
@@ -193,7 +193,7 @@ async def verify_boundaries(monkeypatch):
         monkeypatch.setattr(login, "create_session", original)
         assert not isinstance(await attempt(raw, recovery), ApiError)
         # The provider boundary is mocked; the actual callback/database/session gate runs.
-        profile = MicrosoftProfile(_cuid(), "tenant", email, "MFA Microsoft", None)
+        profile = MicrosoftProfile(cuid(), "tenant", email, "MFA Microsoft", None)
 
         async def complete(*args):
             return profile, "synthetic-graph-token"

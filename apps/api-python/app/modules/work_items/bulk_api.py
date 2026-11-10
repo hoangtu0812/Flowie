@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.utc_responses import UtcAPIRouter
 from ...db.session import get_session
-from ..access.projects import _workspace_access
+from ..access.projects import workspace_access
 from ..identity.auth import current_user
 from ..identity.password_reset import limit_request
 from .bulk_contracts import BulkPreview
@@ -21,7 +21,7 @@ async def recent(
     user=Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ):
-    await _workspace_access(db, workspaceId, user["id"])
+    await workspace_access(db, workspaceId, user["id"])
     rows = (
         (
             await db.execute(

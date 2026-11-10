@@ -1,6 +1,6 @@
 from sqlalchemy import text
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.errors import ApiError
 from ..work_items.lifecycle import managed_due
 from .cycles import (
@@ -75,7 +75,7 @@ async def close_cycle(db, cycle, state, at):
 
 
 async def sync_issue(db, identifier, *, now=None):
-    now = now or _utcnow()
+    now = now or utcnow()
     issue = await locked_issue(db, identifier)
     if not issue:
         return None
@@ -92,7 +92,7 @@ async def sync_issue(db, identifier, *, now=None):
         .mappings()
         .all()
     )
-    now = max(now, _utcnow(), *(event["occurred_at"] for event in events))
+    now = max(now, utcnow(), *(event["occurred_at"] for event in events))
     rebind = False
     for event in events:
         if (
@@ -181,7 +181,7 @@ async def sync_issue(db, identifier, *, now=None):
 
 
 async def reapply_policy(db, identifier, *, now=None):
-    now = now or _utcnow()
+    now = now or utcnow()
     issue = await locked_issue(db, identifier)
     if (
         not issue
@@ -193,7 +193,7 @@ async def reapply_policy(db, identifier, *, now=None):
         raise ApiError(409, "Reopen the issue before applying an SLA.", "Conflict")
     await sync_issue(db, identifier, now=now)
     issue = await locked_issue(db, identifier)
-    now = max(now, _utcnow())
+    now = max(now, utcnow())
     cycle = await latest_cycle(db, identifier)
     policy = await select_policy(
         db, issue["workspace_id"], issue["team_id"], issue["priority"]
