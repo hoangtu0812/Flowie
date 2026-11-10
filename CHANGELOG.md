@@ -33,6 +33,9 @@ pull request and commit references, which are for us.
 
 ### Fixed
 
+- The browser test of tab titles no longer fails now and then on a project page: it waited for any "… - Overview" title and could capture the placeholder "Project - Overview" shown before the project's name loads, so going back later expected the wrong title. It now waits for the project's own name. Test-only; nothing to rebuild. (DTD-524)
+  VI: Test trình duyệt về title tab không còn thỉnh thoảng hỏng ở trang project: nó chờ bất kỳ title "… - Overview" nào nên có thể lưu nhầm title tạm "Project - Overview" hiện trước khi tên dự án tải xong, khiến bước Back sau đó chờ sai title. Nay nó chờ tên của chính dự án. Chỉ đổi test; không cần build lại gì. (DTD-524)
+
 - The initiatives toolbar browser test no longer fails on WebKit when navigation cancels a page prefetch; WebKit reports those cancelled loads as page errors, and the test now ignores them as other specs already do. Test-only; nothing to rebuild. (DTD-572, #246)
   VI: Test trình duyệt của toolbar initiatives không còn hỏng trên WebKit khi điều hướng huỷ một prefetch trang; WebKit báo các request bị huỷ đó thành page error, và test nay bỏ qua chúng như các spec khác đã làm. Chỉ đổi test; không cần build lại gì. (DTD-572)
 
