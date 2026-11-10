@@ -38,12 +38,12 @@ from ..modules.portfolio.projects_api import (
     create_project,
     update_project,
 )
-from ..modules.work_items.issues_api import CreateIssueInput, create_issue
-from .team_insights import (
+from ..modules.teams.insights_api import (
     assignment_suggestions,
     hcm_today,
     workload_report,
 )
+from ..modules.work_items.issues_api import CreateIssueInput, create_issue
 
 router = APIRouter(prefix='/api/v1/agent', tags=['agent'])
 ProviderName = Literal['OPENAI', 'GOOGLE']

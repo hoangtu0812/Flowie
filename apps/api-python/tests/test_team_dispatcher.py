@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.domains.team_dispatcher import (
+from app.modules.teams.dispatcher_api import (
     DispatcherSettingsInput,
     as_db_date,
     dispatch_cutoff_utc,

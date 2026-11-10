@@ -27,7 +27,7 @@ async def manager(db: AsyncSession, workspace_id: str, user_id: str) -> None:
         raise ApiError(403, "Workspace administrator access is required.", "Forbidden")
 
 
-async def _owner(db: AsyncSession, workspace_id: str, user_id: str) -> None:
+async def owner(db: AsyncSession, workspace_id: str, user_id: str) -> None:
     # Keep ownership stable until the protected membership write commits.
     result = await db.execute(
         text("""SELECT role FROM workspace_members

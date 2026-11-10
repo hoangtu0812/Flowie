@@ -6,13 +6,13 @@ from collections.abc import Awaitable, Callable
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from ..domains.team_insights import (
+from ..modules.operations.heartbeats import progress
+from ..modules.teams.insights_api import (
     digest_cutoff_utc,
     hcm_today,
     seconds_until_next_digest,
     send_digest_for_workspace,
 )
-from ..modules.operations.heartbeats import progress
 
 logger = logging.getLogger(__name__)
 

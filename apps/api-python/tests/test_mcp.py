@@ -1857,7 +1857,11 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(identifiers), 1001)
 
     async def test_team_membership_routes_revoke_mcp_access(self):
-        from app.domains.teams import TeamMemberRoleInput, remove_member, update_member
+        from app.modules.teams.api import (
+            TeamMemberRoleInput,
+            remove_member,
+            update_member,
+        )
 
         async with self.factory() as db:
             result = await update_member(

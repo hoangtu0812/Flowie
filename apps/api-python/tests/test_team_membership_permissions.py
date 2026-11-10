@@ -12,8 +12,8 @@ from app.core.config import _async_database_url
 from app.core.errors import ApiError, api_error_handler
 from app.core.identifiers import cuid
 from app.db.session import get_session
-from app.domains.teams import router
 from app.modules.identity.auth import create_workspace_bootstrap, current_user
+from app.modules.teams.api import router
 
 
 @pytest.mark.skipif(

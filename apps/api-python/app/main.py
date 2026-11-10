@@ -19,10 +19,6 @@ from .domains.native_customer_requests import router as customer_requests_router
 from .domains.native_integrations import router as integrations_router
 from .domains.scm.router import router as scm_router
 from .domains.scm.router import webhook_router as scm_webhook_router
-from .domains.team_dispatcher import router as team_dispatcher_router
-from .domains.team_insights import digest_router as digest_router
-from .domains.team_insights import router as team_insights_router
-from .domains.teams import router as teams_router
 from .jobs.digest import digest_loop
 from .jobs.dispatcher import dispatcher_loop
 from .jobs.reminders import reminder_loop
@@ -53,6 +49,10 @@ from .modules.portfolio.projects_api import router as native_projects_router
 from .modules.releases.api import router as releases_router
 from .modules.reviews.api import router as reviews_router
 from .modules.sla.api import router as slas_router
+from .modules.teams.api import router as teams_router
+from .modules.teams.dispatcher_api import router as team_dispatcher_router
+from .modules.teams.insights_api import digest_router as digest_router
+from .modules.teams.insights_api import router as team_insights_router
 from .modules.views.api import router as views_router
 from .modules.work_items.activity_api import public_router as activities_router
 from .modules.work_items.activity_api import router as native_activities_router

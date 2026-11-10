@@ -13,7 +13,7 @@ from sqlalchemy import text
 from ...core.clock import utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import cuid
-from ...domains.team_insights import hcm_today
+from ..teams.insights_api import hcm_today
 from .commands import CommandService
 from .compact import compact_comment, compact_issue
 from .connections import validate_current
