@@ -125,7 +125,7 @@ const projectStatusAliases: Record<string, string> = {
    cancelled: 'canceled',
 };
 
-const mapStatus = (value: string): Status => {
+export const mapStatus = (value: string): Status => {
    const normalized = value
       .trim()
       .toLowerCase()

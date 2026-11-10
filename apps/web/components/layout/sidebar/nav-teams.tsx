@@ -16,7 +16,7 @@ import {
    Users,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -46,6 +46,8 @@ import {
 import { RiDonutChartFill } from '@remixicon/react';
 import { toast } from 'sonner';
 import { withBasePath } from '@/lib/base-path';
+import { useSidebarSection } from '@/store/sidebar-collapse-store';
+import { isProjectPage, NavProjectList, useSidebarProjects } from './nav-project-list';
 
 export function NavTeams() {
    const tx = useMessages(messages);
@@ -180,42 +182,8 @@ export function NavTeams() {
                                  </Link>
                               </SidebarMenuSubButton>
                            </SidebarMenuSubItem>
-                           <SidebarMenuSubItem>
-                              <SidebarMenuSubButton asChild>
-                                 <Link href={`/${orgId}/team/${item.identifier}/cycles`}>
-                                    <RiDonutChartFill size={14} />
-                                    <span>{tx('Cycles')}</span>
-                                 </Link>
-                              </SidebarMenuSubButton>
-                              <SidebarMenuSub className="mr-0 pr-0">
-                                 <SidebarMenuSubItem>
-                                    <SidebarMenuSubButton asChild>
-                                       <Link
-                                          href={`/${orgId}/team/${item.identifier}/cycle/active`}
-                                       >
-                                          <span>{tx('Current')}</span>
-                                       </Link>
-                                    </SidebarMenuSubButton>
-                                 </SidebarMenuSubItem>
-                                 <SidebarMenuSubItem>
-                                    <SidebarMenuSubButton asChild>
-                                       <Link
-                                          href={`/${orgId}/team/${item.identifier}/cycle/upcoming`}
-                                       >
-                                          <span>{tx('Upcoming')}</span>
-                                       </Link>
-                                    </SidebarMenuSubButton>
-                                 </SidebarMenuSubItem>
-                              </SidebarMenuSub>
-                           </SidebarMenuSubItem>
-                           <SidebarMenuSubItem>
-                              <SidebarMenuSubButton asChild>
-                                 <Link href={`/${orgId}/team/${item.identifier}/projects`}>
-                                    <Box size={14} />
-                                    <span>{tx('Projects')}</span>
-                                 </Link>
-                              </SidebarMenuSubButton>
-                           </SidebarMenuSubItem>
+                           <TeamCycles orgId={orgId} team={item} />
+                           <TeamProjects orgId={orgId} team={item} />
                            <SidebarMenuSubItem>
                               <SidebarMenuSubButton asChild>
                                  <Link href={`/${orgId}/team/${item.identifier}/views`}>
@@ -239,5 +207,99 @@ export function NavTeams() {
             ))}
          </SidebarMenu>
       </SidebarGroup>
+   );
+}
+
+/**
+ * Toggle for a collapsible team entry: a chevron next to the entry's link, so clicking the text
+ * still navigates and only the chevron collapses or expands.
+ * VI: Nút thu gọn của một mục team: chevron cạnh link của mục, nên bấm chữ vẫn điều hướng và chỉ
+ * VI: bấm chevron mới thu gọn hoặc mở rộng.
+ */
+function SectionToggle({ label }: { label: string }) {
+   return (
+      <CollapsibleTrigger asChild>
+         <SidebarMenuAction aria-label={label} className="top-1 data-[state=open]:rotate-90">
+            <ChevronRight />
+         </SidebarMenuAction>
+      </CollapsibleTrigger>
+   );
+}
+
+/**
+ * The team's Cycles entry with Current and Upcoming underneath, collapsible per team; a cycle page
+ * of this team opens it.
+ * VI: Mục Cycles của team với Current và Upcoming bên dưới, thu gọn riêng theo team; trang cycle
+ * VI: của team này sẽ mở nó.
+ */
+function TeamCycles({ orgId, team }: { orgId: string; team: WorkspaceTeam }) {
+   const tx = useMessages(messages);
+   const base = `/${orgId}/team/${team.identifier}`;
+   const [open, setOpen] = useSidebarSection(
+      `team:${team.id}:cycles`,
+      usePathname().startsWith(`${base}/cycle/`)
+   );
+   return (
+      <Collapsible open={open} onOpenChange={setOpen} asChild>
+         <SidebarMenuSubItem>
+            <SidebarMenuSubButton asChild>
+               <Link href={`${base}/cycles`}>
+                  <RiDonutChartFill size={14} />
+                  <span>{tx('Cycles')}</span>
+               </Link>
+            </SidebarMenuSubButton>
+            <SectionToggle label={tx('Toggle Cycles')} />
+            <CollapsibleContent>
+               <SidebarMenuSub className="mr-0 pr-0">
+                  <SidebarMenuSubItem>
+                     <SidebarMenuSubButton asChild>
+                        <Link href={`${base}/cycle/active`}>
+                           <span>{tx('Current')}</span>
+                        </Link>
+                     </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
+                     <SidebarMenuSubButton asChild>
+                        <Link href={`${base}/cycle/upcoming`}>
+                           <span>{tx('Upcoming')}</span>
+                        </Link>
+                     </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+               </SidebarMenuSub>
+            </CollapsibleContent>
+         </SidebarMenuSubItem>
+      </Collapsible>
+   );
+}
+
+/**
+ * The team's Projects entry with the team's current projects underneath, collapsible per team; a
+ * page of one of those projects opens it.
+ * VI: Mục Projects của team với các dự án hiện tại của team bên dưới, thu gọn riêng theo team;
+ * VI: trang của một trong các dự án đó sẽ mở nó.
+ */
+function TeamProjects({ orgId, team }: { orgId: string; team: WorkspaceTeam }) {
+   const tx = useMessages(messages);
+   const projects = useSidebarProjects(team.id);
+   const href = `/${orgId}/team/${team.identifier}/projects`;
+   const [open, setOpen] = useSidebarSection(
+      `team:${team.id}:projects`,
+      isProjectPage(usePathname(), orgId, projects)
+   );
+   return (
+      <Collapsible open={open} onOpenChange={setOpen} asChild>
+         <SidebarMenuSubItem>
+            <SidebarMenuSubButton asChild>
+               <Link href={href}>
+                  <Box size={14} />
+                  <span>{tx('Projects')}</span>
+               </Link>
+            </SidebarMenuSubButton>
+            <SectionToggle label={tx('Toggle Projects')} />
+            <CollapsibleContent>
+               <NavProjectList projects={projects} viewAllHref={href} />
+            </CollapsibleContent>
+         </SidebarMenuSubItem>
+      </Collapsible>
    );
 }

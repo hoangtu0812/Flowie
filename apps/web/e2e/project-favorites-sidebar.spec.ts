@@ -8,12 +8,25 @@ const fixture = JSON.parse(readFileSync('.e2e-fixture.json', 'utf8')) as {
    projectId: string;
 };
 
-// Starring a project adds it under Projects in the sidebar at once, it survives a reload and opens
-// the project from another page; removing the star removes the entry and leaves no favorite behind
-// for other specs.
-// VI: Gắn sao thêm dự án vào dưới Projects ở sidebar ngay lập tức, còn nguyên sau khi tải lại và mở
-// VI: được dự án từ trang khác; bỏ sao xoá mục đó và không để lại yêu thích cho các spec khác.
+// Starring a project adds it under Projects in the sidebar at once and opens the project from
+// another page; removing the star removes the entry and leaves no favorite behind for other specs.
+// The sidebar also lists current projects, so the seeded project is reported as Completed in the
+// unstarred lists: only the star can then put it in the sidebar.
+// VI: Gắn sao thêm dự án vào dưới Projects ở sidebar ngay lập tức và mở được dự án từ trang khác;
+// VI: bỏ sao xoá mục đó và không để lại yêu thích cho các spec khác. Sidebar cũng liệt kê dự án
+// VI: đang chạy, nên dự án mẫu được trả về là Completed trong các danh sách không lọc sao: khi đó
+// VI: chỉ có sao mới đưa được nó vào sidebar.
 test('starred projects appear under Projects in the sidebar', async ({ page }) => {
+   await page.route(/\/api\/v1\/projects\?/, async (route) => {
+      if (new URL(route.request().url()).searchParams.get('favorite') === 'true')
+         return route.continue();
+      const response = await route.fetch();
+      const body = (await response.json()) as { data: { id: string; status: string }[] };
+      body.data = body.data.map((row) =>
+         row.id === fixture.projectId ? { ...row, status: 'completed' } : row
+      );
+      return route.fulfill({ response, json: body });
+   });
    await page.goto('/auth/login');
    await page.getByLabel('Email', { exact: true }).fill(fixture.email);
    await page.getByLabel('Password', { exact: true }).fill(fixture.password);
