@@ -1,9 +1,14 @@
-from sqlalchemy import text
 
 from ...core.errors import ApiError
 from ...core.pagination import CursorCodec
 from ..access.project_scope import project_read_scope
 from ..access.projects import workspace_access
+from .queries import (
+    HISTORY_PAGE_SELECT_INITIATIVES,
+    history_page_select_projects_sql,
+    history_page_select_sql,
+    history_page_select_sql_2,
+)
 
 
 async def history_page(
@@ -21,9 +26,7 @@ async def history_page(
             identifier
             and not (
                 await db.execute(
-                    text(
-                        f"SELECT 1 FROM projects p WHERE p.id=:entity AND {project_read_scope()}"
-                    ),
+                    history_page_select_projects_sql(project_read_scope),
                     params,
                 )
             ).first()
@@ -36,9 +39,7 @@ async def history_page(
     elif kind in {"initiative_updates", "initiative_activity"}:
         if not (
             await db.execute(
-                text(
-                    "SELECT 1 FROM initiatives WHERE id=:entity AND workspace_id=:workspace AND archived_at IS NULL"
-                ),
+                HISTORY_PAGE_SELECT_INITIATIVES,
                 params,
             )
         ).first():
@@ -57,7 +58,7 @@ async def history_page(
     )
     total = (
         await db.execute(
-            text(f"SELECT COUNT(*) FROM {source} WHERE {predicate}"), params
+            history_page_select_sql(source, predicate), params
         )
     ).scalar_one()
     if cursor:
@@ -71,8 +72,7 @@ async def history_page(
     rows = (
         (
             await db.execute(
-                text(f"""SELECT h.*,u.id AS person_id,u.name AS person_name,u.avatar_url AS person_avatar {extra}
-        FROM {source} WHERE {predicate} ORDER BY h.created_at DESC,h.id DESC LIMIT :limit"""),
+                history_page_select_sql_2(extra, source, predicate),
                 params,
             )
         )
