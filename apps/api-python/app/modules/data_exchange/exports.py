@@ -12,7 +12,7 @@ from ...core.csv_export import csv_bytes
 from ...core.errors import ApiError
 from ...core.xlsx_export import xlsx_bytes
 from ..access.projects import workspace_access
-from ..work_items.document_repository import _team_access
+from ..work_items.document_repository import document_team_access
 from ..work_items.issue_search import issue_scope
 
 VIETNAM = ZoneInfo("Asia/Ho_Chi_Minh")
@@ -180,7 +180,7 @@ async def export_documents(db, user, payload, storage):
     if len(documents) != len(identifiers):
         raise ApiError(404, "One or more documents are unavailable.", "Not Found")
     for document in documents:
-        await _team_access(db, payload.workspaceId, document["team_id"], user["id"])
+        await document_team_access(db, payload.workspaceId, document["team_id"], user["id"])
     attachments = []
     if payload.includeAttachments:
         attachments = (

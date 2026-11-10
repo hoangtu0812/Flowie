@@ -32,7 +32,7 @@ class DiscordWebhookInput(BaseModel):
     dailyDigestEnabled: bool = False
 
 
-async def _manager_access(db: AsyncSession, workspace_id: str, user_id: str) -> None:
+async def integration_manager(db: AsyncSession, workspace_id: str, user_id: str) -> None:
     result = await db.execute(
         text(
             '''SELECT 1 FROM workspace_members
@@ -71,7 +71,7 @@ async def discord_status(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any] | None]:
-    await _manager_access(db, workspaceId, user['id'])
+    await integration_manager(db, workspaceId, user['id'])
     result = await db.execute(
         text('SELECT enabled, daily_digest_enabled, webhook_url, updated_at FROM discord_webhooks WHERE workspace_id = :workspace_id'),
         {'workspace_id': workspaceId},
@@ -87,7 +87,7 @@ async def save_discord(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _manager_access(db, workspaceId, user['id'])
+    await integration_manager(db, workspaceId, user['id'])
     existing = await db.execute(
         text('SELECT id, webhook_url FROM discord_webhooks WHERE workspace_id = :workspace_id'),
         {'workspace_id': workspaceId},
@@ -131,7 +131,7 @@ async def test_discord(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _manager_access(db, workspaceId, user['id'])
+    await integration_manager(db, workspaceId, user['id'])
     result = await db.execute(
         text('SELECT webhook_url, enabled FROM discord_webhooks WHERE workspace_id = :workspace_id'),
         {'workspace_id': workspaceId},
@@ -190,7 +190,7 @@ def _teams_status(row: Any) -> dict[str, Any]:
     return status
 
 
-async def _send_teams_test(webhook_url: str) -> dict[str, Any]:
+async def send_teams_test(webhook_url: str) -> dict[str, Any]:
     message = teams_message({'title': 'Flowie', 'description': '✅ Flowie đã kết nối Microsoft Teams thành công.'})
     try:
         async with httpx.AsyncClient(timeout=10) as client:
@@ -210,7 +210,7 @@ async def teams_status(
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any] | None]:
     _teams_gate(request)
-    await _manager_access(db, workspaceId, user['id'])
+    await integration_manager(db, workspaceId, user['id'])
     result = await db.execute(
         text('SELECT enabled, webhook_url, updated_at FROM teams_webhooks WHERE workspace_id = :workspace_id'),
         {'workspace_id': workspaceId},
@@ -228,7 +228,7 @@ async def save_teams(
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
     _teams_gate(request)
-    await _manager_access(db, workspaceId, user['id'])
+    await integration_manager(db, workspaceId, user['id'])
     existing = await db.execute(
         text('SELECT webhook_url FROM teams_webhooks WHERE workspace_id = :workspace_id'),
         {'workspace_id': workspaceId},
@@ -263,7 +263,7 @@ async def test_teams(
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
     _teams_gate(request)
-    await _manager_access(db, workspaceId, user['id'])
+    await integration_manager(db, workspaceId, user['id'])
     result = await db.execute(
         text('SELECT webhook_url, enabled FROM teams_webhooks WHERE workspace_id = :workspace_id'),
         {'workspace_id': workspaceId},
@@ -273,7 +273,7 @@ async def test_teams(
         return {'data': {'delivered': False, 'reason': 'No Microsoft Teams webhook is configured.'}}
     if not webhook['enabled']:
         return {'data': {'delivered': False, 'reason': 'Microsoft Teams notifications are turned off.'}}
-    return {'data': await _send_teams_test(webhook['webhook_url'])}
+    return {'data': await send_teams_test(webhook['webhook_url'])}
 
 
 async def _project_teams_access(db: AsyncSession, workspace_id: str, project_id: str, user_id: str) -> bool:
@@ -389,4 +389,4 @@ async def test_project_teams(
         return {'data': {'delivered': False, 'reason': 'No Microsoft Teams channel is connected to this project.'}}
     if not channel['enabled']:
         return {'data': {'delivered': False, 'reason': 'Microsoft Teams notifications are turned off for this project.'}}
-    return {'data': await _send_teams_test(channel['webhook_url'])}
+    return {'data': await send_teams_test(channel['webhook_url'])}

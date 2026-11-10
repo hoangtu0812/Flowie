@@ -11,7 +11,7 @@ from ...core.errors import ApiError
 from ...core.identifiers import cuid
 from ..access.projects import team_access
 from ..work_items.contracts import CreateIssueInput
-from ..work_items.issue_rules import _validate_references, _validate_schedule_dates
+from ..work_items.issue_rules import validate_references, validate_schedule_dates
 from .csv_input import parse_csv, validate_mapping
 
 
@@ -103,10 +103,10 @@ async def import_preview(db, user, payload):
             )
             values = normalized.model_dump(mode="json")
             if state == "PENDING":
-                await _validate_references(
+                await validate_references(
                     db, payload.workspaceId, payload.teamId, values, creating=True
                 )
-                _validate_schedule_dates(
+                validate_schedule_dates(
                     parse_date(values.get("startDate")), parse_date(values.get("targetDate"))
                 )
                 parse_date(values.get("dueDate"))

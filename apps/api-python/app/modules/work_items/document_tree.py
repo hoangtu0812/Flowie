@@ -22,7 +22,7 @@ from ...core.clock import utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import cuid
 from ..sharepoint.graph import viewer_url
-from .document_repository import _document_by_id, _documents, _team_access
+from .document_repository import _document_by_id, _documents, document_team_access
 
 FolderKind = Literal["project", "module", "feature", "changes", "general"]
 DocStatus = Literal["DRAFT", "IN_REVIEW", "APPROVED"]
@@ -107,7 +107,7 @@ async def default_folder(db: AsyncSession, workspace_id: str, team_id: str) -> A
     return (await db.execute(query, params)).mappings().first()
 
 
-async def _project_team(db: AsyncSession, workspace_id: str, project_id: str, user_id: str) -> str:
+async def project_document_team(db: AsyncSession, workspace_id: str, project_id: str, user_id: str) -> str:
     row = (
         await db.execute(
             text(
@@ -124,7 +124,7 @@ async def _project_team(db: AsyncSession, workspace_id: str, project_id: str, us
             "Assign the project to a team before building its document tree.",
             "Bad Request",
         )
-    await _team_access(db, workspace_id, row["team_id"], user_id)
+    await document_team_access(db, workspace_id, row["team_id"], user_id)
     return row["team_id"]
 
 
@@ -284,13 +284,13 @@ async def create_folder(
         if len(await _ancestors(db, parent_id)) >= MAX_FOLDER_DEPTH:
             raise ApiError(400, f"Folders nest at most {MAX_FOLDER_DEPTH} levels deep.", "Bad Request")
     elif project_id:
-        project_team = await _project_team(db, workspace_id, project_id, user_id)
+        project_team = await project_document_team(db, workspace_id, project_id, user_id)
         if team_id and team_id != project_team:
             raise ApiError(400, "The folder must belong to the project's team.", "Bad Request")
         team_id = project_team
     if not team_id:
         raise ApiError(400, "A team or parent folder is required.", "Bad Request")
-    await _team_access(db, workspace_id, team_id, user_id)
+    await document_team_access(db, workspace_id, team_id, user_id)
     await _lock_team_folders(db, team_id)
     if parent_id:
         parent = await _folder_row(db, workspace_id, parent_id)
@@ -352,7 +352,7 @@ async def update_folder(
     VI: hoặc thư mục cha sẽ phát hành lại các tài liệu bên dưới lên SharePoint theo đường dẫn mới.
     """
     folder = await _folder_row(db, workspace_id, folder_id)
-    await _team_access(db, workspace_id, folder["team_id"], user_id)
+    await document_team_access(db, workspace_id, folder["team_id"], user_id)
     await _lock_team_folders(db, folder["team_id"])
     folder = await _folder_row(db, workspace_id, folder_id)
     if "expectedParentId" in values and values["expectedParentId"] != folder["parent_id"]:
@@ -429,7 +429,7 @@ async def delete_folder(
     VI: Cha kỳ vọng rỗng biểu thị gốc; None giữ tương thích với bên gọi cũ.
     """
     folder = await _folder_row(db, workspace_id, folder_id)
-    await _team_access(db, workspace_id, folder["team_id"], user_id)
+    await document_team_access(db, workspace_id, folder["team_id"], user_id)
     await _lock_team_folders(db, folder["team_id"])
     folder = await _folder_row(db, workspace_id, folder_id)
     if expected_parent_id is not None and (folder["parent_id"] or "") != expected_parent_id:
@@ -461,7 +461,7 @@ async def mutate_folder_file(
     VI: thư mục rỗng. Nguồn kỳ vọng ngăn thao tác phá hủy dựa trên dữ liệu cũ.
     """
     source = await _folder_row(db, workspace_id, expected_folder_id)
-    await _team_access(db, workspace_id, source["team_id"], user_id)
+    await document_team_access(db, workspace_id, source["team_id"], user_id)
     await _lock_team_folders(db, source["team_id"])
     source = await _folder_row(db, workspace_id, expected_folder_id)
     file = (await db.execute(text(
@@ -495,7 +495,7 @@ async def scaffold_project_tree(
     VI: toàn: giữ thư mục đã có, chỉ thêm thư mục còn thiếu (so theo tên). Số chuẩn đã bị thư
     VI: mục khác dùng thì giữ cho thư mục đó, thư mục chuẩn còn thiếu nhận số trống kế tiếp.
     """
-    team_id = await _project_team(db, workspace_id, project_id, user_id)
+    team_id = await project_document_team(db, workspace_id, project_id, user_id)
     project_name = (
         await db.execute(text("SELECT name FROM projects WHERE id = :id"), {"id": project_id})
     ).scalar_one()
@@ -585,7 +585,7 @@ async def project_tree(
     VI: `documents[].linked` đánh dấu tài liệu liên kết với dự án (hoặc issue của dự án)
     VI: nhưng nằm ở nơi khác; cây hiển thị chúng là chưa xếp thư mục.
     """
-    team_id = await _project_team(db, workspace_id, project_id, user_id)
+    team_id = await project_document_team(db, workspace_id, project_id, user_id)
     folders = (
         await db.execute(
             text(
@@ -682,7 +682,7 @@ async def _readable_document(
     document = await _document_by_id(db, document_id, workspace_id)
     if not document:
         raise ApiError(404, "Document not found.", "Not Found")
-    await _team_access(db, workspace_id, document["teamId"], user_id)
+    await document_team_access(db, workspace_id, document["teamId"], user_id)
     return document
 
 

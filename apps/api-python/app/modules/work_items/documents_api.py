@@ -18,7 +18,7 @@ from .contracts import (
 from .document_repository import (
     _document_by_id,
     _documents,
-    _team_access,
+    document_team_access,
 )
 from .document_review import (
     DecisionInput,
@@ -71,7 +71,7 @@ class ProjectTreeInput(BaseModel):
 
 @router.get('')
 async def list_documents(workspaceId: str = Query(min_length=1), teamId: str | None = None, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
-    await _team_access(db, workspaceId, teamId, user['id'])
+    await document_team_access(db, workspaceId, teamId, user['id'])
     return {'data': await _documents(db, workspaceId, teamId, user_id=user['id'])}
 
 
@@ -79,7 +79,7 @@ async def list_documents(workspaceId: str = Query(min_length=1), teamId: str | N
 async def list_folders(workspaceId: str = Query(min_length=1), teamId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
     from .document_tree import folder_payload
 
-    await _team_access(db, workspaceId, teamId, user['id'])
+    await document_team_access(db, workspaceId, teamId, user['id'])
     # Project Docs folders carry their project's team too; only team-wide folders belong here,
     # project trees are read through /project-tree.
     # VI: Thư mục cây Docs dự án cũng mang team của dự án; ở đây chỉ trả thư mục chung của team,
@@ -258,7 +258,7 @@ async def accessible_document(db: AsyncSession, workspace_id: str, document_id: 
     document = await _document_by_id(db, document_id, workspace_id)
     if not document:
         raise ApiError(404, 'Document not found.', 'Not Found')
-    await _team_access(db, workspace_id, document['teamId'], user_id)
+    await document_team_access(db, workspace_id, document['teamId'], user_id)
     return document
 
 

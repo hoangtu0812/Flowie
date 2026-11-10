@@ -26,9 +26,9 @@ from .issue_numbering import allocate_issue_number
 from .issue_queries import _person_name, _project_name, _status_name, issue_row
 from .issue_rules import (
     _enforce_start_gate,
-    _validate_references,
     _validate_release_ids,
-    _validate_schedule_dates,
+    validate_references,
+    validate_schedule_dates,
 )
 from .lifecycle import actor_context
 
@@ -43,10 +43,10 @@ async def create_issue(
         await team_access(db, payload.workspaceId, payload.teamId, user["id"])
     await actor_context(db, user["id"])
     values = payload.model_dump()
-    category = await _validate_references(
+    category = await validate_references(
         db, payload.workspaceId, payload.teamId, values, creating=True
     )
-    _validate_schedule_dates(
+    validate_schedule_dates(
         parse_date(values.get("startDate")), parse_date(values.get("targetDate"))
     )
     await _enforce_start_gate(
@@ -233,13 +233,13 @@ async def update_issue(
     previous_assignee_id = issue["assignee"]["id"] if issue.get("assignee") else None
     if "statusId" in values and values["statusId"] is None:
         raise ApiError(400, "statusId cannot be empty.", "Bad Request")
-    _validate_schedule_dates(
+    validate_schedule_dates(
         parse_date(values["startDate"]) if "startDate" in values else issue.get("startDate"),
         parse_date(values["targetDate"])
         if "targetDate" in values
         else issue.get("targetDate"),
     )
-    category = await _validate_references(
+    category = await validate_references(
         db, workspaceId, issue["teamId"], values, creating=False
     )
     await _enforce_start_gate(

@@ -20,7 +20,7 @@ from ...modules.notifications.outbox import stage_notifications
 from ...services.notification_events import create_notification_batch
 from ..access.membership import workspace_role
 from ..audit.write import record_change
-from .document_repository import _team_access
+from .document_repository import document_team_access
 
 Decision = Literal["APPROVED", "CHANGES_REQUESTED"]
 
@@ -138,7 +138,7 @@ async def _locked(db: AsyncSession, workspace_id: str, document_id: str, user_id
     ).mappings().first()
     if not row:
         raise ApiError(404, "Document not found.", "Not Found")
-    await _team_access(db, workspace_id, row["team_id"], user_id)
+    await document_team_access(db, workspace_id, row["team_id"], user_id)
     return dict(row)
 
 
@@ -156,7 +156,7 @@ async def review_state(
     ).mappings().first()
     if not row:
         raise ApiError(404, "Document not found.", "Not Found")
-    await _team_access(db, workspace_id, row["team_id"], user_id)
+    await document_team_access(db, workspace_id, row["team_id"], user_id)
     approvers = await approver_ids(db, workspace_id, row["team_id"])
     reviewers = await _reviewers(db, document_id)
     people = (

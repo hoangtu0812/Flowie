@@ -10,7 +10,7 @@ from ...core.errors import ApiError
 from ..access.membership import workspace_role
 
 
-async def _team_access(
+async def document_team_access(
     db: AsyncSession, workspace_id: str, team_id: str | None, user_id: str
 ) -> None:
     await workspace_role(db, workspace_id, user_id)
