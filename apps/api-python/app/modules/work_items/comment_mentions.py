@@ -1,16 +1,15 @@
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.errors import ApiError
+from .queries import (
+    MENTION_OPTIONS_SELECT_TEAM_MEMBERS,
+)
 
 
 async def mention_options(db: AsyncSession, issue: dict) -> list[dict]:
     rows = (
         await db.execute(
-            text("""SELECT u.id,u.name,u.avatar_url AS "avatarUrl"
-        FROM team_members tm JOIN users u ON u.id=tm.user_id JOIN workspace_members wm
-        ON wm.user_id=tm.user_id AND wm.workspace_id=:workspace WHERE tm.team_id=:team
-        AND wm.status='ACTIVE' AND u.status='ACTIVE' ORDER BY u.name,u.id"""),
+            MENTION_OPTIONS_SELECT_TEAM_MEMBERS,
             {"workspace": issue["workspaceId"], "team": issue["teamId"]},
         )
     ).mappings()

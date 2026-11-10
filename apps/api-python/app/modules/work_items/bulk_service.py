@@ -2,13 +2,24 @@ import json
 from datetime import timedelta
 from hashlib import sha256
 
-from sqlalchemy import text
-
 from ...core.clock import utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import cuid
 from ..access.projects import workspace_access
+from .commands import (
+    BULK_COMMAND_UPDATE_BULK_OPERATIONS,
+    BULK_PREVIEW_INSERT_BULK_OPERATION_ITEMS,
+    BULK_PREVIEW_INSERT_BULK_OPERATIONS,
+    BULK_PREVIEW_LOCK,
+)
 from .issue_search import issue_scope
+from .queries import (
+    BULK_PREVIEW_SELECT_BULK_OPERATIONS,
+    BULK_RESULT_SELECT_BULK_OPERATION_ITEMS,
+    bulk_preview_select_sql,
+    bulk_result_select_bulk_operations_sql,
+    bulk_result_select_sql,
+)
 
 
 async def bulk_preview(db, user, payload):
@@ -17,15 +28,13 @@ async def bulk_preview(db, user, payload):
         json.dumps(payload.model_dump(mode="json"), sort_keys=True).encode()
     ).hexdigest()
     await db.execute(
-        text("SELECT pg_advisory_xact_lock(hashtextextended(:key,0))"),
+        BULK_PREVIEW_LOCK,
         {"key": f"bulk:{user['id']}:{payload.requestKey}"},
     )
     previous = (
         (
             await db.execute(
-                text(
-                    "SELECT id,fingerprint FROM bulk_operations WHERE actor_id=:user AND request_key=:key"
-                ),
+                BULK_PREVIEW_SELECT_BULK_OPERATIONS,
                 {"user": user["id"], "key": payload.requestKey},
             )
         )
@@ -50,11 +59,7 @@ async def bulk_preview(db, user, payload):
     rows = (
         (
             await db.execute(
-                text(
-                    "SELECT i.id,i.identifier,i.version "
-                    + sql
-                    + " ORDER BY i.id LIMIT 1001"
-                ),
+                bulk_preview_select_sql(sql),
                 params,
             )
         )
@@ -71,8 +76,7 @@ async def bulk_preview(db, user, payload):
         )
     identifier, now = cuid(), utcnow()
     await db.execute(
-        text("""INSERT INTO bulk_operations(id,workspace_id,actor_id,request_key,fingerprint,changes,created_at,expires_at)
-        VALUES (:id,:workspace,:user,:key,:fingerprint,CAST(:changes AS jsonb),:now,:expires)"""),
+        BULK_PREVIEW_INSERT_BULK_OPERATIONS,
         {
             "id": identifier,
             "workspace": payload.workspaceId,
@@ -85,8 +89,7 @@ async def bulk_preview(db, user, payload):
         },
     )
     await db.execute(
-        text("""INSERT INTO bulk_operation_items(operation_id,issue_id,expected_version,identifier)
-        VALUES (:operation,:id,:version,:identifier)"""),
+        BULK_PREVIEW_INSERT_BULK_OPERATION_ITEMS,
         [
             {
                 "operation": identifier,
@@ -109,10 +112,7 @@ async def bulk_result(db, user, workspace, identifier, *, lock=False):
     row = (
         (
             await db.execute(
-                text(
-                    "SELECT * FROM bulk_operations WHERE id=:id AND workspace_id=:workspace AND actor_id=:user"
-                    + (" FOR UPDATE" if lock else "")
-                ),
+                bulk_result_select_bulk_operations_sql(lock),
                 {"id": identifier, "workspace": workspace, "user": user["id"]},
             )
         )
@@ -124,9 +124,7 @@ async def bulk_result(db, user, workspace, identifier, *, lock=False):
     counts = (
         (
             await db.execute(
-                text(
-                    "SELECT state,COUNT(*) AS count FROM bulk_operation_items WHERE operation_id=:id GROUP BY state"
-                ),
+                BULK_RESULT_SELECT_BULK_OPERATION_ITEMS,
                 {"id": identifier},
             )
         )
@@ -140,13 +138,7 @@ async def bulk_result(db, user, workspace, identifier, *, lock=False):
     visible = (
         (
             await db.execute(
-                text(
-                    """SELECT item.issue_id,item.identifier,item.expected_version,item.state,item.error_code,
-        (item.state='PENDING' AND i.version<>item.expected_version) AS stale """
-                    + scope
-                    + """
-        AND item.operation_id=:operation ORDER BY item.issue_id LIMIT 1000"""
-                ),
+                bulk_result_select_sql(scope),
                 {**params, "operation": identifier},
             )
         )
@@ -174,7 +166,7 @@ async def bulk_command(db, user, workspace, identifier, command):
     else:
         return result
     await db.execute(
-        text("UPDATE bulk_operations SET state=:state WHERE id=:id"),
+        BULK_COMMAND_UPDATE_BULK_OPERATIONS,
         {"state": state, "id": identifier},
     )
     result["state"] = state

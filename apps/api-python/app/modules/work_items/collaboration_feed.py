@@ -2,11 +2,19 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import text
-
 from ...core.errors import ApiError
 from ...core.pagination import CursorCodec
 from .issue_queries import issue_row
+from .queries import (
+    ACTIVITY_PAGE_SELECT_PROJECTS,
+    COMMENT_PAGE_SELECT_COMMENTS,
+    COMMENT_PAGE_SELECT_COMMENTS_2,
+    COMMENT_ROWS_SELECT_ATTACHMENTS,
+    COMMENT_ROWS_SELECT_COMMENT_REACTIONS,
+    COMMENT_ROWS_SELECT_COMMENTS,
+    activity_page_select_activities_sql,
+    comment_page_select_comments_sql,
+)
 
 
 async def comment_rows(
@@ -18,11 +26,7 @@ async def comment_rows(
     rows = (
         (
             await db.execute(
-                text("""SELECT c.*,u.name AS author_name,u.avatar_url AS author_avatar_url,
-        (SELECT count(*)::int FROM comments child WHERE child.parent_comment_id=c.id AND child.deleted_at IS NULL) AS reply_count,
-        (SELECT COALESCE(a.data->'agent','{}'::jsonb) FROM activities a WHERE a.issue_id=c.issue_id AND a.type='comment.created' AND a.data->>'commentId'=c.id AND a.data->>'source'='AI' LIMIT 1) AS agent
-        FROM comments c JOIN users u ON u.id=c.author_id JOIN issues i ON i.id=c.issue_id
-        WHERE c.id=ANY(CAST(:ids AS text[])) AND i.workspace_id=:workspace AND c.deleted_at IS NULL"""),
+                COMMENT_ROWS_SELECT_COMMENTS,
                 params,
             )
         )
@@ -31,15 +35,13 @@ async def comment_rows(
     )
     reactions = (
         await db.execute(
-            text("""SELECT comment_id,emoji,count(*)::int AS count,bool_or(user_id=:user) AS reacted
-        FROM comment_reactions WHERE comment_id=ANY(CAST(:ids AS text[])) GROUP BY comment_id,emoji ORDER BY MIN(created_at)"""),
+            COMMENT_ROWS_SELECT_COMMENT_REACTIONS,
             params,
         )
     ).mappings()
     attachments = (
         await db.execute(
-            text("""SELECT id,filename,mime_type AS "mimeType",size,created_at AS "createdAt",entity_id AS "entityId"
-        FROM attachments WHERE workspace_id=:workspace AND entity_type='comment' AND entity_id=ANY(CAST(:ids AS text[])) ORDER BY created_at,id"""),
+            COMMENT_ROWS_SELECT_ATTACHMENTS,
             params,
         )
     ).mappings()
@@ -107,9 +109,7 @@ async def comment_page(
     if parent_id:
         parent = (
             await db.execute(
-                text(
-                    "SELECT 1 FROM comments WHERE id=:id AND issue_id=:issue AND deleted_at IS NULL"
-                ),
+                COMMENT_PAGE_SELECT_COMMENTS,
                 {"id": parent_id, "issue": issue_id},
             )
         ).scalar_one_or_none()
@@ -127,9 +127,7 @@ async def comment_page(
     rows = (
         (
             await db.execute(
-                text(
-                    f"SELECT c.id,c.created_at FROM comments c WHERE {' AND '.join(where)} ORDER BY c.created_at DESC,c.id DESC LIMIT :limit"
-                ),
+                comment_page_select_comments_sql(where),
                 params,
             )
         )
@@ -147,10 +145,7 @@ async def comment_page(
         children = (
             (
                 await db.execute(
-                    text("""SELECT id FROM (
-            SELECT id,row_number() OVER (PARTITION BY parent_comment_id ORDER BY created_at DESC,id DESC) AS position
-            FROM comments WHERE parent_comment_id=ANY(CAST(:parents AS text[])) AND deleted_at IS NULL
-        ) bounded WHERE position<=5"""),
+                    COMMENT_PAGE_SELECT_COMMENTS_2,
                     {"parents": ids},
                 )
             )
@@ -185,9 +180,7 @@ async def activity_page(
         project = (
             (
                 await db.execute(
-                    text(
-                        "SELECT team_id FROM projects WHERE id=:id AND workspace_id=:workspace AND archived_at IS NULL"
-                    ),
+                    ACTIVITY_PAGE_SELECT_PROJECTS,
                     {"id": project_id, "workspace": workspace_id},
                 )
             )
@@ -215,9 +208,7 @@ async def activity_page(
     rows = (
         (
             await db.execute(
-                text(f"""SELECT a.id,a.type,a.data,a.created_at,u.id AS actor_id,u.name AS actor_name,u.avatar_url AS actor_avatar_url
-        FROM activities a LEFT JOIN users u ON u.id=a.actor_id WHERE a.workspace_id=:workspace AND {clause} {after}
-        ORDER BY a.created_at DESC,a.id DESC LIMIT :limit"""),
+                activity_page_select_activities_sql(clause, after),
                 params,
             )
         )

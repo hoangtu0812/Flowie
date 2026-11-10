@@ -4,7 +4,6 @@ from typing import Annotated, Any
 
 from fastapi import Depends, Query, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import utcnow
@@ -12,6 +11,11 @@ from ...core.errors import ApiError
 from ...core.utc_responses import UtcAPIRouter as APIRouter
 from ...db.session import get_session
 from ..identity.auth import current_user
+from .commands import (
+    REMOVE_COMMENT_UPDATE_COMMENTS,
+    TOGGLE_COMMENT_REACTION_DELETE_COMMENT_REACTIONS,
+    TOGGLE_COMMENT_REACTION_INSERT_COMMENT_REACTIONS,
+)
 from .comment_repository import (
     _comment,
     _reaction_summary,
@@ -21,6 +25,9 @@ from .contracts import (
     CreateCommentInput,
 )
 from .issue_queries import issue_row
+from .queries import (
+    COMMENT_REVISIONS_SELECT_COMMENT_REVISIONS,
+)
 
 router = APIRouter(prefix='/api/v1/_native/comments', tags=['native-comments'])
 # Comments have no web UI adapter switched yet. Expose the audited native
@@ -51,8 +58,7 @@ async def mention_members(workspaceId: str = Query(min_length=1), issueId: str =
 @public_router.get('/{comment_id}/revisions')
 async def comment_revisions(comment_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict:
     await _comment(db, comment_id, workspaceId, user['id'])
-    rows = (await db.execute(text('''SELECT version,content,mention_ids AS "mentionIds",created_at AS "createdAt"
-        FROM comment_revisions WHERE comment_id=:id ORDER BY version DESC LIMIT 100'''), {'id': comment_id})).mappings()
+    rows = (await db.execute(COMMENT_REVISIONS_SELECT_COMMENT_REVISIONS, {'id': comment_id})).mappings()
     return {'data': [dict(row) for row in rows]}
 
 
@@ -126,7 +132,7 @@ async def remove_comment(
     if current['authorId'] != user['id']:
         raise ApiError(403, 'Only the comment author can delete it.', 'Forbidden')
     now = utcnow()
-    await db.execute(text('UPDATE comments SET deleted_at = :now, updated_at = :now WHERE id = :comment_id'), {'comment_id': comment_id, 'now': now})
+    await db.execute(REMOVE_COMMENT_UPDATE_COMMENTS, {'comment_id': comment_id, 'now': now})
     await db.commit()
     return {'data': {**current, 'deletedAt': now}}
 
@@ -154,12 +160,12 @@ async def toggle_comment_reaction(
     await _comment(db, comment_id, payload.workspaceId, user['id'])
     emoji = payload.emoji.strip()
     result = await db.execute(
-        text('DELETE FROM comment_reactions WHERE comment_id = :comment_id AND user_id = :user_id AND emoji = :emoji RETURNING emoji'),
+        TOGGLE_COMMENT_REACTION_DELETE_COMMENT_REACTIONS,
         {'comment_id': comment_id, 'user_id': user['id'], 'emoji': emoji},
     )
     if result.scalar_one_or_none() is None:
         await db.execute(
-            text('INSERT INTO comment_reactions (comment_id, user_id, emoji) VALUES (:comment_id, :user_id, :emoji)'),
+            TOGGLE_COMMENT_REACTION_INSERT_COMMENT_REACTIONS,
             {'comment_id': comment_id, 'user_id': user['id'], 'emoji': emoji},
         )
     await db.commit()

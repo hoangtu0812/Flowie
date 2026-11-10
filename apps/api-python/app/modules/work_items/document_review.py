@@ -11,7 +11,6 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import utcnow
@@ -20,7 +19,23 @@ from ...modules.notifications.outbox import stage_notifications
 from ...services.notification_events import create_notification_batch
 from ..access.membership import workspace_role
 from ..audit.write import record_change
+from .commands import (
+    DECIDE_UPDATE_DOCUMENT_REVIEWERS,
+    DECIDE_UPDATE_DOCUMENTS,
+    SET_REVIEWERS_DELETE_DOCUMENT_REVIEWERS,
+    SET_REVIEWERS_INSERT_DOCUMENT_REVIEWERS,
+)
 from .document_repository import document_team_access
+from .queries import (
+    LOCKED_SELECT_DOCUMENTS,
+    REVIEW_STATE_SELECT_DOCUMENTS,
+    REVIEW_STATE_SELECT_USERS,
+    REVIEWERS_SELECT_DOCUMENT_REVIEWERS_2,
+    approver_ids_select_workspace_members_sql,
+    review_state_select_users_sql,
+    set_reviewers_select_team_members_sql,
+    set_reviewers_select_users_sql,
+)
 
 Decision = Literal["APPROVED", "CHANGES_REQUESTED"]
 
@@ -68,10 +83,7 @@ async def approver_ids(db: AsyncSession, workspace_id: str, team_id: str | None)
     return list(
         (
             await db.execute(
-                text(f"""SELECT wm.user_id FROM workspace_members wm JOIN users u ON u.id=wm.user_id
-                WHERE wm.workspace_id=:workspace AND wm.status='ACTIVE' AND u.status='ACTIVE'
-                AND (wm.role IN ('OWNER','ADMIN') {lead_filter}) {team_filter}
-                ORDER BY wm.created_at,wm.user_id"""),
+                approver_ids_select_workspace_members_sql(lead_filter, team_filter),
                 {"workspace": workspace_id, "team": team_id},
             )
         ).scalars().all()
@@ -81,9 +93,7 @@ async def approver_ids(db: AsyncSession, workspace_id: str, team_id: str | None)
 async def _reviewers(db: AsyncSession, document_id: str) -> list[dict[str, Any]]:
     rows = (
         await db.execute(
-            text("""SELECT r.reviewer_id,r.decision,r.note,r.decided_at,r.assigned_at,u.name,u.avatar_url
-            FROM document_reviewers r JOIN users u ON u.id=r.reviewer_id
-            WHERE r.document_id=:id ORDER BY r.assigned_at,r.reviewer_id"""),
+            REVIEWERS_SELECT_DOCUMENT_REVIEWERS_2,
             {"id": document_id},
         )
     ).mappings().all()
@@ -131,8 +141,7 @@ def approval_block(
 async def _locked(db: AsyncSession, workspace_id: str, document_id: str, user_id: str) -> dict:
     row = (
         await db.execute(
-            text("""SELECT * FROM documents WHERE id=:id AND workspace_id=:workspace
-            AND archived_at IS NULL FOR UPDATE"""),
+            LOCKED_SELECT_DOCUMENTS,
             {"id": document_id, "workspace": workspace_id},
         )
     ).mappings().first()
@@ -150,7 +159,7 @@ async def review_state(
     """
     row = (
         await db.execute(
-            text("SELECT * FROM documents WHERE id=:id AND workspace_id=:workspace AND archived_at IS NULL"),
+            REVIEW_STATE_SELECT_DOCUMENTS,
             {"id": document_id, "workspace": workspace_id},
         )
     ).mappings().first()
@@ -161,7 +170,7 @@ async def review_state(
     reviewers = await _reviewers(db, document_id)
     people = (
         await db.execute(
-            text("SELECT id,name,avatar_url FROM users WHERE id=ANY(CAST(:ids AS text[]))"),
+            REVIEW_STATE_SELECT_USERS,
             {"ids": approvers},
         )
     ).mappings().all()
@@ -177,9 +186,7 @@ async def review_state(
     members = (
         (
             await db.execute(
-                text(f"""SELECT u.id,u.name,u.avatar_url FROM users u
-                WHERE {"EXISTS(SELECT 1 FROM team_members tm WHERE tm.team_id=:team AND tm.user_id=u.id) AND" if row["team_id"] else ""}
-                {ACTIVE_MEMBER.format(user='u.id')} ORDER BY u.name,u.id LIMIT 500"""),
+                review_state_select_users_sql(row, ACTIVE_MEMBER),
                 {"team": row["team_id"], "workspace": workspace_id},
             )
         ).mappings().all()
@@ -278,16 +285,14 @@ async def set_reviewers(
         members = set(
             (
                 await db.execute(
-                    text(f"""SELECT tm.user_id FROM team_members tm WHERE tm.team_id=:team
-                    AND tm.user_id=ANY(CAST(:ids AS text[])) AND {ACTIVE_MEMBER.format(user='tm.user_id')}"""),
+                    set_reviewers_select_team_members_sql(ACTIVE_MEMBER),
                     {"team": document["team_id"], "ids": wanted, "workspace": payload.workspaceId},
                 )
             ).scalars().all()
         ) if document["team_id"] else set(
             (
                 await db.execute(
-                    text(f"""SELECT u.id FROM users u WHERE u.id=ANY(CAST(:ids AS text[]))
-                    AND {ACTIVE_MEMBER.format(user='u.id')}"""),
+                    set_reviewers_select_users_sql(ACTIVE_MEMBER),
                     {"ids": wanted, "workspace": payload.workspaceId},
                 )
             ).scalars().all()
@@ -296,14 +301,13 @@ async def set_reviewers(
             raise ApiError(400, "Reviewers must be active members of the document's team.", "Bad Request")
     current = {row["id"] for row in await _reviewers(db, document_id)}
     await db.execute(
-        text("DELETE FROM document_reviewers WHERE document_id=:id AND NOT reviewer_id=ANY(CAST(:ids AS text[]))"),
+        SET_REVIEWERS_DELETE_DOCUMENT_REVIEWERS,
         {"id": document_id, "ids": wanted},
     )
     added = [reviewer for reviewer in wanted if reviewer not in current]
     for reviewer in added:
         await db.execute(
-            text("""INSERT INTO document_reviewers (document_id,reviewer_id,assigned_by,assigned_at)
-            VALUES (:id,:reviewer,:by,:now)"""),
+            SET_REVIEWERS_INSERT_DOCUMENT_REVIEWERS,
             {"id": document_id, "reviewer": reviewer, "by": user["id"], "now": utcnow()},
         )
     if added or len(current - set(wanted)):
@@ -325,8 +329,7 @@ async def decide(
     note = (payload.note or "").strip() or None
     updated = (
         await db.execute(
-            text("""UPDATE document_reviewers SET decision=:decision,note=:note,decided_at=:now
-            WHERE document_id=:id AND reviewer_id=:user RETURNING reviewer_id"""),
+            DECIDE_UPDATE_DOCUMENT_REVIEWERS,
             {"decision": payload.decision, "note": note, "now": utcnow(), "id": document_id, "user": user["id"]},
         )
     ).first()
@@ -341,7 +344,7 @@ async def decide(
         # The author fixes a draft; the change request stays visible until the next submission.
         # VI: Tác giả sửa bản nháp; yêu cầu sửa vẫn hiển thị cho tới lần gửi duyệt kế tiếp.
         await db.execute(
-            text("UPDATE documents SET status='DRAFT',updated_by=:user,updated_at=:now WHERE id=:id"),
+            DECIDE_UPDATE_DOCUMENTS,
             {"id": document_id, "user": user["id"], "now": utcnow()},
         )
         await _notify(

@@ -2,12 +2,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.errors import ApiError
 from .contracts import CommentInput
 from .issue_queries import issue_row
+from .queries import (
+    COMMENT_SELECT_ACTIVITIES,
+    COMMENT_SELECT_ATTACHMENTS,
+    REACTION_SUMMARY_SELECT_COMMENT_REACTIONS,
+)
 
 
 def _text_from_body(value: Any) -> str:
@@ -46,15 +50,7 @@ async def _comment(
     db: AsyncSession, comment_id: str, workspace_id: str, user_id: str
 ) -> dict[str, Any]:
     result = await db.execute(
-        text(
-            """SELECT c.*, u.id AS author_id_value, u.name AS author_name, u.avatar_url AS author_avatar_url,
-                      (SELECT COALESCE(a.data->'agent','{}'::jsonb) FROM activities a WHERE a.issue_id=c.issue_id AND a.type='comment.created' AND a.data->>'commentId'=c.id AND a.data->>'source'='AI' LIMIT 1) AS agent
-               FROM comments c
-               JOIN issues i ON i.id = c.issue_id
-               JOIN users u ON u.id = c.author_id
-               WHERE c.id = :comment_id AND i.workspace_id = :workspace_id
-                 AND i.archived_at IS NULL AND c.deleted_at IS NULL LIMIT 1"""
-        ),
+        COMMENT_SELECT_ACTIVITIES,
         {"comment_id": comment_id, "workspace_id": workspace_id},
     )
     row = result.mappings().first()
@@ -63,11 +59,7 @@ async def _comment(
     await issue_row(db, row["issue_id"], workspace_id, user_id)
     reactions = await _reaction_summary(db, comment_id, user_id)
     attachments = await db.execute(
-        text(
-            """SELECT id, filename, mime_type, size, created_at, entity_id FROM attachments
-               WHERE workspace_id = :workspace_id AND entity_type = 'comment' AND entity_id = :comment_id
-               ORDER BY created_at"""
-        ),
+        COMMENT_SELECT_ATTACHMENTS,
         {"workspace_id": workspace_id, "comment_id": comment_id},
     )
     body = (
@@ -110,10 +102,7 @@ async def _reaction_summary(
     db: AsyncSession, comment_id: str, user_id: str
 ) -> list[dict[str, Any]]:
     result = await db.execute(
-        text(
-            """SELECT emoji, COUNT(*)::int AS count, BOOL_OR(user_id = :user_id) AS reacted
-               FROM comment_reactions WHERE comment_id = :comment_id GROUP BY emoji ORDER BY MIN(created_at)"""
-        ),
+        REACTION_SUMMARY_SELECT_COMMENT_REACTIONS,
         {"comment_id": comment_id, "user_id": user_id},
     )
     return [

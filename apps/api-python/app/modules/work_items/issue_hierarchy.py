@@ -1,9 +1,16 @@
 from __future__ import annotations
 
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.errors import ApiError
+from .commands import (
+    VALIDATE_PARENT_LOCK,
+)
+from .queries import (
+    ISSUE_ANCESTORS_SELECT_ISSUES,
+    VALIDATE_PARENT_SELECT_ISSUES,
+    VALIDATE_PARENT_SELECT_ISSUES_2,
+)
 
 
 async def validate_parent(
@@ -28,24 +35,19 @@ async def validate_parent(
     if parent_id == issue_id:
         raise ApiError(400, "An issue cannot be its own parent.", "Bad Request")
     await db.execute(
-        text("SELECT pg_advisory_xact_lock(hashtextextended('issue-hierarchy:' || :workspace, 0))"),
+        VALIDATE_PARENT_LOCK,
         {"workspace": workspace_id},
     )
     parent = (
         await db.execute(
-            text("""SELECT id, identifier FROM issues WHERE id = :id AND workspace_id = :workspace
-                    AND team_id IS NOT DISTINCT FROM :team AND archived_at IS NULL"""),
+            VALIDATE_PARENT_SELECT_ISSUES_2,
             {"id": parent_id, "workspace": workspace_id, "team": team_id},
         )
     ).mappings().first()
     if parent is None:
         raise ApiError(404, "Parent issue was not found for this team.", "Not Found")
     cycle = await db.execute(
-        text("""WITH RECURSIVE ancestors(id, parent_issue_id) AS (
-                    SELECT id, parent_issue_id FROM issues WHERE id = :parent
-                    UNION
-                    SELECT i.id, i.parent_issue_id FROM issues i JOIN ancestors a ON i.id = a.parent_issue_id
-                ) SELECT 1 FROM ancestors WHERE id = :issue"""),
+        VALIDATE_PARENT_SELECT_ISSUES,
         {"parent": parent_id, "issue": issue_id},
     )
     if cycle.first():
@@ -67,15 +69,7 @@ async def issue_ancestors(db: AsyncSession, workspace_id: str, issue_id: str) ->
     VI: (``validate_parent``), nên người đọc được con cũng xem được cha.
     """
     rows = await db.execute(
-        text("""WITH RECURSIVE chain(id, identifier, title, parent_issue_id, depth) AS (
-                    SELECT p.id, p.identifier, p.title, p.parent_issue_id, 1
-                    FROM issues c JOIN issues p ON p.id = c.parent_issue_id
-                    WHERE c.id = :issue AND p.workspace_id = :workspace AND p.archived_at IS NULL
-                    UNION ALL
-                    SELECT p.id, p.identifier, p.title, p.parent_issue_id, chain.depth + 1
-                    FROM chain JOIN issues p ON p.id = chain.parent_issue_id
-                    WHERE p.workspace_id = :workspace AND p.archived_at IS NULL AND chain.depth < 50
-                ) SELECT id, identifier, title FROM chain ORDER BY depth DESC"""),
+        ISSUE_ANCESTORS_SELECT_ISSUES,
         {"issue": issue_id, "workspace": workspace_id},
     )
     return [dict(row) for row in rows.mappings()]

@@ -3,11 +3,15 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import urlparse
 
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.errors import ApiError
 from ..access.membership import workspace_role
+from .queries import (
+    DOCUMENT_TEAM_ACCESS_SELECT_TEAMS,
+    FOLDER_SELECT_DOCUMENT_FOLDERS,
+    documents_select_document_releases_sql,
+)
 
 
 async def document_team_access(
@@ -17,9 +21,7 @@ async def document_team_access(
     if not team_id:
         return
     member = await db.execute(
-        text("""SELECT 1 FROM teams t JOIN team_members tm ON tm.team_id = t.id
-                WHERE t.id = :team_id AND t.workspace_id = :workspace_id
-                  AND t.archived_at IS NULL AND tm.user_id = :user_id"""),
+        DOCUMENT_TEAM_ACCESS_SELECT_TEAMS,
         {"team_id": team_id, "workspace_id": workspace_id, "user_id": user_id},
     )
     if member.scalar_one_or_none() is None:
@@ -100,24 +102,7 @@ async def _documents(
         filters.append("d.folder_id = :folder_id")
         params["folder_id"] = folder_id
     result = await db.execute(
-        text(f"""SELECT d.*, creator.id AS created_by_id, creator.name AS created_by_name,
-                        creator.avatar_url AS created_by_avatar_url, updater.id AS updated_by_id,
-                        updater.name AS updated_by_name, updater.avatar_url AS updated_by_avatar_url,
-                        source_attachment.id AS source_attachment_id,
-                        source_attachment.filename AS source_attachment_filename,
-                        source_attachment.mime_type AS source_attachment_mime_type,
-                        source_attachment.size AS source_attachment_size,
-                        (SELECT MAX(r.release) FROM document_releases r WHERE r.document_id = d.id) AS latest_release
-                 FROM documents d
-                 JOIN users creator ON creator.id = d.created_by
-                 JOIN users updater ON updater.id = d.updated_by
-                 LEFT JOIN LATERAL (
-                    SELECT id, filename, mime_type, size FROM attachments
-                    WHERE workspace_id = d.workspace_id AND entity_type = 'document' AND entity_id = d.id
-                    ORDER BY created_at ASC LIMIT 1
-                 ) source_attachment ON TRUE
-                 WHERE {" AND ".join(filters)}
-                 ORDER BY d.position ASC, d.created_at ASC, d.id ASC"""),
+        documents_select_document_releases_sql(filters),
         params,
     )
     return [_document(row) for row in result.mappings().all()]
@@ -132,9 +117,7 @@ async def _document_by_id(
 
 async def _folder(db: AsyncSession, folder_id: str, workspace_id: str) -> Any:
     result = await db.execute(
-        text(
-            "SELECT * FROM document_folders WHERE id = :id AND workspace_id = :workspace_id"
-        ),
+        FOLDER_SELECT_DOCUMENT_FOLDERS,
         {"id": folder_id, "workspace_id": workspace_id},
     )
     row = result.mappings().first()

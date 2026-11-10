@@ -1,10 +1,11 @@
 from typing import Any
 
-from sqlalchemy import text
-
 from ...core.errors import ApiError
 from ..access.project_scope import project_read_scope
 from .issue_search import issue_scope
+from .queries import (
+    issue_insights_select_sql,
+)
 
 DIMENSIONS = {
     'status': ("s.id", "s.name", "s.color", "NULL::text"),
@@ -21,7 +22,7 @@ async def issue_insights(db, workspace, user, options, slice_by, segment_by):
     joins = f' LEFT JOIN users a ON a.id=i.assignee_id LEFT JOIN projects p ON p.id=i.project_id AND {project_read_scope()} '
     sql = sql.replace(' WHERE ', joins+' WHERE ',1)
     expressions = [f'{expression} AS {prefix}_{field}' for prefix,dimension in [('slice',slice_by),('segment',segment_by)] for field,expression in zip(['id','label','color','avatar'],DIMENSIONS[dimension],strict=False)]
-    cells = (await db.execute(text('SELECT '+','.join(expressions)+',COUNT(*) AS count '+sql+' GROUP BY 1,2,3,4,5,6,7,8 ORDER BY 1,5 LIMIT 1001'),params)).mappings().all()
+    cells = (await db.execute(issue_insights_select_sql(expressions, sql),params)).mappings().all()
     if len(cells)>1000:
         raise ApiError(400,'Too many report groups. Narrow the filters.','Bad Request')
 

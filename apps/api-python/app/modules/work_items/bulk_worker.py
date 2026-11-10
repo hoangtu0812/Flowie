@@ -1,15 +1,30 @@
 import asyncio
 import json
 
-from sqlalchemy import text
-
 from ...core.clock import utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import cuid
 from ..operations.heartbeats import progress
+from .commands import (
+    PROCESS_BULK_ITEM_DELETE_ISSUE_CYCLES,
+    PROCESS_BULK_ITEM_INSERT_ACTIVITIES,
+    PROCESS_BULK_ITEM_INSERT_ISSUE_CYCLES,
+    PROCESS_BULK_ITEM_UPDATE_BULK_OPERATION_ITEMS,
+    PROCESS_BULK_ITEM_UPDATE_BULK_OPERATIONS,
+    PROCESS_BULK_ITEM_UPDATE_BULK_OPERATIONS_2,
+    PROCESS_BULK_ITEM_UPDATE_BULK_OPERATIONS_3,
+    PROCESS_BULK_ITEM_UPDATE_ISSUES,
+)
 from .contracts import UpdateIssueInput
 from .issue_search import issue_scope
 from .issues import update_issue
+from .queries import (
+    PROCESS_BULK_ITEM_SELECT_BULK_OPERATION_ITEMS,
+    PROCESS_BULK_ITEM_SELECT_BULK_OPERATIONS,
+    PROCESS_BULK_ITEM_SELECT_CYCLES,
+    PROCESS_BULK_ITEM_SELECT_USERS,
+    process_bulk_item_select_sql,
+)
 
 
 async def process_bulk_item(factory):
@@ -17,8 +32,7 @@ async def process_bulk_item(factory):
         operation = (
             (
                 await db.execute(
-                    text("""SELECT * FROM bulk_operations
-            WHERE state IN ('QUEUED','RUNNING') ORDER BY created_at,id FOR UPDATE SKIP LOCKED LIMIT 1""")
+                    PROCESS_BULK_ITEM_SELECT_BULK_OPERATIONS
                 )
             )
             .mappings()
@@ -29,9 +43,7 @@ async def process_bulk_item(factory):
         user = (
             (
                 await db.execute(
-                    text("""SELECT u.id,u.name,u.avatar_url AS "avatarUrl" FROM users u
-            JOIN workspace_members wm ON wm.user_id=u.id WHERE u.id=:user AND wm.workspace_id=:workspace
-            AND wm.status='ACTIVE' AND u.status='ACTIVE' """),
+                    PROCESS_BULK_ITEM_SELECT_USERS,
                     {
                         "user": operation["actor_id"],
                         "workspace": operation["workspace_id"],
@@ -43,7 +55,7 @@ async def process_bulk_item(factory):
         )
         if not user:
             await db.execute(
-                text("UPDATE bulk_operations SET state='FAILED' WHERE id=:id"),
+                PROCESS_BULK_ITEM_UPDATE_BULK_OPERATIONS_2,
                 {"id": operation["id"]},
             )
             await db.commit()
@@ -51,9 +63,7 @@ async def process_bulk_item(factory):
         item = (
             (
                 await db.execute(
-                    text(
-                        "SELECT * FROM bulk_operation_items WHERE operation_id=:id AND state='PENDING' ORDER BY issue_id LIMIT 1 FOR UPDATE"
-                    ),
+                    PROCESS_BULK_ITEM_SELECT_BULK_OPERATION_ITEMS,
                     {"id": operation["id"]},
                 )
             )
@@ -62,7 +72,7 @@ async def process_bulk_item(factory):
         )
         if item is None:
             await db.execute(
-                text("UPDATE bulk_operations SET state='DONE' WHERE id=:id"),
+                PROCESS_BULK_ITEM_UPDATE_BULK_OPERATIONS_3,
                 {"id": operation["id"]},
             )
             await db.commit()
@@ -74,11 +84,7 @@ async def process_bulk_item(factory):
                 issue = (
                     (
                         await db.execute(
-                            text(
-                                "SELECT i.id,i.version,i.team_id "
-                                + scope
-                                + " AND i.id=:issue FOR UPDATE OF i"
-                            ),
+                            process_bulk_item_select_sql(scope),
                             {**params, "issue": item["issue_id"]},
                         )
                     )
@@ -102,9 +108,7 @@ async def process_bulk_item(factory):
                         cycle
                         and not (
                             await db.execute(
-                                text(
-                                    "SELECT 1 FROM cycles WHERE id=:cycle AND workspace_id=:workspace AND team_id=:team"
-                                ),
+                                PROCESS_BULK_ITEM_SELECT_CYCLES,
                                 {
                                     "cycle": cycle,
                                     "workspace": operation["workspace_id"],
@@ -117,24 +121,21 @@ async def process_bulk_item(factory):
                             400, "Cycle does not match the issue team.", "Bad Request"
                         )
                     await db.execute(
-                        text("DELETE FROM issue_cycles WHERE issue_id=:id"),
+                        PROCESS_BULK_ITEM_DELETE_ISSUE_CYCLES,
                         {"id": issue["id"]},
                     )
                     if cycle:
                         await db.execute(
-                            text(
-                                "INSERT INTO issue_cycles(issue_id,cycle_id) VALUES (:id,:cycle)"
-                            ),
+                            PROCESS_BULK_ITEM_INSERT_ISSUE_CYCLES,
                             {"id": issue["id"], "cycle": cycle},
                         )
                     if len(changes) == 1:
                         await db.execute(
-                            text("UPDATE issues SET updated_at=:now WHERE id=:id"),
+                            PROCESS_BULK_ITEM_UPDATE_ISSUES,
                             {"now": utcnow(), "id": issue["id"]},
                         )
                 await db.execute(
-                    text("""INSERT INTO activities(id,workspace_id,issue_id,actor_id,type,data,created_at)
-                    VALUES (:id,:workspace,:issue,:user,'issue.bulk_changed',CAST(:data AS jsonb),:now)"""),
+                    PROCESS_BULK_ITEM_INSERT_ACTIVITIES,
                     {
                         "id": cuid(),
                         "workspace": operation["workspace_id"],
@@ -156,9 +157,7 @@ async def process_bulk_item(factory):
         except Exception:
             code = "FAILED"
         await db.execute(
-            text(
-                "UPDATE bulk_operation_items SET state=:state,error_code=:error WHERE operation_id=:operation AND issue_id=:issue"
-            ),
+            PROCESS_BULK_ITEM_UPDATE_BULK_OPERATION_ITEMS,
             {
                 "state": "FAILED" if code else "SUCCEEDED",
                 "error": code,
@@ -167,8 +166,7 @@ async def process_bulk_item(factory):
             },
         )
         await db.execute(
-            text("""UPDATE bulk_operations SET state=CASE WHEN EXISTS(
-            SELECT 1 FROM bulk_operation_items WHERE operation_id=:id AND state='PENDING') THEN 'RUNNING' ELSE 'DONE' END WHERE id=:id"""),
+            PROCESS_BULK_ITEM_UPDATE_BULK_OPERATIONS,
             {"id": operation["id"]},
         )
         await db.commit()

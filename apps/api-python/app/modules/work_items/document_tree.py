@@ -15,14 +15,49 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import cuid
 from ..sharepoint.graph import viewer_url
+from .commands import (
+    CREATE_FOLDER_INSERT_DOCUMENT_FOLDERS,
+    DEFAULT_FOLDER_INSERT_DOCUMENT_FOLDERS,
+    DELETE_FOLDER_DELETE_DOCUMENT_FOLDERS,
+    LINK_ISSUE_DOCUMENT_DELETE_DOCUMENT_LINKS,
+    LINK_ISSUE_DOCUMENT_INSERT_DOCUMENT_LINKS,
+    LOCK_TEAM_FOLDERS_LOCK,
+    MUTATE_FOLDER_FILE_DELETE_ATTACHMENTS,
+    MUTATE_FOLDER_FILE_UPDATE_ATTACHMENTS,
+    REPUBLISH_BELOW_UPDATE_DOCUMENT_PUBLICATIONS,
+    UPDATE_FOLDER_UPDATE_DOCUMENT_FOLDERS,
+    UPDATE_FOLDER_UPDATE_DOCUMENT_FOLDERS_2,
+)
 from .document_repository import _document_by_id, _documents, document_team_access
+from .queries import (
+    ANCESTORS_SELECT_DOCUMENT_FOLDERS,
+    CREATE_FOLDER_SELECT_DOCUMENT_FOLDERS,
+    DEFAULT_FOLDER_SELECT_DOCUMENT_FOLDERS,
+    DELETE_FOLDER_SELECT_DOCUMENT_FOLDERS,
+    DOCUMENT_ISSUES_SELECT_DOCUMENT_LINKS,
+    ENSURE_UNIQUE_NAME_SELECT_DOCUMENT_FOLDERS,
+    ENSURE_UNIQUE_NUMBER_SELECT_DOCUMENT_FOLDERS,
+    FOLDER_ROW_SELECT_DOCUMENT_FOLDERS,
+    ISSUE_DOCUMENTS_SELECT_DOCUMENT_LINKS,
+    MUTATE_FOLDER_FILE_SELECT_ATTACHMENTS,
+    NEXT_NUMBER_SELECT_DOCUMENT_FOLDERS,
+    PROJECT_DOCUMENT_TEAM_SELECT_PROJECTS,
+    PROJECT_TREE_SELECT_ATTACHMENTS,
+    PROJECT_TREE_SELECT_DOCUMENT_FOLDERS,
+    PROJECT_TREE_SELECT_DOCUMENT_LINKS,
+    PROJECT_TREE_SELECT_WORKSPACE_MEMBERS,
+    PUBLICATIONS_BY_DOCUMENT_SELECT_DOCUMENT_PUBLICATIONS,
+    SCAFFOLD_PROJECT_TREE_SELECT_DOCUMENT_FOLDERS,
+    SCAFFOLD_PROJECT_TREE_SELECT_DOCUMENT_FOLDERS_2,
+    SCAFFOLD_PROJECT_TREE_SELECT_PROJECTS,
+    SUBTREE_HEIGHT_SELECT_DOCUMENT_FOLDERS,
+)
 
 FolderKind = Literal["project", "module", "feature", "changes", "general"]
 DocStatus = Literal["DRAFT", "IN_REVIEW", "APPROVED"]
@@ -67,7 +102,7 @@ async def _lock_team_folders(db: AsyncSession, team_id: str) -> None:
     # VI: Tuần tự hóa thay đổi cây và thêm nội dung theo team để kiểm tra tên/độ sâu/độ rỗng
     # VI: còn đúng tới lúc commit, kể cả PDF đa hình không có khóa ngoại tới thư mục.
     await db.execute(
-        text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+        LOCK_TEAM_FOLDERS_LOCK,
         {"key": f"document-folders:{team_id}"},
     )
 
@@ -83,11 +118,7 @@ async def default_folder(db: AsyncSession, workspace_id: str, team_id: str) -> A
     VI: tạo tài liệu thất bại; giờ tài liệu đầu tiên sẽ tạo thư mục này. Bỏ qua thư mục của
     VI: cây Docs dự án để tài liệu team không rơi vào cây dự án.
     """
-    query = text(
-        """SELECT * FROM document_folders WHERE workspace_id = :workspace AND team_id = :team
-           AND project_id IS NULL
-           ORDER BY (parent_id IS NOT NULL), position ASC, created_at ASC, id ASC LIMIT 1"""
-    )
+    query = DEFAULT_FOLDER_SELECT_DOCUMENT_FOLDERS
     params = {"workspace": workspace_id, "team": team_id}
     folder = (await db.execute(query, params)).mappings().first()
     if folder:
@@ -98,10 +129,7 @@ async def default_folder(db: AsyncSession, workspace_id: str, team_id: str) -> A
         return folder
     now = utcnow()
     await db.execute(
-        text(
-            """INSERT INTO document_folders (id, workspace_id, team_id, kind, name, icon, position, created_at, updated_at)
-               VALUES (:id, :workspace, :team, 'general', :name, '📁', 0, :now, :now)"""
-        ),
+        DEFAULT_FOLDER_INSERT_DOCUMENT_FOLDERS,
         {"id": cuid(), **params, "name": DEFAULT_FOLDER_NAME, "now": now},
     )
     return (await db.execute(query, params)).mappings().first()
@@ -110,9 +138,7 @@ async def default_folder(db: AsyncSession, workspace_id: str, team_id: str) -> A
 async def project_document_team(db: AsyncSession, workspace_id: str, project_id: str, user_id: str) -> str:
     row = (
         await db.execute(
-            text(
-                "SELECT team_id FROM projects WHERE id = :id AND workspace_id = :workspace AND archived_at IS NULL"
-            ),
+            PROJECT_DOCUMENT_TEAM_SELECT_PROJECTS,
             {"id": project_id, "workspace": workspace_id},
         )
     ).mappings().first()
@@ -131,7 +157,7 @@ async def project_document_team(db: AsyncSession, workspace_id: str, project_id:
 async def _folder_row(db: AsyncSession, workspace_id: str, folder_id: str) -> Any:
     row = (
         await db.execute(
-            text("SELECT * FROM document_folders WHERE id = :id AND workspace_id = :workspace"),
+            FOLDER_ROW_SELECT_DOCUMENT_FOLDERS,
             {"id": folder_id, "workspace": workspace_id},
         )
     ).mappings().first()
@@ -144,14 +170,7 @@ async def _ancestors(db: AsyncSession, folder_id: str) -> list[str]:
     """Ids from `folder_id` up to its root, inclusive. VI: Id từ `folder_id` lên tới gốc."""
     rows = (
         await db.execute(
-            text(
-                """WITH RECURSIVE chain(id, parent_id, depth) AS (
-                       SELECT id, parent_id, 1 FROM document_folders WHERE id = :id
-                       UNION ALL
-                       SELECT f.id, f.parent_id, chain.depth + 1 FROM document_folders f
-                       JOIN chain ON f.id = chain.parent_id WHERE chain.depth <= :limit)
-                   SELECT id FROM chain ORDER BY depth"""
-            ),
+            ANCESTORS_SELECT_DOCUMENT_FOLDERS,
             {"id": folder_id, "limit": MAX_FOLDER_DEPTH + 1},
         )
     ).scalars().all()
@@ -162,14 +181,7 @@ async def _subtree_height(db: AsyncSession, folder_id: str) -> int:
     """Levels below and including `folder_id`. VI: Số tầng tính từ `folder_id` trở xuống."""
     return (
         await db.execute(
-            text(
-                """WITH RECURSIVE below(id, depth) AS (
-                       SELECT id, 1 FROM document_folders WHERE id = :id
-                       UNION ALL
-                       SELECT f.id, below.depth + 1 FROM document_folders f
-                       JOIN below ON f.parent_id = below.id WHERE below.depth <= :limit)
-                   SELECT MAX(depth) FROM below"""
-            ),
+            SUBTREE_HEIGHT_SELECT_DOCUMENT_FOLDERS,
             {"id": folder_id, "limit": MAX_FOLDER_DEPTH + 1},
         )
     ).scalar_one() or 1
@@ -180,11 +192,7 @@ async def _ensure_unique_name(
 ) -> None:
     taken = (
         await db.execute(
-            text(
-                """SELECT 1 FROM document_folders WHERE team_id = :team
-                   AND parent_id IS NOT DISTINCT FROM :parent AND lower(name) = lower(:name)
-                   AND id <> COALESCE(:exclude, '') LIMIT 1"""
-            ),
+            ENSURE_UNIQUE_NAME_SELECT_DOCUMENT_FOLDERS,
             {"team": team_id, "parent": parent_id, "name": name, "exclude": exclude_id},
         )
     ).first()
@@ -201,10 +209,7 @@ async def _ensure_unique_number(
         return
     taken = (
         await db.execute(
-            text(
-                """SELECT 1 FROM document_folders WHERE parent_id = :parent AND number = :number
-                   AND id <> COALESCE(:exclude, '') LIMIT 1"""
-            ),
+            ENSURE_UNIQUE_NUMBER_SELECT_DOCUMENT_FOLDERS,
             {"parent": parent_id, "number": number, "exclude": exclude_id},
         )
     ).first()
@@ -219,10 +224,7 @@ async def _next_number(db: AsyncSession, parent_id: str) -> int | None:
     VI: dưới 99, bắt đầu từ 01; trả None khi chạm 99, vì 99 dành cho ô cuối."""
     number = (
         await db.execute(
-            text(
-                """SELECT COALESCE(MAX(number) FILTER (WHERE number < :last), 0) + 1
-                   FROM document_folders WHERE parent_id = :parent"""
-            ),
+            NEXT_NUMBER_SELECT_DOCUMENT_FOLDERS,
             {"parent": parent_id, "last": LAST_FOLDER_NUMBER},
         )
     ).scalar_one()
@@ -241,13 +243,7 @@ async def _republish_below(db: AsyncSession, folder_id: str) -> None:
     VI: nằm trên SharePoint (Flowie không xoá gì ở đó).
     """
     await db.execute(
-        text(
-            """WITH RECURSIVE below(id) AS (
-                   SELECT id FROM document_folders WHERE id = :id
-                   UNION ALL SELECT f.id FROM document_folders f JOIN below ON f.parent_id = below.id)
-               UPDATE document_publications SET release = NULL
-               WHERE document_id IN (SELECT d.id FROM documents d WHERE d.folder_id IN (SELECT id FROM below))"""
-        ),
+        REPUBLISH_BELOW_UPDATE_DOCUMENT_PUBLICATIONS,
         {"id": folder_id},
     )
 
@@ -305,20 +301,13 @@ async def create_folder(
     await _ensure_unique_number(db, parent_id, number)
     position = (
         await db.execute(
-            text(
-                """SELECT COALESCE(MAX(position), -1) + 1 FROM document_folders
-                   WHERE team_id = :team AND parent_id IS NOT DISTINCT FROM :parent"""
-            ),
+            CREATE_FOLDER_SELECT_DOCUMENT_FOLDERS,
             {"team": team_id, "parent": parent_id},
         )
     ).scalar_one()
     folder_id, now = cuid(), utcnow()
     await db.execute(
-        text(
-            """INSERT INTO document_folders
-               (id, workspace_id, team_id, parent_id, project_id, kind, name, icon, position, number, created_at, updated_at)
-               VALUES (:id, :workspace, :team, :parent, :project, :kind, :name, :icon, :position, :number, :now, :now)"""
-        ),
+        CREATE_FOLDER_INSERT_DOCUMENT_FOLDERS,
         {
             "id": folder_id,
             "workspace": workspace_id,
@@ -384,10 +373,7 @@ async def update_folder(
     if "number" in values or "parentId" in values:
         await _ensure_unique_number(db, parent_id, number, exclude_id=folder_id)
     await db.execute(
-        text(
-            """UPDATE document_folders SET name = :name, icon = :icon, position = :position, kind = :kind,
-               parent_id = :parent, number = :number, updated_at = :now WHERE id = :id"""
-        ),
+        UPDATE_FOLDER_UPDATE_DOCUMENT_FOLDERS,
         {
             "id": folder_id,
             "name": name,
@@ -403,12 +389,7 @@ async def update_folder(
         await _republish_below(db, folder_id)
     if project_id != folder["project_id"]:
         await db.execute(
-            text(
-                """WITH RECURSIVE below(id) AS (
-                       SELECT id FROM document_folders WHERE id = :id
-                       UNION ALL SELECT f.id FROM document_folders f JOIN below ON f.parent_id = below.id)
-                   UPDATE document_folders SET project_id = :project WHERE id IN (SELECT id FROM below)"""
-            ),
+            UPDATE_FOLDER_UPDATE_DOCUMENT_FOLDERS_2,
             {"id": folder_id, "project": project_id},
         )
     return folder_payload(await _folder_row(db, workspace_id, folder_id))
@@ -436,15 +417,10 @@ async def delete_folder(
         raise ApiError(409, "This folder moved. Reload the tree and try again.", "Conflict")
     if folder["kind"] == "project":
         raise ApiError(400, "The project root cannot be deleted.", "Bad Request")
-    occupied = (await db.execute(text(
-        """SELECT EXISTS(SELECT 1 FROM document_folders WHERE parent_id = :id)
-           OR EXISTS(SELECT 1 FROM documents WHERE folder_id = :id AND archived_at IS NULL)
-           OR EXISTS(SELECT 1 FROM attachments WHERE workspace_id = :workspace
-                     AND entity_type = 'document-folder' AND entity_id = :id)"""
-    ), {"id": folder_id, "workspace": workspace_id})).scalar_one()
+    occupied = (await db.execute(DELETE_FOLDER_SELECT_DOCUMENT_FOLDERS, {"id": folder_id, "workspace": workspace_id})).scalar_one()
     if occupied:
         raise ApiError(409, "This folder is not empty. Move or delete its contents first.", "Conflict")
-    await db.execute(text("DELETE FROM document_folders WHERE id = :id"), {"id": folder_id})
+    await db.execute(DELETE_FOLDER_DELETE_DOCUMENT_FOLDERS, {"id": folder_id})
     return {"id": folder_id, "deleted": True}
 
 
@@ -464,10 +440,7 @@ async def mutate_folder_file(
     await document_team_access(db, workspace_id, source["team_id"], user_id)
     await _lock_team_folders(db, source["team_id"])
     source = await _folder_row(db, workspace_id, expected_folder_id)
-    file = (await db.execute(text(
-        """SELECT * FROM attachments WHERE id = :id AND workspace_id = :workspace
-           AND entity_type = 'document-folder' FOR UPDATE"""
-    ), {"id": file_id, "workspace": workspace_id})).mappings().first()
+    file = (await db.execute(MUTATE_FOLDER_FILE_SELECT_ATTACHMENTS, {"id": file_id, "workspace": workspace_id})).mappings().first()
     if not file:
         raise ApiError(404, "File not found.", "Not Found")
     if file["entity_id"] != expected_folder_id:
@@ -476,10 +449,10 @@ async def mutate_folder_file(
         destination = await _folder_row(db, workspace_id, folder_id)
         if (destination["team_id"], destination["project_id"]) != (source["team_id"], source["project_id"]):
             raise ApiError(400, "Files can only move within their project and team.", "Bad Request")
-        await db.execute(text("UPDATE attachments SET entity_id = :folder WHERE id = :id"),
+        await db.execute(MUTATE_FOLDER_FILE_UPDATE_ATTACHMENTS,
                          {"id": file_id, "folder": folder_id})
         return {"id": file_id, "folderId": folder_id}
-    await db.execute(text("DELETE FROM attachments WHERE id = :id"), {"id": file_id})
+    await db.execute(MUTATE_FOLDER_FILE_DELETE_ATTACHMENTS, {"id": file_id})
     return {"id": file_id, "deleted": True}
 
 
@@ -497,14 +470,11 @@ async def scaffold_project_tree(
     """
     team_id = await project_document_team(db, workspace_id, project_id, user_id)
     project_name = (
-        await db.execute(text("SELECT name FROM projects WHERE id = :id"), {"id": project_id})
+        await db.execute(SCAFFOLD_PROJECT_TREE_SELECT_PROJECTS, {"id": project_id})
     ).scalar_one()
     root = (
         await db.execute(
-            text(
-                """SELECT * FROM document_folders WHERE project_id = :project AND parent_id IS NULL
-                   AND kind = 'project' ORDER BY created_at LIMIT 1"""
-            ),
+            SCAFFOLD_PROJECT_TREE_SELECT_DOCUMENT_FOLDERS,
             {"project": project_id},
         )
     ).mappings().first()
@@ -523,10 +493,7 @@ async def scaffold_project_tree(
     for number, name in SCAFFOLD_FOLDERS:
         siblings = (
             await db.execute(
-                text(
-                    """SELECT bool_or(lower(name) = lower(:name)) AS named, bool_or(number = :number) AS numbered
-                       FROM document_folders WHERE parent_id = :parent"""
-                ),
+                SCAFFOLD_PROJECT_TREE_SELECT_DOCUMENT_FOLDERS_2,
                 {"parent": root_id, "name": name, "number": number},
             )
         ).mappings().one()
@@ -555,10 +522,7 @@ async def publications_by_document(
     """
     rows = (
         await db.execute(
-            text(
-                """SELECT document_id, version, release, web_url, path, published_at, last_error FROM document_publications
-                   WHERE document_id = ANY(CAST(:ids AS text[]))"""
-            ),
+            PUBLICATIONS_BY_DOCUMENT_SELECT_DOCUMENT_PUBLICATIONS,
             {"ids": document_ids},
         )
     ).mappings().all()
@@ -588,10 +552,7 @@ async def project_tree(
     team_id = await project_document_team(db, workspace_id, project_id, user_id)
     folders = (
         await db.execute(
-            text(
-                """SELECT * FROM document_folders WHERE workspace_id = :workspace AND project_id = :project
-                   ORDER BY position, name, id"""
-            ),
+            PROJECT_TREE_SELECT_DOCUMENT_FOLDERS,
             {"workspace": workspace_id, "project": project_id},
         )
     ).mappings().all()
@@ -599,10 +560,7 @@ async def project_tree(
     linked = set(
         (
             await db.execute(
-                text(
-                    """SELECT dl.document_id FROM document_links dl LEFT JOIN issues i ON i.id = dl.issue_id
-                       WHERE dl.workspace_id = :workspace AND COALESCE(dl.project_id, i.project_id) = :project"""
-                ),
+                PROJECT_TREE_SELECT_DOCUMENT_LINKS,
                 {"workspace": workspace_id, "project": project_id},
             )
         ).scalars().all()
@@ -623,21 +581,14 @@ async def project_tree(
         document["publication"] = publications.get(document["id"])
     files = (
         await db.execute(
-            text(
-                """SELECT id, entity_id, filename, mime_type, size, created_at FROM attachments
-                   WHERE workspace_id = :workspace AND entity_type = 'document-folder'
-                     AND entity_id = ANY(CAST(:folders AS text[]))
-                   ORDER BY filename, id"""
-            ),
+            PROJECT_TREE_SELECT_ATTACHMENTS,
             {"workspace": workspace_id, "folders": list(folder_ids)},
         )
     ).mappings().all()
     return {
         "projectId": project_id,
         "teamId": team_id,
-        "canManage": (await db.execute(text(
-            "SELECT role FROM workspace_members WHERE workspace_id = :workspace AND user_id = :user AND status = 'ACTIVE'"
-        ), {"workspace": workspace_id, "user": user_id})).scalar_one() != "ADMIN_VIEWER",
+        "canManage": (await db.execute(PROJECT_TREE_SELECT_WORKSPACE_MEMBERS, {"workspace": workspace_id, "user": user_id})).scalar_one() != "ADMIN_VIEWER",
         "folders": [folder_payload(row) for row in folders],
         "documents": documents,
         # PDFs uploaded into the tree's folders, previewed through the attachment routes.
@@ -666,7 +617,7 @@ async def issue_documents(
     linked = set(
         (
             await db.execute(
-                text("SELECT document_id FROM document_links WHERE workspace_id = :workspace AND issue_id = :issue"),
+                ISSUE_DOCUMENTS_SELECT_DOCUMENT_LINKS,
                 {"workspace": workspace_id, "issue": issue["id"]},
             )
         ).scalars().all()
@@ -699,11 +650,7 @@ async def document_issues(
     await _readable_document(db, workspace_id, user_id, document_id)
     ids = (
         await db.execute(
-            text(
-                """SELECT issue_id FROM document_links
-                   WHERE workspace_id = :workspace AND document_id = :document AND issue_id IS NOT NULL
-                   ORDER BY created_at, id"""
-            ),
+            DOCUMENT_ISSUES_SELECT_DOCUMENT_LINKS,
             {"workspace": workspace_id, "document": document_id},
         )
     ).scalars().all()
@@ -736,18 +683,13 @@ async def link_issue_document(
     issue = await issue_row(db, issue_id, workspace_id, user_id)
     if not linked:
         await db.execute(
-            text(
-                "DELETE FROM document_links WHERE workspace_id = :workspace AND document_id = :document AND issue_id = :issue"
-            ),
+            LINK_ISSUE_DOCUMENT_DELETE_DOCUMENT_LINKS,
             {"workspace": workspace_id, "document": document_id, "issue": issue["id"]},
         )
         return
     if document["teamId"] and document["teamId"] != issue["teamId"]:
         raise ApiError(400, "A team document can only link to that team.", "Bad Request")
     await db.execute(
-        text(
-            """INSERT INTO document_links (id, document_id, workspace_id, issue_id)
-               VALUES (:id, :document, :workspace, :issue) ON CONFLICT DO NOTHING"""
-        ),
+        LINK_ISSUE_DOCUMENT_INSERT_DOCUMENT_LINKS,
         {"id": cuid(), "document": document_id, "workspace": workspace_id, "issue": issue["id"]},
     )

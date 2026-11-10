@@ -6,7 +6,6 @@ from typing import Annotated, Any, Literal
 
 from fastapi import Depends, Query, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import utcnow
@@ -18,6 +17,29 @@ from ..access.membership import manager
 from ..access.project_scope import project_read_scope
 from ..access.projects import team_access, workspace_access
 from ..identity.auth import current_user
+from .commands import (
+    ADD_ISSUE_REACTION_INSERT_ISSUE_REACTIONS,
+    ARCHIVE_ISSUE_UPDATE_ISSUES,
+    CANCEL_ISSUE_REMINDER_DELETE_ISSUE_REMINDERS,
+    CLASSIFY_ISSUE_UPDATE_ISSUES,
+    CONVERT_ISSUE_TO_COMMENT_INSERT_COMMENTS,
+    CONVERT_ISSUE_TO_COMMENT_UPDATE_ISSUES,
+    CREATE_ISSUE_TEMPLATE_INSERT_ISSUE_TEMPLATES,
+    DELETE_ISSUE_TEMPLATE_DELETE_ISSUE_TEMPLATES,
+    FAVORITE_ISSUE_INSERT_ISSUE_FAVORITES,
+    MOVE_ISSUE_DELETE_ISSUE_CYCLES,
+    MOVE_ISSUE_UPDATE_ISSUES,
+    MOVE_ISSUE_UPDATE_ISSUES_2,
+    REMOVE_ISSUE_REACTION_DELETE_ISSUE_REACTIONS,
+    REMOVE_ISSUE_RELATION_DELETE_ISSUE_RELATIONS,
+    SET_ISSUE_REMINDER_INSERT_ISSUE_REMINDERS,
+    SUBSCRIBE_ISSUE_INSERT_ISSUE_SUBSCRIPTIONS,
+    TOGGLE_ISSUE_REACTION_DELETE_ISSUE_REACTIONS,
+    TOGGLE_ISSUE_REACTION_INSERT_ISSUE_REACTIONS,
+    UNFAVORITE_ISSUE_DELETE_ISSUE_FAVORITES,
+    UNSUBSCRIBE_ISSUE_DELETE_ISSUE_SUBSCRIPTIONS,
+    update_issue_template_update_issue_templates_sql,
+)
 from .contracts import CreateIssueInput, UpdateIssueInput
 from .issue_activity import _write_activity
 from .issue_hierarchy import issue_ancestors
@@ -30,6 +52,27 @@ from .issue_relations import _add_issue_relation, _relation_kind
 from .issue_rules import (
     _ensure_default_issue_statuses,
     _validate_template_references,
+)
+from .queries import (
+    CLASSIFY_ISSUE_SELECT_ISSUE_STATUSES,
+    CLASSIFY_ISSUE_SELECT_ISSUES,
+    CONVERT_ISSUE_TO_COMMENT_SELECT_ISSUES,
+    CONVERT_ISSUE_TO_COMMENT_SELECT_USERS,
+    DESCENDANT_IDS_SELECT_ISSUES,
+    ISSUE_OPTIONS_SELECT_LABELS,
+    ISSUE_OPTIONS_SELECT_RELEASES,
+    ISSUE_OPTIONS_SELECT_WORKSPACE_MEMBERS,
+    ISSUE_REACTIONS_SELECT_ISSUE_REACTIONS,
+    LIST_ISSUE_RELATIONS_SELECT_ISSUE_RELATIONS,
+    LIST_ISSUE_TEMPLATES_SELECT_ISSUE_TEMPLATES,
+    LIST_SUB_ISSUES_SELECT_ISSUES,
+    LIST_SUB_ISSUES_SELECT_ISSUES_2,
+    LOOKUP_ISSUE_SELECT_ISSUES,
+    MOVE_ISSUE_SELECT_ISSUE_STATUSES,
+    MOVE_ISSUE_SELECT_PROJECTS,
+    issue_options_select_cycles_sql,
+    issue_options_select_issue_statuses_sql,
+    issue_options_select_projects_sql,
 )
 
 # Mutations remain staged under the private prefix. Read endpoints are exposed
@@ -191,7 +234,7 @@ async def lookup_issue(reference: str, workspaceId: str = Query(min_length=1), u
     if len(reference) > 100:
         raise ApiError(400, 'Invalid issue reference.', 'Bad Request')
     await workspace_access(db, workspaceId, user['id'])
-    row = (await db.execute(text('SELECT id FROM issues WHERE workspace_id=:workspace AND (id=:reference OR identifier=:reference) AND archived_at IS NULL LIMIT 1'), {'workspace': workspaceId, 'reference': reference})).mappings().first()
+    row = (await db.execute(LOOKUP_ISSUE_SELECT_ISSUES, {'workspace': workspaceId, 'reference': reference})).mappings().first()
     if not row:
         raise ApiError(404, 'Issue not found.', 'Not Found')
     issue = await issue_row(db, row['id'], workspaceId, user['id'])
@@ -219,27 +262,18 @@ async def issue_options(
     team_filter = 'AND team_id IS NULL' if noTeam else ('AND (team_id IS NULL OR team_id = :team_id)' if teamId else '')
     params = {'workspace_id': workspaceId, 'team_id': teamId, 'user_id': user['id']}
     statuses, projects, members, labels, cycles = await db.execute(
-        text(f'''SELECT id, name, category, color, position FROM issue_statuses WHERE workspace_id = :workspace_id {team_filter}
-            AND (team_id IS NULL OR EXISTS (SELECT 1 FROM teams scope_t JOIN team_members scope_tm ON scope_tm.team_id=scope_t.id
-            WHERE scope_t.id=issue_statuses.team_id AND scope_t.workspace_id=:workspace_id AND scope_t.archived_at IS NULL AND scope_tm.user_id=:user_id)) ORDER BY position, name'''), params
+        issue_options_select_issue_statuses_sql(team_filter), params
     ), await db.execute(
-        text(f'''SELECT p.id,p.name,p.identifier,p.status,p.priority,p.health,p.start_date,p.target_date,p.lead_id,p.team_id
-            FROM projects p WHERE {project_read_scope(workspace='workspace_id', user='user_id')} {"AND p.team_id IS NULL" if noTeam else ("AND (p.team_id IS NULL OR p.team_id=:team_id)" if teamId else "")} ORDER BY p.name'''), params
+        issue_options_select_projects_sql(project_read_scope, noTeam, teamId), params
     ), await db.execute(
-        text('''SELECT u.id, u.name, u.email, u.avatar_url, u.last_seen_at FROM workspace_members wm JOIN users u ON u.id = wm.user_id WHERE wm.workspace_id = :workspace_id AND wm.status = 'ACTIVE' ORDER BY u.name'''), {'workspace_id': workspaceId}
+        ISSUE_OPTIONS_SELECT_WORKSPACE_MEMBERS, {'workspace_id': workspaceId}
     ), await db.execute(
-        text('SELECT id, name, color FROM labels WHERE workspace_id = :workspace_id ORDER BY name'), {'workspace_id': workspaceId}
+        ISSUE_OPTIONS_SELECT_LABELS, {'workspace_id': workspaceId}
     ), await db.execute(
-        text('''SELECT id, team_id, name, status, start_date, end_date FROM cycles WHERE workspace_id = :workspace_id
-            AND EXISTS (SELECT 1 FROM teams scope_t JOIN team_members scope_tm ON scope_tm.team_id=scope_t.id
-            WHERE scope_t.id=cycles.team_id AND scope_t.workspace_id=:workspace_id AND scope_t.archived_at IS NULL AND scope_tm.user_id=:user_id) ''' + ('AND team_id = :team_id ' if teamId else '') + 'ORDER BY start_date DESC NULLS LAST, created_at DESC'), params
+        issue_options_select_cycles_sql(teamId), params
     )
     releases = await db.execute(
-        text(
-            '''SELECT id, name, version, status, target_date FROM releases
-               WHERE workspace_id = :workspace_id AND archived_at IS NULL
-               ORDER BY target_date DESC NULLS LAST, created_at DESC'''
-        ),
+        ISSUE_OPTIONS_SELECT_RELEASES,
         {'workspace_id': workspaceId},
     )
     return {'data': {
@@ -312,14 +346,7 @@ async def list_issue_templates(
 ) -> dict[str, list[dict[str, Any]]]:
     await workspace_access(db, workspaceId, user['id'])
     result = await db.execute(
-        text(
-            '''SELECT template.*, creator.id AS creator_id, creator.name AS creator_name,
-                      creator.avatar_url AS creator_avatar_url
-               FROM issue_templates template
-               JOIN users creator ON creator.id = template.created_by
-               WHERE template.workspace_id = :workspace_id
-               ORDER BY template.name'''
-        ),
+        LIST_ISSUE_TEMPLATES_SELECT_ISSUE_TEMPLATES,
         {'workspace_id': workspaceId},
     )
     return {'data': [_template(row) for row in result.mappings().all()]}
@@ -337,13 +364,7 @@ async def create_issue_template(
     await _validate_template_references(db, payload.workspaceId, values)
     template_id, now = cuid(), utcnow()
     await db.execute(
-        text(
-            '''INSERT INTO issue_templates
-               (id, workspace_id, name, description, title, issue_description, status_id,
-                priority, project_id, assignee_id, label_ids, created_by, created_at, updated_at)
-               VALUES (:id, :workspace_id, :name, :description, :title, :issue_description, :status_id,
-                :priority, :project_id, :assignee_id, :label_ids, :created_by, :now, :now)'''
-        ),
+        CREATE_ISSUE_TEMPLATE_INSERT_ISSUE_TEMPLATES,
         {
             'id': template_id, 'workspace_id': payload.workspaceId,
             'name': payload.name.strip(), 'description': values.get('description'),
@@ -378,7 +399,7 @@ async def update_issue_template(
             params[field] = values[field].strip() if field in {'name', 'title'} and values[field] else values[field]
             sets.append(f'{column} = :{field}')
     if sets:
-        await db.execute(text(f"UPDATE issue_templates SET {', '.join(sets)}, updated_at = :now WHERE id = :template_id AND workspace_id = :workspace_id"), params)
+        await db.execute(update_issue_template_update_issue_templates_sql(sets), params)
         await db.commit()
     return {'data': _template(await _template_row(db, template_id, workspaceId))}
 
@@ -392,7 +413,7 @@ async def delete_issue_template(
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
     await manager(db, workspaceId, user['id'])
-    result = await db.execute(text('DELETE FROM issue_templates WHERE id = :template_id AND workspace_id = :workspace_id RETURNING id'), {'template_id': template_id, 'workspace_id': workspaceId})
+    result = await db.execute(DELETE_ISSUE_TEMPLATE_DELETE_ISSUE_TEMPLATES, {'template_id': template_id, 'workspace_id': workspaceId})
     if result.scalar_one_or_none() is None:
         raise ApiError(404, 'Issue template not found.', 'Not Found')
     await db.commit()
@@ -413,18 +434,7 @@ async def _descendant_ids(db: AsyncSession, workspace_id: str, team_id: str | No
     VI: archive ẩn cả nhánh của nó, khớp với những gì cây sub-issue hiển thị.
     """
     result = await db.execute(
-        text(
-            '''WITH RECURSIVE tree AS (
-                   SELECT child.id, 1 AS depth FROM issues child
-                   WHERE child.workspace_id = :workspace_id AND child.team_id IS NOT DISTINCT FROM :team_id
-                     AND child.parent_issue_id = :issue_id AND child.archived_at IS NULL
-                   UNION ALL
-                   SELECT child.id, tree.depth + 1 FROM issues child JOIN tree ON child.parent_issue_id = tree.id
-                   WHERE child.workspace_id = :workspace_id AND child.team_id IS NOT DISTINCT FROM :team_id
-                     AND child.archived_at IS NULL AND tree.depth < :max_depth
-               )
-               SELECT id FROM tree GROUP BY id ORDER BY min(depth)'''
-        ),
+        DESCENDANT_IDS_SELECT_ISSUES,
         {'workspace_id': workspace_id, 'team_id': team_id, 'issue_id': issue_id, 'max_depth': SUB_ISSUE_MAX_DEPTH},
     )
     return list(result.scalars().all())
@@ -451,28 +461,11 @@ async def list_sub_issues(
         ids = await _descendant_ids(db, workspaceId, parent['teamId'], parent['id'])
     else:
         ids = list((await db.execute(
-            text(
-                '''SELECT id FROM issues
-                   WHERE workspace_id = :workspace_id AND team_id IS NOT DISTINCT FROM :team_id
-                     AND parent_issue_id = :parent_issue_id AND archived_at IS NULL'''
-            ),
+            LIST_SUB_ISSUES_SELECT_ISSUES_2,
             {'workspace_id': workspaceId, 'team_id': parent['teamId'], 'parent_issue_id': parent['id']},
         )).scalars().all())
     result = await db.execute(
-        text(
-            '''SELECT child.id, child.identifier, child.title, child.parent_issue_id, child.due_date, child.manual_order,
-                      child.start_date, child.target_date, child.created_at, child.version,
-                      child.priority::text AS priority,
-                      status.id AS status_id, status.name AS status_name,
-                      status.color AS status_color, status.category AS status_category,
-                      assignee.id AS assignee_id, assignee.name AS assignee_name,
-                      assignee.avatar_url AS assignee_avatar_url
-               FROM issues child
-               JOIN issue_statuses status ON status.id = child.status_id
-               LEFT JOIN users assignee ON assignee.id = child.assignee_id
-               WHERE child.id = ANY(CAST(:ids AS text[]))
-               ORDER BY child.manual_order, child.id'''
-        ),
+        LIST_SUB_ISSUES_SELECT_ISSUES,
         {'ids': ids},
     )
     return {'data': [
@@ -514,18 +507,7 @@ async def list_issue_relations(
 ) -> dict[str, list[dict[str, Any]]]:
     await issue_row(db, issue_id, workspaceId, user['id'])
     result = await db.execute(
-        text(
-            '''SELECT relation.issue_id, relation.related_issue_id, relation.type
-               FROM issue_relations relation
-               JOIN issues other ON other.id = CASE
-                   WHEN relation.issue_id = :issue_id THEN relation.related_issue_id
-                   ELSE relation.issue_id
-               END
-               WHERE relation.workspace_id = :workspace_id
-                 AND (relation.issue_id = :issue_id OR relation.related_issue_id = :issue_id)
-                 AND other.archived_at IS NULL
-               ORDER BY relation.created_at DESC'''
-        ),
+        LIST_ISSUE_RELATIONS_SELECT_ISSUE_RELATIONS,
         {'issue_id': issue_id, 'workspace_id': workspaceId},
     )
     data: list[dict[str, Any]] = []
@@ -585,13 +567,7 @@ async def remove_issue_relation(
     issue = await issue_row(db, issue_id, workspaceId, user['id'])
     related = await issue_row(db, related_issue_id, workspaceId, user['id'])
     result = await db.execute(
-        text(
-            '''DELETE FROM issue_relations
-               WHERE workspace_id = :workspace_id
-                 AND ((issue_id = :issue_id AND related_issue_id = :related_issue_id)
-                   OR (issue_id = :related_issue_id AND related_issue_id = :issue_id))
-               RETURNING issue_id, related_issue_id, type'''
-        ),
+        REMOVE_ISSUE_RELATION_DELETE_ISSUE_RELATIONS,
         {
             'workspace_id': workspaceId,
             'issue_id': issue['id'],
@@ -638,13 +614,7 @@ async def move_issue(
     from .issue_numbering import allocate_issue_number
     team = await allocate_issue_number(db, payload.workspaceId, payload.teamId)
     status = await db.execute(
-        text(
-            '''SELECT id FROM issue_statuses
-               WHERE workspace_id = :workspace_id AND category = :category
-                 AND (team_id = :team_id OR team_id IS NULL)
-               ORDER BY CASE WHEN team_id = :team_id THEN 0 ELSE 1 END, position ASC
-               LIMIT 1'''
-        ),
+        MOVE_ISSUE_SELECT_ISSUE_STATUSES,
         {
             'workspace_id': payload.workspaceId,
             'category': issue['status']['category'],
@@ -657,24 +627,17 @@ async def move_issue(
     project_team_id = None
     if issue['projectId']:
         project_team = await db.execute(
-            text('SELECT team_id FROM projects WHERE id = :project_id'), {'project_id': issue['projectId']}
+            MOVE_ISSUE_SELECT_PROJECTS, {'project_id': issue['projectId']}
         )
         project_team_id = project_team.scalar_one_or_none()
     now = utcnow()
-    await db.execute(text('DELETE FROM issue_cycles WHERE issue_id = :issue_id'), {'issue_id': issue_id})
+    await db.execute(MOVE_ISSUE_DELETE_ISSUE_CYCLES, {'issue_id': issue_id})
     await db.execute(
-        text('UPDATE issues SET parent_issue_id = NULL, updated_at = :now WHERE parent_issue_id = :issue_id'),
+        MOVE_ISSUE_UPDATE_ISSUES,
         {'issue_id': issue_id, 'now': now},
     )
     await db.execute(
-        text(
-            '''UPDATE issues
-               SET team_id = :team_id, status_id = :status_id, identifier = :identifier,
-                   number = :number, parent_issue_id = NULL,
-                   project_id = CASE WHEN :clear_project THEN NULL ELSE project_id END,
-                   updated_at = :now
-               WHERE id = :issue_id AND workspace_id = :workspace_id'''
-        ),
+        MOVE_ISSUE_UPDATE_ISSUES_2,
         {
             'team_id': team['id'],
             'status_id': destination_status['id'],
@@ -717,10 +680,7 @@ async def classify_issue(
         if not identifier:
             raise ApiError(400, 'A duplicate issue identifier is required.', 'Bad Request')
         target = await db.execute(
-            text(
-                '''SELECT id FROM issues WHERE workspace_id = :workspace_id
-                   AND identifier = :identifier AND archived_at IS NULL LIMIT 1'''
-            ),
+            CLASSIFY_ISSUE_SELECT_ISSUES,
             {'workspace_id': payload.workspaceId, 'identifier': identifier},
         )
         duplicate_of_id = target.scalar_one_or_none()
@@ -731,13 +691,7 @@ async def classify_issue(
         duplicate = await issue_row(db, duplicate_of_id, payload.workspaceId, user['id'])
         duplicate_identifier = duplicate['identifier']
     canceled_status = await db.execute(
-        text(
-            '''SELECT id FROM issue_statuses
-               WHERE workspace_id = :workspace_id AND category = 'CANCELED'
-                 AND (team_id = :team_id OR team_id IS NULL)
-               ORDER BY CASE WHEN team_id = :team_id THEN 0 ELSE 1 END, position ASC
-               LIMIT 1'''
-        ),
+        CLASSIFY_ISSUE_SELECT_ISSUE_STATUSES,
         {'workspace_id': payload.workspaceId, 'team_id': issue['teamId']},
     )
     status_id = canceled_status.scalar_one_or_none()
@@ -745,11 +699,7 @@ async def classify_issue(
         raise ApiError(404, 'No canceled status is configured for this team.', 'Not Found')
     now = utcnow()
     await db.execute(
-        text(
-            '''UPDATE issues SET resolution = :resolution, duplicate_of_id = :duplicate_of_id,
-               status_id = :status_id, completed_at = NULL, canceled_at = :now, updated_at = :now
-               WHERE id = :issue_id AND workspace_id = :workspace_id'''
-        ),
+        CLASSIFY_ISSUE_UPDATE_ISSUES,
         {
             'resolution': payload.resolution,
             'duplicate_of_id': duplicate_of_id,
@@ -784,8 +734,7 @@ async def convert_issue_to_comment(
     await actor_context(db, user['id'])
     source = await issue_row(db, issue_id, payload.workspaceId, user['id'])
     target_id = await db.execute(
-        text('''SELECT id FROM issues WHERE workspace_id = :workspace_id AND identifier = :identifier
-                AND archived_at IS NULL LIMIT 1'''),
+        CONVERT_ISSUE_TO_COMMENT_SELECT_ISSUES,
         {'workspace_id': payload.workspaceId, 'identifier': payload.targetIdentifier.strip().upper()},
     )
     target_issue_id = target_id.scalar_one_or_none()
@@ -794,14 +743,13 @@ async def convert_issue_to_comment(
     if target_issue_id == source['id']:
         raise ApiError(400, 'An issue cannot be converted into its own comment.', 'Bad Request')
     target = await issue_row(db, target_issue_id, payload.workspaceId, user['id'])
-    actor = await db.execute(text('SELECT id, name, avatar_url FROM users WHERE id = :user_id'), {'user_id': user['id']})
+    actor = await db.execute(CONVERT_ISSUE_TO_COMMENT_SELECT_USERS, {'user_id': user['id']})
     actor_row = actor.mappings().one()
     content = '\n\n'.join(filter(None, [f"**{source['identifier']}: {source['title']}**", (source['description'] or '').strip()]))
     body = {'type': 'doc', 'content': [{'type': 'paragraph', 'content': [{'type': 'text', 'text': content}]}]}
     comment_id, now = cuid(), utcnow()
     await db.execute(
-        text('''INSERT INTO comments (id, issue_id, author_id, content, body, created_at, updated_at)
-                VALUES (:id, :issue_id, :author_id, :content, CAST(:body AS jsonb), :now, :now)'''),
+        CONVERT_ISSUE_TO_COMMENT_INSERT_COMMENTS,
         {'id': comment_id, 'issue_id': target['id'], 'author_id': user['id'], 'content': content, 'body': json.dumps(body), 'now': now},
     )
     await _write_activity(db, payload.workspaceId, target['id'], user['id'], 'comment.created', {
@@ -810,7 +758,7 @@ async def convert_issue_to_comment(
     await _write_activity(db, payload.workspaceId, source['id'], user['id'], 'issue.converted_to_comment', {
         'commentId': comment_id, 'targetIssueId': target['id'], 'targetIdentifier': target['identifier'],
     })
-    await db.execute(text('UPDATE issues SET archived_at = :now, updated_at = :now WHERE id = :issue_id'), {'issue_id': source['id'], 'now': now})
+    await db.execute(CONVERT_ISSUE_TO_COMMENT_UPDATE_ISSUES, {'issue_id': source['id'], 'now': now})
     await sync_issue(db, issue_id)
     await db.commit()
     return {'data': {
@@ -839,13 +787,7 @@ async def set_issue_reminder(
     if remind_at > now + timedelta(days=366):
         raise ApiError(400, 'Reminder time may not be more than one year away.', 'Bad Request')
     result = await db.execute(
-        text(
-            '''INSERT INTO issue_reminders (id, issue_id, user_id, remind_at, delivered_at, created_at, updated_at)
-               VALUES (:id, :issue_id, :user_id, :remind_at, NULL, :now, :now)
-               ON CONFLICT (issue_id, user_id) DO UPDATE
-               SET remind_at = EXCLUDED.remind_at, delivered_at = NULL, updated_at = EXCLUDED.updated_at
-               RETURNING id, issue_id, user_id, remind_at, delivered_at, created_at, updated_at'''
-        ),
+        SET_ISSUE_REMINDER_INSERT_ISSUE_REMINDERS,
         {'id': cuid(), 'issue_id': issue_id, 'user_id': user['id'], 'remind_at': remind_at, 'now': now},
     )
     reminder = result.mappings().one()
@@ -862,7 +804,7 @@ async def cancel_issue_reminder(
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
     await issue_row(db, issue_id, workspaceId, user['id'])
-    await db.execute(text('DELETE FROM issue_reminders WHERE issue_id = :issue_id AND user_id = :user_id'), {'issue_id': issue_id, 'user_id': user['id']})
+    await db.execute(CANCEL_ISSUE_REMINDER_DELETE_ISSUE_REMINDERS, {'issue_id': issue_id, 'user_id': user['id']})
     await db.commit()
     return {'data': {'issueId': issue_id, 'reminder': None}}
 
@@ -929,7 +871,7 @@ async def archive_issue(
         archived_ids += descendant_ids
     now = utcnow()
     await db.execute(
-        text('UPDATE issues SET archived_at = :now, updated_at = :now WHERE id = ANY(CAST(:ids AS text[])) AND workspace_id = :workspace_id AND archived_at IS NULL'),
+        ARCHIVE_ISSUE_UPDATE_ISSUES,
         {'ids': archived_ids, 'workspace_id': workspaceId, 'now': now},
     )
     for archived_id in archived_ids:
@@ -981,8 +923,7 @@ async def subscribe_issue(
 ) -> dict[str, dict[str, Any]]:
     await issue_row(db, issue_id, workspaceId, user['id'])
     await db.execute(
-        text('''INSERT INTO issue_subscriptions (issue_id, user_id) VALUES (:issue_id, :user_id)
-                ON CONFLICT DO NOTHING'''),
+        SUBSCRIBE_ISSUE_INSERT_ISSUE_SUBSCRIPTIONS,
         {'issue_id': issue_id, 'user_id': user['id']},
     )
     await db.commit()
@@ -999,7 +940,7 @@ async def unsubscribe_issue(
 ) -> dict[str, dict[str, Any]]:
     await issue_row(db, issue_id, workspaceId, user['id'])
     await db.execute(
-        text('DELETE FROM issue_subscriptions WHERE issue_id = :issue_id AND user_id = :user_id'),
+        UNSUBSCRIBE_ISSUE_DELETE_ISSUE_SUBSCRIPTIONS,
         {'issue_id': issue_id, 'user_id': user['id']},
     )
     await db.commit()
@@ -1016,8 +957,7 @@ async def favorite_issue(
 ) -> dict[str, dict[str, Any]]:
     await issue_row(db, issue_id, workspaceId, user['id'])
     await db.execute(
-        text('''INSERT INTO issue_favorites (issue_id, user_id) VALUES (:issue_id, :user_id)
-                ON CONFLICT DO NOTHING'''),
+        FAVORITE_ISSUE_INSERT_ISSUE_FAVORITES,
         {'issue_id': issue_id, 'user_id': user['id']},
     )
     await db.commit()
@@ -1034,7 +974,7 @@ async def unfavorite_issue(
 ) -> dict[str, dict[str, Any]]:
     await issue_row(db, issue_id, workspaceId, user['id'])
     await db.execute(
-        text('DELETE FROM issue_favorites WHERE issue_id = :issue_id AND user_id = :user_id'),
+        UNFAVORITE_ISSUE_DELETE_ISSUE_FAVORITES,
         {'issue_id': issue_id, 'user_id': user['id']},
     )
     await db.commit()
@@ -1043,8 +983,7 @@ async def unfavorite_issue(
 
 async def _issue_reactions(db: AsyncSession, issue_id: str, user_id: str) -> list[dict[str, Any]]:
     result = await db.execute(
-        text('''SELECT emoji, COUNT(*)::int AS count, BOOL_OR(user_id = :user_id) AS reacted
-                FROM issue_reactions WHERE issue_id = :issue_id GROUP BY emoji ORDER BY MIN(created_at)'''),
+        ISSUE_REACTIONS_SELECT_ISSUE_REACTIONS,
         {'issue_id': issue_id, 'user_id': user_id},
     )
     return [{'emoji': row['emoji'], 'count': row['count'], 'reacted': row['reacted']} for row in result.mappings().all()]
@@ -1073,14 +1012,12 @@ async def toggle_issue_reaction(  # noqa: D401 - kept for existing API clients
     await issue_row(db, issue_id, payload.workspaceId, user['id'])
     emoji = payload.emoji.strip()
     deleted = await db.execute(
-        text('''DELETE FROM issue_reactions WHERE issue_id = :issue_id AND user_id = :user_id
-                AND emoji = :emoji RETURNING emoji'''),
+        TOGGLE_ISSUE_REACTION_DELETE_ISSUE_REACTIONS,
         {'issue_id': issue_id, 'user_id': user['id'], 'emoji': emoji},
     )
     if deleted.scalar_one_or_none() is None:
         await db.execute(
-            text('''INSERT INTO issue_reactions (issue_id, user_id, emoji)
-                    VALUES (:issue_id, :user_id, :emoji)'''),
+            TOGGLE_ISSUE_REACTION_INSERT_ISSUE_REACTIONS,
             {'issue_id': issue_id, 'user_id': user['id'], 'emoji': emoji},
         )
     await db.commit()
@@ -1103,10 +1040,7 @@ async def add_issue_reaction(
     if not value:
         raise ApiError(400, 'emoji must not be empty', 'Bad Request')
     await db.execute(
-        text(
-            '''INSERT INTO issue_reactions (issue_id, user_id, emoji)
-               VALUES (:issue_id, :user_id, :emoji) ON CONFLICT DO NOTHING'''
-        ),
+        ADD_ISSUE_REACTION_INSERT_ISSUE_REACTIONS,
         {'issue_id': issue_id, 'user_id': user['id'], 'emoji': value},
     )
     await db.commit()
@@ -1124,10 +1058,7 @@ async def remove_issue_reaction(
 ) -> dict[str, list[dict[str, Any]]]:
     await issue_row(db, issue_id, workspaceId, user['id'])
     await db.execute(
-        text(
-            '''DELETE FROM issue_reactions WHERE issue_id = :issue_id
-               AND user_id = :user_id AND emoji = :emoji'''
-        ),
+        REMOVE_ISSUE_REACTION_DELETE_ISSUE_REACTIONS,
         {'issue_id': issue_id, 'user_id': user['id'], 'emoji': emoji.strip()},
     )
     await db.commit()

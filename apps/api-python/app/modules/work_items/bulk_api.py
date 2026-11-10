@@ -1,7 +1,6 @@
 from typing import Literal
 
 from fastapi import Depends, Request
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.utc_responses import UtcAPIRouter
@@ -11,6 +10,9 @@ from ..identity.auth import current_user
 from ..identity.password_reset import limit_request
 from .bulk_contracts import BulkPreview
 from .bulk_service import bulk_command, bulk_preview, bulk_result
+from .queries import (
+    RECENT_SELECT_BULK_OPERATIONS,
+)
 
 router = UtcAPIRouter(prefix="/api/v1/bulk-issues", tags=["bulk-issues"])
 
@@ -25,8 +27,7 @@ async def recent(
     rows = (
         (
             await db.execute(
-                text("""SELECT id,state,created_at AS "createdAt",expires_at AS "expiresAt"
-        FROM bulk_operations WHERE workspace_id=:workspace AND actor_id=:user ORDER BY created_at DESC,id DESC LIMIT 20"""),
+                RECENT_SELECT_BULK_OPERATIONS,
                 {"workspace": workspaceId, "user": user["id"]},
             )
         )

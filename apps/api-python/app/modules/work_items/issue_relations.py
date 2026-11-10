@@ -2,13 +2,19 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import utcnow
 from ...core.errors import ApiError
+from .commands import (
+    ADD_ISSUE_RELATION_INSERT_ISSUE_RELATIONS,
+    ADD_ISSUE_RELATION_UPDATE_ISSUE_RELATIONS,
+)
 from .issue_activity import _write_activity
 from .issue_queries import issue_row
+from .queries import (
+    ADD_ISSUE_RELATION_SELECT_ISSUE_RELATIONS,
+)
 
 
 async def _add_issue_relation(
@@ -30,13 +36,7 @@ async def _add_issue_relation(
         else (related["id"], issue["id"])
     )
     existing = await db.execute(
-        text(
-            """SELECT issue_id, related_issue_id, type FROM issue_relations
-               WHERE workspace_id = :workspace_id
-                 AND ((issue_id = :issue_id AND related_issue_id = :related_issue_id)
-                   OR (issue_id = :related_issue_id AND related_issue_id = :issue_id))
-               LIMIT 1"""
-        ),
+        ADD_ISSUE_RELATION_SELECT_ISSUE_RELATIONS,
         {
             "workspace_id": workspace_id,
             "issue_id": issue["id"],
@@ -58,12 +58,7 @@ async def _add_issue_relation(
 
     if previous:
         await db.execute(
-            text(
-                """UPDATE issue_relations
-                   SET issue_id = :source_issue_id, related_issue_id = :target_issue_id,
-                       type = :relation_type, created_by = :user_id, created_at = :now
-                   WHERE issue_id = :previous_issue_id AND related_issue_id = :previous_related_issue_id"""
-            ),
+            ADD_ISSUE_RELATION_UPDATE_ISSUE_RELATIONS,
             {
                 "source_issue_id": source_issue_id,
                 "target_issue_id": target_issue_id,
@@ -76,11 +71,7 @@ async def _add_issue_relation(
         )
     else:
         await db.execute(
-            text(
-                """INSERT INTO issue_relations
-                   (workspace_id, issue_id, related_issue_id, type, created_at, created_by)
-                   VALUES (:workspace_id, :issue_id, :related_issue_id, :relation_type, :now, :user_id)"""
-            ),
+            ADD_ISSUE_RELATION_INSERT_ISSUE_RELATIONS,
             {
                 "workspace_id": workspace_id,
                 "issue_id": source_issue_id,

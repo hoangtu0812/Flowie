@@ -1,22 +1,21 @@
-from sqlalchemy import text
 
 from ...core.clock import utcnow
 from ...core.errors import ApiError
+from .commands import (
+    ALLOCATE_ISSUE_NUMBER_UPDATE_TEAMS,
+    ALLOCATE_ISSUE_NUMBER_UPDATE_WORKSPACES,
+)
 
 
 async def allocate_issue_number(db, workspace_id: str, team_id: str | None):
     if team_id:
         result = await db.execute(
-            text("""UPDATE teams SET issue_sequence=issue_sequence+1, updated_at=:now
-                WHERE id=:team AND workspace_id=:workspace AND archived_at IS NULL
-                RETURNING id, identifier, issue_sequence"""),
+            ALLOCATE_ISSUE_NUMBER_UPDATE_TEAMS,
             {"team": team_id, "workspace": workspace_id, "now": utcnow()},
         )
     else:
         result = await db.execute(
-            text("""UPDATE workspaces SET issue_sequence=issue_sequence+1
-                WHERE id=:workspace RETURNING NULL::text AS id,
-                NULL::text AS identifier, issue_sequence"""),
+            ALLOCATE_ISSUE_NUMBER_UPDATE_WORKSPACES,
             {"workspace": workspace_id},
         )
     row = result.mappings().first()
