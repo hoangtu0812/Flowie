@@ -9,7 +9,6 @@ from urllib.parse import urlsplit
 
 from fastapi import Depends, File, Form, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import utcnow
@@ -24,6 +23,18 @@ from ..access.projects import (
 )
 from ..identity.auth import current_user
 from ..sharepoint.graph import viewer_url
+from .commands import (
+    STORE_ATTACHMENT_INSERT_ATTACHMENTS,
+)
+from .queries import (
+    AUTHORIZE_ENTITY_SELECT_COMMENTS,
+    DOWNLOAD_ATTACHMENT_SELECT_ATTACHMENTS,
+    ENTITY_TEAM_ID_SELECT,
+    GET_ATTACHMENT_SELECT_ATTACHMENTS,
+    LIST_ATTACHMENTS_SELECT_ATTACHMENTS,
+    PREVIEW_ATTACHMENT_SELECT_ATTACHMENTS,
+    STORE_ATTACHMENT_SELECT_ATTACHMENTS,
+)
 from .tables import (
     UnreadableSpreadsheet,
     csv_sheet,
@@ -64,15 +75,7 @@ HTML_STORAGE_SHIM = (
 
 
 async def _entity_team_id(db: AsyncSession, workspace_id: str, entity_type: EntityType, entity_id: str) -> str | None:
-    queries = {
-        'issue': 'SELECT team_id FROM issues WHERE id = :entity_id AND workspace_id = :workspace_id AND archived_at IS NULL',
-        'comment': 'SELECT i.team_id FROM comments c JOIN issues i ON i.id = c.issue_id WHERE c.id = :entity_id AND i.workspace_id = :workspace_id AND c.deleted_at IS NULL AND i.archived_at IS NULL',
-        'project': 'SELECT team_id FROM projects WHERE id = :entity_id AND workspace_id = :workspace_id AND archived_at IS NULL',
-        'project-update': 'SELECT p.team_id FROM project_updates pu JOIN projects p ON p.id = pu.project_id WHERE pu.id = :entity_id AND pu.workspace_id = :workspace_id AND p.archived_at IS NULL',
-        'document': 'SELECT team_id FROM documents WHERE id = :entity_id AND workspace_id = :workspace_id AND archived_at IS NULL',
-        'document-folder': 'SELECT team_id FROM document_folders WHERE id = :entity_id AND workspace_id = :workspace_id',
-    }
-    result = await db.execute(text(queries[entity_type]), {'entity_id': entity_id, 'workspace_id': workspace_id})
+    result = await db.execute(ENTITY_TEAM_ID_SELECT[entity_type], {'entity_id': entity_id, 'workspace_id': workspace_id})
     row = result.mappings().first()
     if not row:
         raise ApiError(404, 'Attachment target not found.', 'Not Found')
@@ -92,7 +95,7 @@ async def _authorize_entity(db: AsyncSession, workspace_id: str, entity_type: En
     if team_id:
         await team_access(db, workspace_id, team_id, user_id)
     if writing and entity_type == 'comment':
-        author = (await db.execute(text('SELECT author_id FROM comments WHERE id=:id'), {'id': entity_id})).scalar_one()
+        author = (await db.execute(AUTHORIZE_ENTITY_SELECT_COMMENTS, {'id': entity_id})).scalar_one()
         if author != user_id:
             raise ApiError(403, 'Only the comment author can attach files to it.', 'Forbidden')
 
@@ -110,7 +113,7 @@ def _present(row: Any) -> dict[str, Any]:
 @public_router.get('')
 async def list_attachments(workspaceId: str = Query(min_length=1), entityType: EntityType = Query(), entityId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
     await _authorize_entity(db, workspaceId, entityType, entityId, user['id'])
-    result = await db.execute(text('SELECT a.*, pub.web_url AS sp_web_url, pub.path AS sp_path, pub.last_error AS sp_last_error FROM attachments a LEFT JOIN attachment_publications pub ON pub.attachment_id = a.id WHERE a.workspace_id = :workspace_id AND a.entity_type = :entity_type AND a.entity_id = :entity_id ORDER BY a.created_at DESC'), {'workspace_id': workspaceId, 'entity_type': entityType, 'entity_id': entityId})
+    result = await db.execute(LIST_ATTACHMENTS_SELECT_ATTACHMENTS, {'workspace_id': workspaceId, 'entity_type': entityType, 'entity_id': entityId})
     return {'data': [_present(row) for row in result.mappings().all()]}
 
 
@@ -162,8 +165,8 @@ async def store_attachment(db: AsyncSession, settings: Any, workspace_id: str, u
     object_key = f'{workspace_id}/{user_id}/{token_urlsafe(18)}-{filename}'
     await MinioStorage(settings).put(object_key, body, mime_type)
     attachment_id = cuid()
-    await db.execute(text('''INSERT INTO attachments (id, workspace_id, uploaded_by, entity_type, entity_id, object_key, filename, mime_type, size, created_at) VALUES (:id, :workspace_id, :uploaded_by, :entity_type, :entity_id, :object_key, :filename, :mime_type, :size, :now)'''), {'id': attachment_id, 'workspace_id': workspace_id, 'uploaded_by': user_id, 'entity_type': entity_type, 'entity_id': entity_id, 'object_key': object_key, 'filename': filename, 'mime_type': mime_type, 'size': len(body), 'now': utcnow()})
-    result = await db.execute(text('SELECT * FROM attachments WHERE id = :id'), {'id': attachment_id})
+    await db.execute(STORE_ATTACHMENT_INSERT_ATTACHMENTS, {'id': attachment_id, 'workspace_id': workspace_id, 'uploaded_by': user_id, 'entity_type': entity_type, 'entity_id': entity_id, 'object_key': object_key, 'filename': filename, 'mime_type': mime_type, 'size': len(body), 'now': utcnow()})
+    result = await db.execute(STORE_ATTACHMENT_SELECT_ATTACHMENTS, {'id': attachment_id})
     return _present(result.mappings().one())
 
 
@@ -176,7 +179,7 @@ async def get_attachment(attachment_id: str, user: Any = Depends(current_user), 
     VI: Metadata và tên người tải lên của một tệp đính kèm, cho header trang xem trước HTML. Cùng
     VI: luật quyền như tải xuống; tệp không tồn tại hay không đọc được đều trả 404.
     """
-    row = (await db.execute(text('SELECT a.*, u.name AS uploader_name FROM attachments a LEFT JOIN users u ON u.id = a.uploaded_by WHERE a.id = :attachment_id'), {'attachment_id': attachment_id})).mappings().first()
+    row = (await db.execute(GET_ATTACHMENT_SELECT_ATTACHMENTS, {'attachment_id': attachment_id})).mappings().first()
     if not row:
         raise ApiError(404, 'Attachment not found.', 'Not Found')
     await _authorize_entity(db, row['workspace_id'], row['entity_type'], row['entity_id'], user['id'])
@@ -186,7 +189,7 @@ async def get_attachment(attachment_id: str, user: Any = Depends(current_user), 
 @router.get('/{attachment_id}/download')
 @public_router.get('/{attachment_id}/download')
 async def download_attachment(attachment_id: str, request: Request, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)):
-    result = await db.execute(text('SELECT * FROM attachments WHERE id = :attachment_id'), {'attachment_id': attachment_id})
+    result = await db.execute(DOWNLOAD_ATTACHMENT_SELECT_ATTACHMENTS, {'attachment_id': attachment_id})
     row = result.mappings().first()
     if not row:
         raise ApiError(404, 'Attachment not found.', 'Not Found')
@@ -200,7 +203,7 @@ async def download_attachment(attachment_id: str, request: Request, user: Any = 
 @public_router.get('/{attachment_id}/preview')
 async def preview_attachment(attachment_id: str, request: Request, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)):
     """Render a private document in-browser without exposing it to a third party."""
-    result = await db.execute(text('SELECT * FROM attachments WHERE id = :attachment_id'), {'attachment_id': attachment_id})
+    result = await db.execute(PREVIEW_ATTACHMENT_SELECT_ATTACHMENTS, {'attachment_id': attachment_id})
     row = result.mappings().first()
     if not row:
         raise ApiError(404, 'Attachment not found.', 'Not Found')

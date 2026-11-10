@@ -19,10 +19,12 @@ import json
 import re
 
 from fastapi import Request
-from sqlalchemy import text
 from starlette.requests import HTTPConnection
 
 from ...core.errors import ApiError
+from .queries import (
+    ENFORCE_READ_ONLY_ROLE_SELECT_WORKSPACE_MEMBERS,
+)
 
 READ_ONLY_ROLE = "ADMIN_VIEWER"
 # Roles that may read admin-only pages and data. VI: Các role đọc được trang và dữ liệu chỉ dành cho admin.
@@ -98,7 +100,7 @@ async def enforce_read_only_role(connection: HTTPConnection) -> None:
         roles = dict(
             (
                 await db.execute(
-                    text("SELECT workspace_id, role FROM workspace_members WHERE user_id = :user AND status = 'ACTIVE'"),
+                    ENFORCE_READ_ONLY_ROLE_SELECT_WORKSPACE_MEMBERS,
                     {"user": user_id},
                 )
             ).all()

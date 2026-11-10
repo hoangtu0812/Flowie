@@ -1,12 +1,14 @@
 import re
 from typing import Any
 
-from sqlalchemy import text
-
 from ...core.errors import ApiError
 from ...core.pagination import CursorCodec
 from ..access.project_scope import project_read_scope
 from ..access.projects import workspace_manager
+from .queries import (
+    audit_page_select_attributed_sql,
+    audit_page_select_attributed_sql_2,
+)
 
 EVENTS = """WITH events AS (
     SELECT 'audit:'||id AS id,workspace_id,actor_id,action,entity_type,entity_id,metadata,created_at FROM audit_logs
@@ -118,7 +120,7 @@ async def audit_page(
     )
     total = (
         await db.execute(
-            text(EVENTS + "SELECT COUNT(*) FROM attributed ev WHERE " + predicate),
+            audit_page_select_attributed_sql(EVENTS, predicate),
             params,
         )
     ).scalar_one()
@@ -133,13 +135,7 @@ async def audit_page(
     rows = (
         (
             await db.execute(
-                text(
-                    EVENTS
-                    + """SELECT ev.*,u.name AS actor_name FROM attributed ev LEFT JOIN users u ON u.id=ev.actor_id
-        WHERE """
-                    + predicate
-                    + " ORDER BY ev.created_at DESC,ev.id DESC LIMIT :limit"
-                ),
+                audit_page_select_attributed_sql_2(EVENTS, predicate),
                 params,
             )
         )

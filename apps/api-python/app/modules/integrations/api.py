@@ -6,7 +6,6 @@ from urllib.parse import urlparse
 import httpx
 from fastapi import Depends, Query, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import utcnow
@@ -22,6 +21,26 @@ from ...services.microsoft_teams import (
 )
 from ..access.project_scope import project_read_scope
 from ..identity.auth import current_user
+from .commands import (
+    DELETE_PROJECT_TEAMS_DELETE_PROJECT_TEAMS_CHANNELS,
+    SAVE_DISCORD_INSERT_DISCORD_WEBHOOKS,
+    SAVE_DISCORD_UPDATE_DISCORD_WEBHOOKS,
+    SAVE_PROJECT_TEAMS_INSERT_PROJECT_TEAMS_CHANNELS,
+    SAVE_TEAMS_INSERT_TEAMS_WEBHOOKS,
+)
+from .queries import (
+    DISCORD_STATUS_SELECT_DISCORD_WEBHOOKS,
+    INTEGRATION_MANAGER_SELECT_WORKSPACE_MEMBERS,
+    PROJECT_TEAMS_STATUS_SELECT_PROJECT_TEAMS_CHANNELS,
+    SAVE_DISCORD_SELECT_DISCORD_WEBHOOKS,
+    SAVE_PROJECT_TEAMS_SELECT_PROJECT_TEAMS_CHANNELS,
+    SAVE_TEAMS_SELECT_TEAMS_WEBHOOKS,
+    TEAMS_STATUS_SELECT_TEAMS_WEBHOOKS,
+    TEST_DISCORD_SELECT_DISCORD_WEBHOOKS,
+    TEST_PROJECT_TEAMS_SELECT_PROJECT_TEAMS_CHANNELS,
+    TEST_TEAMS_SELECT_TEAMS_WEBHOOKS,
+    project_teams_access_select_workspace_members_sql,
+)
 
 router = APIRouter(prefix='/api/v1/integrations', tags=['integrations'])
 
@@ -34,11 +53,7 @@ class DiscordWebhookInput(BaseModel):
 
 async def integration_manager(db: AsyncSession, workspace_id: str, user_id: str) -> None:
     result = await db.execute(
-        text(
-            '''SELECT 1 FROM workspace_members
-               WHERE workspace_id = :workspace_id AND user_id = :user_id
-                 AND status = 'ACTIVE' AND role IN ('OWNER', 'ADMIN')'''
-        ),
+        INTEGRATION_MANAGER_SELECT_WORKSPACE_MEMBERS,
         {'workspace_id': workspace_id, 'user_id': user_id},
     )
     if result.scalar_one_or_none() is None:
@@ -73,7 +88,7 @@ async def discord_status(
 ) -> dict[str, dict[str, Any] | None]:
     await integration_manager(db, workspaceId, user['id'])
     result = await db.execute(
-        text('SELECT enabled, daily_digest_enabled, webhook_url, updated_at FROM discord_webhooks WHERE workspace_id = :workspace_id'),
+        DISCORD_STATUS_SELECT_DISCORD_WEBHOOKS,
         {'workspace_id': workspaceId},
     )
     row = result.mappings().first()
@@ -89,7 +104,7 @@ async def save_discord(
 ) -> dict[str, dict[str, Any]]:
     await integration_manager(db, workspaceId, user['id'])
     existing = await db.execute(
-        text('SELECT id, webhook_url FROM discord_webhooks WHERE workspace_id = :workspace_id'),
+        SAVE_DISCORD_SELECT_DISCORD_WEBHOOKS,
         {'workspace_id': workspaceId},
     )
     row = existing.mappings().first()
@@ -101,21 +116,12 @@ async def save_discord(
     now = utcnow()
     if row:
         result = await db.execute(
-            text(
-                '''UPDATE discord_webhooks SET webhook_url = :webhook_url, enabled = :enabled,
-                   daily_digest_enabled = :daily_digest_enabled,
-                   updated_at = :now WHERE id = :id
-                   RETURNING enabled, daily_digest_enabled, webhook_url, updated_at'''
-            ),
+            SAVE_DISCORD_UPDATE_DISCORD_WEBHOOKS,
             {'id': row['id'], 'webhook_url': webhook_url, 'enabled': payload.enabled, 'daily_digest_enabled': payload.dailyDigestEnabled, 'now': now},
         )
     else:
         result = await db.execute(
-            text(
-                '''INSERT INTO discord_webhooks (id, workspace_id, webhook_url, enabled, daily_digest_enabled, created_at, updated_at)
-                   VALUES (:id, :workspace_id, :webhook_url, :enabled, :daily_digest_enabled, :now, :now)
-                   RETURNING enabled, daily_digest_enabled, webhook_url, updated_at'''
-            ),
+            SAVE_DISCORD_INSERT_DISCORD_WEBHOOKS,
             {
                 'id': cuid(), 'workspace_id': workspaceId, 'webhook_url': webhook_url,
                 'enabled': payload.enabled, 'daily_digest_enabled': payload.dailyDigestEnabled, 'now': now,
@@ -133,7 +139,7 @@ async def test_discord(
 ) -> dict[str, dict[str, Any]]:
     await integration_manager(db, workspaceId, user['id'])
     result = await db.execute(
-        text('SELECT webhook_url, enabled FROM discord_webhooks WHERE workspace_id = :workspace_id'),
+        TEST_DISCORD_SELECT_DISCORD_WEBHOOKS,
         {'workspace_id': workspaceId},
     )
     webhook = result.mappings().first()
@@ -212,7 +218,7 @@ async def teams_status(
     _teams_gate(request)
     await integration_manager(db, workspaceId, user['id'])
     result = await db.execute(
-        text('SELECT enabled, webhook_url, updated_at FROM teams_webhooks WHERE workspace_id = :workspace_id'),
+        TEAMS_STATUS_SELECT_TEAMS_WEBHOOKS,
         {'workspace_id': workspaceId},
     )
     row = result.mappings().first()
@@ -230,7 +236,7 @@ async def save_teams(
     _teams_gate(request)
     await integration_manager(db, workspaceId, user['id'])
     existing = await db.execute(
-        text('SELECT webhook_url FROM teams_webhooks WHERE workspace_id = :workspace_id'),
+        SAVE_TEAMS_SELECT_TEAMS_WEBHOOKS,
         {'workspace_id': workspaceId},
     )
     current = existing.scalar_one_or_none()
@@ -238,13 +244,7 @@ async def save_teams(
         raise ApiError(400, 'A Microsoft Teams webhook URL is required.', 'Bad Request')
     now = utcnow()
     result = await db.execute(
-        text(
-            '''INSERT INTO teams_webhooks (id, workspace_id, webhook_url, enabled, created_at, updated_at)
-               VALUES (:id, :workspace_id, :webhook_url, :enabled, :now, :now)
-               ON CONFLICT (workspace_id) DO UPDATE SET webhook_url = EXCLUDED.webhook_url,
-                   enabled = EXCLUDED.enabled, updated_at = EXCLUDED.updated_at
-               RETURNING enabled, webhook_url, updated_at'''
-        ),
+        SAVE_TEAMS_INSERT_TEAMS_WEBHOOKS,
         {
             'id': cuid(), 'workspace_id': workspaceId,
             'webhook_url': _teams_url(payload.webhookUrl) if payload.webhookUrl else current,
@@ -265,7 +265,7 @@ async def test_teams(
     _teams_gate(request)
     await integration_manager(db, workspaceId, user['id'])
     result = await db.execute(
-        text('SELECT webhook_url, enabled FROM teams_webhooks WHERE workspace_id = :workspace_id'),
+        TEST_TEAMS_SELECT_TEAMS_WEBHOOKS,
         {'workspace_id': workspaceId},
     )
     webhook = result.mappings().first()
@@ -280,12 +280,7 @@ async def _project_teams_access(db: AsyncSession, workspace_id: str, project_id:
     """Return whether the reader may change the channel; readers may only view it."""
 
     result = await db.execute(
-        text(
-            f'''SELECT p.lead_id = :user OR EXISTS(
-                     SELECT 1 FROM workspace_members wm WHERE wm.workspace_id = :workspace
-                       AND wm.user_id = :user AND wm.status = 'ACTIVE' AND wm.role IN ('OWNER', 'ADMIN'))
-               FROM projects p WHERE p.id = :project_id AND {project_read_scope()}'''
-        ),
+        project_teams_access_select_workspace_members_sql(project_read_scope),
         {'project_id': project_id, 'workspace': workspace_id, 'user': user_id},
     )
     row = result.first()
@@ -310,7 +305,7 @@ async def project_teams_status(
     _teams_gate(request)
     can_manage = await _project_teams_access(db, workspaceId, projectId, user['id'])
     result = await db.execute(
-        text('SELECT channel_name, enabled, webhook_url, updated_at FROM project_teams_channels WHERE project_id = :project_id'),
+        PROJECT_TEAMS_STATUS_SELECT_PROJECT_TEAMS_CHANNELS,
         {'project_id': projectId},
     )
     row = result.mappings().first()
@@ -329,7 +324,7 @@ async def save_project_teams(
     _teams_gate(request)
     await _project_manager(db, workspaceId, projectId, user['id'])
     existing = await db.execute(
-        text('SELECT webhook_url FROM project_teams_channels WHERE project_id = :project_id'),
+        SAVE_PROJECT_TEAMS_SELECT_PROJECT_TEAMS_CHANNELS,
         {'project_id': projectId},
     )
     current = existing.scalar_one_or_none()
@@ -337,13 +332,7 @@ async def save_project_teams(
         raise ApiError(400, 'A Microsoft Teams webhook URL is required.', 'Bad Request')
     now = utcnow()
     result = await db.execute(
-        text(
-            '''INSERT INTO project_teams_channels (id, project_id, channel_name, webhook_url, enabled, created_at, updated_at)
-               VALUES (:id, :project_id, :channel_name, :webhook_url, :enabled, :now, :now)
-               ON CONFLICT (project_id) DO UPDATE SET channel_name = EXCLUDED.channel_name,
-                   webhook_url = EXCLUDED.webhook_url, enabled = EXCLUDED.enabled, updated_at = EXCLUDED.updated_at
-               RETURNING channel_name, enabled, webhook_url, updated_at'''
-        ),
+        SAVE_PROJECT_TEAMS_INSERT_PROJECT_TEAMS_CHANNELS,
         {
             'id': cuid(), 'project_id': projectId,
             'channel_name': (payload.channelName or '').strip() or None,
@@ -365,7 +354,7 @@ async def delete_project_teams(
 ) -> dict[str, None]:
     _teams_gate(request)
     await _project_manager(db, workspaceId, projectId, user['id'])
-    await db.execute(text('DELETE FROM project_teams_channels WHERE project_id = :project_id'), {'project_id': projectId})
+    await db.execute(DELETE_PROJECT_TEAMS_DELETE_PROJECT_TEAMS_CHANNELS, {'project_id': projectId})
     await db.commit()
     return {'data': None}
 
@@ -381,7 +370,7 @@ async def test_project_teams(
     _teams_gate(request)
     await _project_manager(db, workspaceId, projectId, user['id'])
     result = await db.execute(
-        text('SELECT webhook_url, enabled FROM project_teams_channels WHERE project_id = :project_id'),
+        TEST_PROJECT_TEAMS_SELECT_PROJECT_TEAMS_CHANNELS,
         {'project_id': projectId},
     )
     channel = result.mappings().first()

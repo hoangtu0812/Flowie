@@ -1,17 +1,18 @@
 from __future__ import annotations
 
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.errors import ApiError
+from .queries import (
+    OWNER_SELECT_WORKSPACE_MEMBERS,
+    WORKSPACE_ROLE_SELECT_WORKSPACE_MEMBERS,
+)
 from .read_only import ADMIN_READ_ROLES
 
 
 async def workspace_role(db: AsyncSession, workspace_id: str, user_id: str) -> str:
     result = await db.execute(
-        text(
-            "SELECT role FROM workspace_members WHERE workspace_id = :workspace_id AND user_id = :user_id AND status = 'ACTIVE'"
-        ),
+        WORKSPACE_ROLE_SELECT_WORKSPACE_MEMBERS,
         {"workspace_id": workspace_id, "user_id": user_id},
     )
     role = result.scalar_one_or_none()
@@ -30,9 +31,7 @@ async def manager(db: AsyncSession, workspace_id: str, user_id: str) -> None:
 async def owner(db: AsyncSession, workspace_id: str, user_id: str) -> None:
     # Keep ownership stable until the protected membership write commits.
     result = await db.execute(
-        text("""SELECT role FROM workspace_members
-            WHERE workspace_id = :workspace_id AND user_id = :user_id AND status = 'ACTIVE'
-            FOR SHARE"""),
+        OWNER_SELECT_WORKSPACE_MEMBERS,
         {"workspace_id": workspace_id, "user_id": user_id},
     )
     if result.scalar_one_or_none() != "OWNER":

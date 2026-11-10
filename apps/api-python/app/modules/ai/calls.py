@@ -13,12 +13,14 @@ from typing import Any
 from urllib.parse import urlsplit
 
 import httpx
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import cuid
+from .commands import (
+    SAVE_INSERT_AI_PROVIDER_CALLS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -166,13 +168,7 @@ async def _save(provider: dict[str, Any], feature: str, record: dict[str, Any], 
     try:
         async with AsyncSession(engine) as db:
             await db.execute(
-                text(
-                    '''INSERT INTO ai_provider_calls
-                       (id, workspace_id, feature, provider, model, outcome, status_code, input_tokens,
-                        output_tokens, attempts, duration_ms, created_at)
-                       VALUES (:id, :workspace_id, :feature, :provider, :model, :outcome, :status_code,
-                               :input_tokens, :output_tokens, :attempts, :duration_ms, :now)'''
-                ),
+                SAVE_INSERT_AI_PROVIDER_CALLS,
                 {
                     **record,
                     'id': cuid(),

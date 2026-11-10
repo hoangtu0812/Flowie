@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import unicodedata
 
-from sqlalchemy import text
-
 from ...core.pagination import CursorCodec, literal_search
 from ..access.membership import workspace_role
 from ..access.project_scope import project_read_scope
 from ..work_items.issue_search import NORMALIZED, VIETNAMESE
+from .queries import (
+    search_select_sql,
+)
 
 SOURCES = f"""
 SELECT 'issue' AS kind,i.id,i.title,i.identifier AS subtitle,'/issue/'||i.identifier AS path,i.created_at,i.identifier||' '||i.title AS search_text
@@ -60,10 +61,7 @@ async def search(
     rows = (
         (
             await db.execute(
-                text(f"""SELECT r.kind,r.id,r.title,r.subtitle,r.path,r.created_at FROM ({SOURCES}) r
-        WHERE translate(lower(r.search_text),:accents,:normalized) ILIKE :pattern ESCAPE '\\'
-        AND (CAST(:kind AS text) IS NULL OR r.kind=CAST(:kind AS text)) {after}
-        ORDER BY r.created_at DESC,r.kind||':'||r.id DESC LIMIT :limit"""),
+                search_select_sql(SOURCES, after),
                 params,
             )
         )

@@ -23,14 +23,24 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import httpx
-from sqlalchemy import text
 
 from ...core.clock import utcnow
 from ...core.config import Settings
 from ...core.errors import ApiError
 from ..scm.security import decrypt_secret_bundle, encrypt_secret_bundle
 from ..work_items.document_tree import folder_label
+from .commands import (
+    PUBLISH_DUE_LOCK,
+    RECORD_INSERT_DOCUMENT_PUBLICATIONS,
+    SAVE_CONNECTION_INSERT_SHAREPOINT_CONNECTIONS,
+)
 from .graph import GraphClient, SharePointError, parse_folder_url, safe_name
+from .queries import (
+    CONNECTION_ROW_SELECT_SHAREPOINT_CONNECTIONS,
+    FOLDER_NAMES_SELECT_DOCUMENT_FOLDERS,
+    PROJECT_PUBLISHING_SELECT_PROJECTS,
+    RELEASE_DUE,
+)
 
 logger = logging.getLogger(__name__)
 BATCH = 20
@@ -55,7 +65,7 @@ def connection_payload(row: Any | None) -> dict[str, Any]:
 async def connection_row(db, workspace_id: str) -> Any | None:
     return (
         await db.execute(
-            text("SELECT * FROM sharepoint_connections WHERE workspace_id = :workspace"),
+            CONNECTION_ROW_SELECT_SHAREPOINT_CONNECTIONS,
             {"workspace": workspace_id},
         )
     ).mappings().first()
@@ -76,14 +86,7 @@ async def save_connection(
         raise ApiError(400, "A client secret is required for the first connection.", "Bad Request")
     now = utcnow()
     await db.execute(
-        text(
-            """INSERT INTO sharepoint_connections
-               (workspace_id, tenant_id, client_id, secret_encrypted, enabled, publish_attachments, updated_by, created_at, updated_at)
-               VALUES (:workspace, :tenant, :client, :secret, :enabled, :attachments, :user, :now, :now)
-               ON CONFLICT (workspace_id) DO UPDATE SET tenant_id = EXCLUDED.tenant_id,
-                 client_id = EXCLUDED.client_id, secret_encrypted = EXCLUDED.secret_encrypted,
-                 enabled = EXCLUDED.enabled, publish_attachments = EXCLUDED.publish_attachments, updated_by = EXCLUDED.updated_by, updated_at = EXCLUDED.updated_at"""
-        ),
+        SAVE_CONNECTION_INSERT_SHAREPOINT_CONNECTIONS,
         {
             "workspace": workspace_id, "tenant": tenant_id, "client": client_id, "secret": secret,
             "enabled": enabled, "attachments": publish_attachments, "user": user_id, "now": now,
@@ -104,14 +107,7 @@ async def _folder_names(db, folder_id: str) -> list[str]:
     VI: SharePoint giống cây Docs có đánh số."""
     rows = (
         await db.execute(
-            text(
-                """WITH RECURSIVE chain AS (
-                     SELECT id, parent_id, name, number, kind, 0 AS depth FROM document_folders WHERE id = :id
-                     UNION ALL
-                     SELECT f.id, f.parent_id, f.name, f.number, f.kind, chain.depth + 1
-                     FROM document_folders f JOIN chain ON f.id = chain.parent_id WHERE chain.depth < 16)
-                   SELECT name, number, kind, parent_id FROM chain ORDER BY depth DESC"""
-            ),
+            FOLDER_NAMES_SELECT_DOCUMENT_FOLDERS,
             {"id": folder_id},
         )
     ).mappings().all()
@@ -159,48 +155,9 @@ def release_markdown(release: Any) -> str:
     return "\n".join(header) + "\n\n" + release["content"]
 
 
-# The latest release decides what is due, not the document status: a document back in Draft
-# keeps its last release published until the next approval.
-# VI: Phiên bản mới nhất quyết định việc đến hạn, không phải trạng thái tài liệu: tài liệu đã
-# VI: về Nháp vẫn giữ phiên bản cuối đã phát hành cho tới lần duyệt kế tiếp.
-DUE_QUERY = """
-SELECT d.id, d.workspace_id, d.folder_id, r.release, r.revision, r.title, r.content,
-       r.approved_at, u.name AS approver, p.id AS project_id, p.sharepoint_folder_url
-FROM documents d
-JOIN LATERAL (
-  SELECT * FROM document_releases WHERE document_id = d.id ORDER BY release DESC LIMIT 1
-) r ON TRUE
-LEFT JOIN users u ON u.id = r.approved_by
-JOIN document_folders f ON f.id = d.folder_id
-JOIN projects p ON p.id = f.project_id AND p.archived_at IS NULL
-JOIN sharepoint_connections c ON c.workspace_id = d.workspace_id AND c.enabled
-LEFT JOIN document_publications pub ON pub.document_id = d.id
-WHERE d.archived_at IS NULL AND p.sharepoint_folder_url IS NOT NULL
-  AND (pub.release IS NULL OR pub.release < r.release)
-  AND (pub.attempted_at IS NULL OR pub.last_error IS NULL OR pub.attempted_at <
-       CAST(:now AS timestamp) - make_interval(mins => LEAST(CAST(:cap AS int), power(2, LEAST(pub.attempts, 6))::int)))
-ORDER BY r.approved_at
-LIMIT :limit
-"""
-
-
 async def _record(db, document: Any, *, now, path=None, item=None, error=None) -> None:
     await db.execute(
-        text(
-            """INSERT INTO document_publications
-               (document_id, workspace_id, version, release, path, item_id, web_url, published_at, attempted_at, attempts, last_error)
-               VALUES (:document, :workspace, :version, :release, :path, :item, :url, :published, :now, :attempts, :error)
-               ON CONFLICT (document_id) DO UPDATE SET
-                 version = COALESCE(EXCLUDED.version, document_publications.version),
-                 release = COALESCE(EXCLUDED.release, document_publications.release),
-                 path = COALESCE(EXCLUDED.path, document_publications.path),
-                 item_id = COALESCE(EXCLUDED.item_id, document_publications.item_id),
-                 web_url = COALESCE(EXCLUDED.web_url, document_publications.web_url),
-                 published_at = COALESCE(EXCLUDED.published_at, document_publications.published_at),
-                 attempted_at = EXCLUDED.attempted_at,
-                 attempts = CASE WHEN EXCLUDED.last_error IS NULL THEN 0 ELSE document_publications.attempts + 1 END,
-                 last_error = EXCLUDED.last_error"""
-        ),
+        RECORD_INSERT_DOCUMENT_PUBLICATIONS,
         {
             "document": document["id"], "workspace": document["workspace_id"],
             "version": None if error else document["revision"],
@@ -225,13 +182,13 @@ async def publish_due(factory, settings: Settings, http: httpx.AsyncClient | Non
     """
     async with factory() as db:
         locked = (
-            await db.execute(text("SELECT pg_try_advisory_xact_lock(hashtextextended('sharepoint-publish', 0))"))
+            await db.execute(PUBLISH_DUE_LOCK)
         ).scalar_one()
         if not locked:
             return 0
         now = utcnow()
         due = (
-            await db.execute(text(DUE_QUERY), {"now": now, "cap": MAX_BACKOFF_MINUTES, "limit": BATCH})
+            await db.execute(RELEASE_DUE, {"now": now, "cap": MAX_BACKOFF_MINUTES, "limit": BATCH})
         ).mappings().all()
         if not due:
             return 0
@@ -282,7 +239,7 @@ async def project_publishing(db, workspace_id: str, project_id: str) -> dict[str
     VI: URL thư mục của dự án và kết nối workspace có đang bật hay không."""
     url = (
         await db.execute(
-            text("SELECT sharepoint_folder_url FROM projects WHERE id = :id AND workspace_id = :workspace"),
+            PROJECT_PUBLISHING_SELECT_PROJECTS,
             {"id": project_id, "workspace": workspace_id},
         )
     ).scalar_one_or_none()

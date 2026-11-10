@@ -1,10 +1,15 @@
-from sqlalchemy import text
 
 from ...core.clock import utcnow
 from ...core.pagination import CursorCodec
 from ..access.project_scope import project_read_scope
 from ..access.projects import workspace_access
 from .history_sql import history_ctes, scoped_sql
+from .queries import (
+    change_page_select_changes_sql,
+    change_page_select_changes_sql_2,
+    project_page_select_grouped_sql,
+    project_page_select_grouped_sql_2,
+)
 
 
 async def change_page(
@@ -24,7 +29,7 @@ async def change_page(
     ) """
     )
     total = (
-        await db.execute(text(ctes + "SELECT COUNT(*) FROM changes"), params)
+        await db.execute(change_page_select_changes_sql(ctes), params)
     ).scalar_one()
     codec = CursorCodec(
         secret,
@@ -39,15 +44,7 @@ async def change_page(
     rows = (
         (
             await db.execute(
-                text(
-                    ctes
-                    # The users join is on its primary key, so it keeps one row per change and the cursor order.
-                    # VI: Join users theo khóa chính nên vẫn một dòng cho mỗi thay đổi và giữ thứ tự con trỏ.
-                    + "SELECT c.*,u.name AS actor_name,u.avatar_url AS actor_avatar_url FROM changes c"
-                    + " LEFT JOIN users u ON u.id=c.actor_id"
-                    + predicate
-                    + " ORDER BY c.occurred_at DESC,c.id DESC LIMIT :limit"
-                ),
+                change_page_select_changes_sql_2(ctes, predicate),
                 {**params, "limit": limit + 1},
             )
         )
@@ -109,7 +106,7 @@ async def project_page(
     ) """
     )
     total = (
-        await db.execute(text(ctes + "SELECT COUNT(*) FROM grouped"), params)
+        await db.execute(project_page_select_grouped_sql(ctes), params)
     ).scalar_one()
     codec = CursorCodec(
         secret,
@@ -124,12 +121,7 @@ async def project_page(
     rows = (
         (
             await db.execute(
-                text(
-                    ctes
-                    + "SELECT * FROM grouped"
-                    + predicate
-                    + " ORDER BY created_at DESC,id DESC LIMIT :limit"
-                ),
+                project_page_select_grouped_sql_2(ctes, predicate),
                 {**params, "limit": limit + 1},
             )
         )

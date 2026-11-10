@@ -11,7 +11,6 @@ from typing import Any
 import httpx
 from fastapi import Depends, Query, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import utcnow
@@ -21,6 +20,9 @@ from ...db.session import get_session
 from ..identity.auth import current_user
 from ..integrations.api import integration_manager
 from ..work_items.document_tree import project_document_team
+from .commands import (
+    PUT_PROJECT_FOLDER_UPDATE_PROJECTS,
+)
 from .graph import SharePointError
 from .service import (
     checked_folder_url,
@@ -124,10 +126,7 @@ async def put_project_folder(
     await integration_manager(db, workspaceId, user["id"])
     updated = (
         await db.execute(
-            text(
-                """UPDATE projects SET sharepoint_folder_url = :url, updated_at = :now
-                   WHERE id = :id AND workspace_id = :workspace AND archived_at IS NULL RETURNING id"""
-            ),
+            PUT_PROJECT_FOLDER_UPDATE_PROJECTS,
             {"url": checked_folder_url(payload.folderUrl), "now": utcnow(), "id": projectId, "workspace": workspaceId},
         )
     ).scalar_one_or_none()
