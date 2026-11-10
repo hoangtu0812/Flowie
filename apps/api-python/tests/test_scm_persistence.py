@@ -15,15 +15,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.identifiers import cuid
-from app.domains.scm.contracts import (
+from app.modules.identity.auth import create_workspace_bootstrap
+from app.modules.reviews.api import list_reviews
+from app.modules.scm.contracts import (
     ProviderRepository,
     ProviderReview,
     ProviderReviewer,
     ProviderRevision,
 )
-from app.domains.scm.service import upsert_repository, upsert_review
-from app.modules.identity.auth import create_workspace_bootstrap
-from app.modules.reviews.api import list_reviews
+from app.modules.scm.service import upsert_repository, upsert_review
 
 
 class ScmPersistenceIntegrationTests(unittest.TestCase):

@@ -7,8 +7,8 @@ import httpx
 from fastapi import FastAPI
 
 from app.db.session import get_session
-from app.domains.scm.router import router
 from app.modules.identity.auth import current_user
+from app.modules.scm.router import router
 
 
 def test_creating_a_github_connection_returns_its_timestamps_as_utc_json():
@@ -38,9 +38,9 @@ def test_creating_a_github_connection_returns_its_timestamps_as_utc_json():
         app.dependency_overrides[current_user] = lambda: {'id': 'user'}
         app.dependency_overrides[get_session] = lambda: AsyncMock()
         with (
-            patch('app.domains.scm.router.workspace_manager', AsyncMock()),
-            patch('app.domains.scm.router._audit', AsyncMock()),
-            patch('app.domains.scm.router.connection_row', AsyncMock(return_value=row)),
+            patch('app.modules.scm.router.workspace_manager', AsyncMock()),
+            patch('app.modules.scm.router._audit', AsyncMock()),
+            patch('app.modules.scm.router.connection_row', AsyncMock(return_value=row)),
         ):
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=app), base_url='http://test'

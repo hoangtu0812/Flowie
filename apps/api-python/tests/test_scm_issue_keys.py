@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
-from app.domains.scm.contracts import ProviderReview
-from app.domains.scm.service import detected_issue_keys
+from app.modules.scm.contracts import ProviderReview
+from app.modules.scm.service import detected_issue_keys
 
 
 def review(source_ref: str, title: str, description: str | None = None) -> ProviderReview:

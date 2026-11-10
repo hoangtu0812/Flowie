@@ -4,7 +4,7 @@ import json
 import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx

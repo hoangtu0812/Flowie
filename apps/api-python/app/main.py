@@ -14,8 +14,6 @@ from .core.errors import ApiError, api_error_handler, validation_error_handler
 from .core.readiness import dependency_status
 from .db.session import create_session_factory
 from .domains.agent import router as agent_router
-from .domains.scm.router import router as scm_router
-from .domains.scm.router import webhook_router as scm_webhook_router
 from .jobs.digest import digest_loop
 from .jobs.dispatcher import dispatcher_loop
 from .jobs.reminders import reminder_loop
@@ -46,6 +44,8 @@ from .modules.portfolio.projects_api import public_router as projects_router
 from .modules.portfolio.projects_api import router as native_projects_router
 from .modules.releases.api import router as releases_router
 from .modules.reviews.api import router as reviews_router
+from .modules.scm.router import router as scm_router
+from .modules.scm.router import webhook_router as scm_webhook_router
 from .modules.service_desk.api import router as asks_router
 from .modules.service_desk.customer_requests_api import (
     router as customer_requests_router,

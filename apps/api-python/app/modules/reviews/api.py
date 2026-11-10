@@ -14,9 +14,9 @@ from ...core.errors import ApiError
 from ...core.identifiers import cuid
 from ...core.utc_responses import UtcAPIRouter as APIRouter
 from ...db.session import get_session
-from ...domains.scm.contracts import read_only_capabilities
 from ..access.projects import workspace_access
 from ..identity.auth import current_user
+from ..scm.contracts import read_only_capabilities
 
 router = APIRouter(prefix='/api/v1/reviews', tags=['reviews'])
 ReviewView = Literal['assigned', 'created', 'all']

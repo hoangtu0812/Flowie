@@ -10,8 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ..core.clock import utcnow
 from ..core.config import Settings
-from ..domains.scm.service import sync_delivery_review
 from ..modules.operations.heartbeats import progress
+from ..modules.scm.service import sync_delivery_review
 
 logger = logging.getLogger(__name__)
 MAX_ATTEMPTS = 8
