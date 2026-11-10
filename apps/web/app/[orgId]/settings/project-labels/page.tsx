@@ -1,4 +1,4 @@
-import ProjectLabelsSettings from '@/components/common/settings/project-labels-settings';
+import ProjectLabelsSettings from '@/features/settings/project-labels-settings';
 import MainLayout from '@/components/layout/main-layout';
 import Header from '@/components/layout/headers/settings/header';
 

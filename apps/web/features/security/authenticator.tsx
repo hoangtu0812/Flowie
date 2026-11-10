@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { VStack, HStack } from '@astryxdesign/core/Layout';
 import { Text, Heading } from '@astryxdesign/core/Text';
 import { RefreshIconButton } from '@/features/shared/refresh-icon-button';
-import { SettingsSection } from '@/components/common/settings/shared';
+import { SettingsSection } from '@/features/settings/shared';
 import { TextInput } from '@astryxdesign/core/TextInput';
 import { Button } from '@astryxdesign/core/Button';
 import { Selector } from '@astryxdesign/core/Selector';

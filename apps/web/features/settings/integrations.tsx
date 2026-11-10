@@ -4,23 +4,23 @@ import {
    DiscordIntegrationDialog,
    loadDiscordStatus,
    type DiscordStatus,
-} from '@/components/settings/discord-integration';
+} from '@/features/settings/discord-integration';
 import {
    TeamsIntegrationDialog,
    loadTeamsStatus,
    microsoftSignInEnabled,
    type TeamsStatus,
-} from '@/components/settings/teams-integration';
+} from '@/features/settings/teams-integration';
 import {
    SharepointIntegrationDialog,
    loadSharepointConnection,
    type SharepointConnection,
-} from '@/components/settings/sharepoint-integration';
+} from '@/features/settings/sharepoint-integration';
 import { Button } from '@/components/ui/button';
 import { ArrowUpRight, FolderUp, MessagesSquare } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { INTEGRATION_LOGOS } from './integration-logos';
-import { McpSettings } from '@/components/settings/mcp/mcp-settings';
+import { McpSettings } from '@/features/settings/mcp/mcp-settings';
 import { SettingsShell } from './shared';
 
 const DiscordLogo = INTEGRATION_LOGOS.discord;

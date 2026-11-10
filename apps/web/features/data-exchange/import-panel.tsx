@@ -18,7 +18,7 @@ import {
    type ImportResult,
    type RecentImport,
 } from './client';
-import { SettingsRow, SettingsSection } from '@/components/common/settings/shared';
+import { SettingsRow, SettingsSection } from '@/features/settings/shared';
 
 export function ImportPanel({
    workspace,

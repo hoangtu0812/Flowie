@@ -16,7 +16,7 @@ import {
    loadProjectSharepoint,
    saveProjectSharepoint,
    testSharepointFolder,
-} from '@/components/settings/sharepoint-integration';
+} from '@/features/settings/sharepoint-integration';
 import { useMessages } from '@/features/shared/use-messages';
 import { messages } from '@/features/documents/messages.vi';
 

@@ -4,7 +4,7 @@ import {
    DiscordIntegrationDialog,
    loadDiscordStatus,
    type DiscordStatus,
-} from '@/components/settings/discord-integration';
+} from '@/features/settings/discord-integration';
 import { Button } from '@/components/ui/button';
 import { ArrowUpRight, Cloud } from 'lucide-react';
 import Link from 'next/link';

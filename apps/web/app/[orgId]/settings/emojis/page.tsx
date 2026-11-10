@@ -1,4 +1,4 @@
-import EmojisSettings from '@/components/common/settings/emojis-settings';
+import EmojisSettings from '@/features/settings/emojis-settings';
 import MainLayout from '@/components/layout/main-layout';
 import Header from '@/components/layout/headers/settings/header';
 

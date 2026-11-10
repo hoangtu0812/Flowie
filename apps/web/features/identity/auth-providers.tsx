@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { Text } from '@astryxdesign/core/Text';
-import { AuthCard } from '@/components/auth/auth-card';
+import { AuthCard } from '@/features/identity/auth-card';
 import { Button } from '@/components/ui/button';
 import { useLocale } from '@/features/shared/use-locale';
 

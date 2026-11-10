@@ -21,7 +21,7 @@ import { PolicyEditor } from './policy-editor';
 import { RevisionHistory } from './revision-history';
 import { SlaReportSummary } from './report-summary';
 import { slaApi, type SlaPolicy } from './types';
-import { SettingsShell } from '@/components/common/settings/shared';
+import { SettingsShell } from '@/features/settings/shared';
 
 export default function SlaSettings() {
    const tx = useMessages(messages);

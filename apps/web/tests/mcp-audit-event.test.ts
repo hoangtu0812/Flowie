@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { describeAuditEvent } from '../components/settings/mcp/audit-event';
+import { describeAuditEvent } from '../features/settings/mcp/audit-event';
 
 test('tool events read as a label with their outcome', () => {
    assert.deepEqual(describeAuditEvent('mcp.read_attachment_text.succeeded'), {

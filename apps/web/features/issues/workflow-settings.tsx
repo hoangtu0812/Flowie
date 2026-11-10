@@ -19,7 +19,7 @@ import {
    managesWorkspace,
 } from '@/lib/workspaces';
 import { responseData } from '@/lib/http';
-import { SettingsShell } from '@/components/common/settings/shared';
+import { SettingsShell } from '@/features/settings/shared';
 
 type WorkflowStatus = {
    id: string;

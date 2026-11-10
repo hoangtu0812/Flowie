@@ -23,7 +23,7 @@ import {
 import { responseData } from '@/lib/http';
 import { ScheduleEditor } from './schedule-editor';
 import { recurringApi, type Schedule, type Run } from './types';
-import { SettingsShell } from '@/components/common/settings/shared';
+import { SettingsShell } from '@/features/settings/shared';
 
 export default function RecurringPage() {
    const tx = useMessages(messages);

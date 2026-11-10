@@ -68,7 +68,7 @@ import {
 import { DocStatusBadge, DocTypeBadge, DOC_TYPES } from './document-badges';
 import { DocumentPreview, EmptyPreview, PdfPreview } from './doc-preview';
 import { ProjectSharepointDialog } from './project-sharepoint';
-import { loadProjectSharepoint } from '@/components/settings/sharepoint-integration';
+import { loadProjectSharepoint } from '@/features/settings/sharepoint-integration';
 import {
    DocsContextMenu,
    TreeItemMenu,

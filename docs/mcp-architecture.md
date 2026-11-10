@@ -59,7 +59,7 @@ it is not exposed as a new MCP mutation.
 
 Frontend code uses `lib/mcp.ts` and `lib/agent-runs.ts` for typed API access.
 Connection state is in `use-mcp-settings.ts`; connection, coordination and trusted
-configuration views are separate components under `components/settings/mcp/`.
+configuration views are separate components under `features/settings/mcp/`.
 The new controls follow the repository's Astryx component guidance.
 
 ## Permission and consistency invariants

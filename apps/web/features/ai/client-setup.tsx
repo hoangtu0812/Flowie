@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { Button } from '@astryxdesign/core/Button';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Heading, Text } from '@astryxdesign/core/Text';
-import { SuccessMark } from '@/components/settings/mcp/success-mark';
+import { SuccessMark } from '@/features/settings/mcp/success-mark';
 import {
    CLIENT_FILES,
    CLIENTS,

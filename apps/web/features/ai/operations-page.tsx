@@ -9,7 +9,7 @@ import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import { responseData } from '@/lib/http';
 import { QueryState } from '@/components/common/query-state';
 import { useParams } from 'next/navigation';
-import { SettingsSection, SettingsShell } from '@/components/common/settings/shared';
+import { SettingsSection, SettingsShell } from '@/features/settings/shared';
 import { RefreshIconButton } from '@/features/shared/refresh-icon-button';
 type Overview = {
    limits: { totalPerMinute: number; perTool: Record<string, number> };

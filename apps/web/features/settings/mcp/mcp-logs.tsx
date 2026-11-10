@@ -8,7 +8,7 @@ import { List, ListItem } from '@astryxdesign/core/List';
 import { SegmentedControl, SegmentedControlItem } from '@astryxdesign/core/SegmentedControl';
 import { Heading, Text } from '@astryxdesign/core/Text';
 import { DesignSurface } from '@/components/common/design-surface';
-import { SettingsShell } from '@/components/common/settings/shared';
+import { SettingsShell } from '@/features/settings/shared';
 import {
    getMcpAuditSummary,
    listMcpConnections,

@@ -6,7 +6,7 @@ import { TextInput } from '@astryxdesign/core/TextInput';
 import { useUiPreferencesStore } from '@/store/ui-preferences-store';
 import { useMessages } from '@/features/shared/use-messages';
 import { resolvedTimezone } from '@/features/shared/account-time';
-import { SettingsCard, SettingsRow, SettingsSection } from '@/components/common/settings/shared';
+import { SettingsCard, SettingsRow, SettingsSection } from '@/features/settings/shared';
 import { preferenceMessages } from './preference-messages';
 
 /**

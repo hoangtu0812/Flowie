@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { SettingsCard, SettingsSection } from '@/components/common/settings/shared';
+import { SettingsCard, SettingsSection } from '@/features/settings/shared';
 import { useMessages } from '@/features/shared/use-messages';
 import { messages } from './messages.vi';
 import { loadAutoJoin, saveAutoJoin, type AutoJoin } from './service-desk-api';

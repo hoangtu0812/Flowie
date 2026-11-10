@@ -54,6 +54,9 @@ pull request and commit references, which are for us.
 
 ### Changed
 
+- The web app's settings pages, which were split between `components/common/settings/` and `components/settings/`, now live together in `apps/web/features/settings/`; the sign-in card moved to `features/identity/` and the admin sidebar to `components/layout/`. This completes the move of domain code out of `components/common/`, which now keeps only UI shared by several domains, and `apps/web/AGENTS.md` describes the final layout. Nothing changes for users. Rebuild `web`; no migration. (DTD-524, DTD-575)
+  VI: Các trang settings của web, trước đây chia ở `components/common/settings/` và `components/settings/`, nay nằm chung ở `apps/web/features/settings/`; thẻ đăng nhập chuyển sang `features/identity/` và sidebar admin sang `components/layout/`. Việc này hoàn tất chuyển code domain ra khỏi `components/common/`, nơi nay chỉ còn UI dùng chung cho nhiều domain, và `apps/web/AGENTS.md` mô tả cấu trúc cuối cùng. Người dùng không thấy gì thay đổi. Build lại `web`; không có migration. (DTD-524, DTD-575)
+
 - The web app's issues code, including the issue detail page under `details/`, now lives in `apps/web/features/issues/` instead of `components/common/`, the fifth of six moves. Nothing changes for users. Rebuild `web`; no migration. (DTD-524, DTD-574, #247)
   VI: Code issues của web, gồm cả trang chi tiết issue trong `details/`, nay nằm ở `apps/web/features/issues/` thay vì `components/common/`, là đợt thứ năm trong sáu đợt chuyển. Người dùng không thấy gì thay đổi. Build lại `web`; không có migration. (DTD-524, DTD-574)
 

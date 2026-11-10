@@ -16,13 +16,13 @@ import { useLocale } from '@/features/shared/use-locale';
 import { useMessages } from '@/features/shared/use-messages';
 import { preferenceMessages } from './preference-messages';
 import { PREFERENCE_CONTROL_WIDTH, TimePreferences } from './time-preferences';
-import { ThemePreferences } from '@/components/common/settings/theme-preferences';
+import { ThemePreferences } from '@/features/settings/theme-preferences';
 import {
    SettingsCard,
    SettingsRow,
    SettingsSection,
    SettingsShell,
-} from '@/components/common/settings/shared';
+} from '@/features/settings/shared';
 
 export default function AccountPreferencesPage() {
    const state = useUiPreferencesStore(),
