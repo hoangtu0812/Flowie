@@ -35,7 +35,7 @@ pull request and commit references, which are for us.
 
 ### Fixed
 
-- The browser regression check for Customize sidebar no longer fails when a team row is in the sidebar: it now opens the Workspace "More" menu instead of matching the team row's hidden "More" label. No app change; nothing to rebuild. (DTD-584)
+- The browser regression check for Customize sidebar no longer fails when a team row is in the sidebar: it now opens the Workspace "More" menu instead of matching the team row's hidden "More" label. No app change; nothing to rebuild. (DTD-584, #255)
   VI: Bài kiểm tra trình duyệt cho Customize sidebar không còn lỗi khi sidebar có dòng team: nay nó mở menu "More" của Workspace thay vì khớp nhầm nhãn "More" ẩn của dòng team. Không đổi ứng dụng; không cần build lại. (DTD-584)
 - Inbox rows no longer scroll sideways: long titles and previews, even without spaces, end in `…` and the status and time stay at the right edge. Notifications an MCP agent caused now show the person's picture, including older ones, and a missing picture falls back to at most two initials instead of text such as `PHT·f`. Rebuild `api` and `web`; no migration. (DTD-576, #250)
   VI: Dòng Inbox không còn cuộn ngang: tiêu đề và preview dài, kể cả không có khoảng trắng, được cắt bằng `…` và trạng thái cùng thời gian luôn ở mép phải. Thông báo do agent MCP tạo nay hiện ảnh của người thực hiện, kể cả thông báo cũ, và khi không có ảnh chỉ hiện tối đa hai chữ cái viết tắt thay vì chuỗi như `PHT·f`. Build lại `api` và `web`; không có migration. (DTD-576)
