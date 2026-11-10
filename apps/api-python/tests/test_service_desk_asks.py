@@ -9,7 +9,9 @@ from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.core.identifiers import cuid
-from app.domains.native_asks import (
+from app.modules.identity.auth import create_workspace_bootstrap
+from app.modules.portfolio.projects_api import UpdateProjectInput, update_project
+from app.modules.service_desk.api import (
     AskTransitionInput,
     CreateAskInput,
     UpdateAskInput,
@@ -22,8 +24,6 @@ from app.domains.native_asks import (
     transition_ask,
     update_ask,
 )
-from app.modules.identity.auth import create_workspace_bootstrap
-from app.modules.portfolio.projects_api import UpdateProjectInput, update_project
 from tests.document_review_support import add_member
 
 

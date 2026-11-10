@@ -9,19 +9,19 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.clock import utcnow
-from ..core.errors import ApiError
-from ..core.identifiers import cuid
-from ..core.utc_responses import UtcAPIRouter as APIRouter
-from ..db.session import get_session
-from ..modules.access.project_scope import project_read_scope
-from ..modules.identity.auth import current_user
-from ..services.microsoft_teams import (
+from ...core.clock import utcnow
+from ...core.errors import ApiError
+from ...core.identifiers import cuid
+from ...core.utc_responses import UtcAPIRouter as APIRouter
+from ...db.session import get_session
+from ...services.microsoft_teams import (
     masked_webhook,
     teams_available,
     teams_message,
     valid_teams_webhook,
 )
+from ..access.project_scope import project_read_scope
+from ..identity.auth import current_user
 
 router = APIRouter(prefix='/api/v1/integrations', tags=['integrations'])
 
@@ -95,7 +95,9 @@ async def save_discord(
     row = existing.mappings().first()
     if not row and not payload.webhookUrl:
         raise ApiError(400, 'A Discord webhook URL is required.', 'Bad Request')
-    webhook_url = _validate_webhook(payload.webhookUrl) if payload.webhookUrl else row['webhook_url']
+    # The check above guarantees a stored row whenever the payload has no webhook URL.
+    # VI: Phép kiểm tra phía trên bảo đảm có dòng đã lưu mỗi khi payload không có webhook URL.
+    webhook_url = _validate_webhook(payload.webhookUrl) if payload.webhookUrl else row['webhook_url']  # type: ignore[index]
     now = utcnow()
     if row:
         result = await db.execute(

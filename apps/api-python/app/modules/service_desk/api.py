@@ -2,28 +2,34 @@ from __future__ import annotations
 
 import json
 from datetime import timedelta
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from fastapi import Depends, Query, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import text
+from sqlalchemy import CursorResult, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.clock import utcnow
-from ..core.errors import ApiError
-from ..core.identifiers import cuid
-from ..core.utc_responses import UtcAPIRouter as APIRouter
-from ..db.session import get_session
-from ..modules.access.projects import team_access, workspace_access
-from ..modules.identity.auth import current_user
-from ..modules.notifications.outbox import stage_notifications
-from ..modules.work_items.issues_api import CreateIssueInput, create_issue
-from ..services.notification_events import (
+from ...core.clock import utcnow
+from ...core.errors import ApiError
+from ...core.identifiers import cuid
+from ...core.utc_responses import UtcAPIRouter as APIRouter
+from ...db.session import get_session
+from ...services.notification_events import (
     create_notification_batch,
     project_teams_batch,
     team_recipient_ids,
 )
-from .service_desk_assistant import AssistantQuestion, answer_question, assistant_status
+from ..access.projects import (
+    team_access,
+    workspace_access,
+)
+from ..identity.auth import current_user
+from ..notifications.outbox import stage_notifications
+from ..work_items.issues_api import (
+    CreateIssueInput,
+    create_issue,
+)
+from .assistant import AssistantQuestion, answer_question, assistant_status
 
 router = APIRouter(prefix='/api/v1/asks', tags=['asks'])
 TICKET_FILE_NOTICE_GAP = timedelta(seconds=60)
@@ -103,7 +109,7 @@ async def _audit(db: AsyncSession, workspace_id: str, actor_id: str, action: str
                              VALUES (:id, :workspace_id, :actor_id, :action, 'ask', :entity_id, CAST(:metadata AS jsonb), :now)'''), {'id': cuid(), 'workspace_id': workspace_id, 'actor_id': actor_id, 'action': action, 'entity_id': ask_id, 'metadata': json.dumps(metadata), 'now': utcnow()})
 
 
-def _identifier(number: int) -> str:
+def ticket_identifier(number: int) -> str:
     return f'SD-{number}'
 
 
@@ -149,7 +155,7 @@ async def _ask(db: AsyncSession, ask_id: str, workspace_id: str) -> dict[str, An
     row = result.mappings().first()
     if not row: raise ApiError(404, 'Ask not found.', 'Not Found')
     pending = reopen_pending(row['status'], row['issue_category'], row['reopened_at'], row['issue_closed_at'])
-    return {'id': row['id'], 'number': row['number'], 'identifier': _identifier(row['number']), 'workspaceId': row['workspace_id'], 'teamId': row['team_id'], 'projectId': row['project_id'], 'title': row['title'], 'description': row['description'], 'priority': row['priority'], 'status': row['status'], 'ticketStatus': ticket_status(row['status'], row['issue_category'], row['last_message_author'] not in {None, row['created_by']}, pending), 'reopenPending': pending, 'createdById': row['created_by'], 'assigneeId': row['assignee_id'], 'assignee': {'id': row['assignee_id'], 'name': row['assignee_name'], 'avatarUrl': row['assignee_avatar_url']} if row['assignee_id'] else None, 'convertedIssueId': row['converted_issue_id'], 'createdAt': row['created_at'], 'updatedAt': row['updated_at'],
+    return {'id': row['id'], 'number': row['number'], 'identifier': ticket_identifier(row['number']), 'workspaceId': row['workspace_id'], 'teamId': row['team_id'], 'projectId': row['project_id'], 'title': row['title'], 'description': row['description'], 'priority': row['priority'], 'status': row['status'], 'ticketStatus': ticket_status(row['status'], row['issue_category'], row['last_message_author'] not in {None, row['created_by']}, pending), 'reopenPending': pending, 'createdById': row['created_by'], 'assigneeId': row['assignee_id'], 'assignee': {'id': row['assignee_id'], 'name': row['assignee_name'], 'avatarUrl': row['assignee_avatar_url']} if row['assignee_id'] else None, 'convertedIssueId': row['converted_issue_id'], 'createdAt': row['created_at'], 'updatedAt': row['updated_at'],
             'team': {'id': row['team_id_value'], 'name': row['team_name'], 'identifier': row['team_identifier'], 'icon': row['team_icon']},
             'project': {'id': row['project_id_value'], 'name': row['project_name'], 'identifier': row['project_identifier'], 'team': {'id': row['team_id']} if row['team_id'] else None} if row['project_id_value'] else None,
             'createdBy': {'id': row['creator_id'], 'name': row['creator_name'], 'avatarUrl': row['creator_avatar_url']},
@@ -270,9 +276,11 @@ async def create_ask(payload: CreateAskInput, user: Any = Depends(current_user),
     if await _accepts_tickets(db, payload.workspaceId, payload.teamId, payload.projectId):
         batch = await create_notification_batch(db, workspace_id=payload.workspaceId, recipient_ids=await team_recipient_ids(db, payload.teamId), actor=user,
                                                 event_type='ticket.created', entity_type='ticket', entity_id=ask_id, title=payload.title.strip(), message='raised a ticket',
-                                                entity_path=f'/service-desk/{ask_id}', entity_label=_identifier(number), body=payload.description, discord=False)
-        channel = await project_teams_batch(db, payload.workspaceId, payload.projectId, actor=user, event_type='ticket.created', entity_type='ticket', title=payload.title.strip(), message='raised a ticket',
-                                            entity_path=f'/service-desk/{ask_id}', entity_label=_identifier(number))
+                                                entity_path=f'/service-desk/{ask_id}', entity_label=ticket_identifier(number), body=payload.description, discord=False)
+        # A ticket without a project matches no project channel, so the batch is None.
+        # VI: Ticket không có dự án không khớp kênh dự án nào, nên batch là None.
+        channel = await project_teams_batch(db, payload.workspaceId, payload.projectId, actor=user, event_type='ticket.created', entity_type='ticket', title=payload.title.strip(), message='raised a ticket',  # type: ignore[arg-type]
+                                            entity_path=f'/service-desk/{ask_id}', entity_label=ticket_identifier(number))
         await stage_notifications(db, batch, channel, workspace_id=payload.workspaceId)
     await db.commit()
     return {'data': await _ask(db, ask_id, payload.workspaceId)}
@@ -330,7 +338,7 @@ async def transition_ask(ask_id: str, payload: AskTransitionInput, workspaceId: 
     changed = await db.execute(text('''UPDATE asks SET status = :status, notified_ticket_status = :label, updated_at = :now,
                                        reopened_at = CASE WHEN :reopen THEN CAST(:now AS timestamp) ELSE reopened_at END
                                        WHERE id = :ask_id AND status = :current'''), {'status': status, 'label': label, 'now': now, 'reopen': payload.action == 'reopen', 'ask_id': ask_id, 'current': ask['status']})
-    if changed.rowcount == 0:
+    if cast(CursorResult[Any], changed).rowcount == 0:
         await db.rollback()
         raise ApiError(409, 'This ticket has just changed. Reload it and try again.', 'Conflict')
     if content: await _add_message(db, ask_id, user['id'], content, now)

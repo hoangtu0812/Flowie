@@ -23,11 +23,17 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.errors import ApiError
-from ..modules.ai.calls import call_provider
-from ..modules.identity.password_reset import limit_request
-from ..modules.work_items.issue_search import NORMALIZED, VIETNAMESE
-from .agent import _fence_untrusted, configured_provider
+from ...core.errors import ApiError
+from ...domains.agent import (
+    _fence_untrusted,
+    configured_provider,
+)
+from ..ai.calls import call_provider
+from ..identity.password_reset import limit_request
+from ..work_items.issue_search import (
+    NORMALIZED,
+    VIETNAMESE,
+)
 
 # Common Vietnamese and English question words. They match almost every document, so keeping
 # them would rank documents by how much prose they have instead of by the question's subject.
@@ -101,7 +107,8 @@ def split_sections(title: str, content: str) -> list[tuple[str, str]]:
     """
     sections: list[tuple[str, str]] = []
     path: list[str] = []
-    heading, lines, in_fence = title, [], False
+    lines: list[str] = []
+    heading, in_fence = title, False
 
     def flush() -> None:
         body = [line for line in lines if not HEADING.match(line)]
@@ -146,7 +153,8 @@ def _pick_sections(documents: list[dict[str, Any]], terms: list[str]) -> list[di
             score = len(matched) * 10 + sum(counts[term] for term in matched) + float(document['rank'])
             candidates.append((-score, document_order, section_order, document, heading, body[:MAX_SECTION_CHARS]))
 
-    chosen, used = [], 0
+    chosen: list[dict[str, Any]] = []
+    used = 0
     for *_, document, heading, excerpt in sorted(candidates, key=lambda item: item[:3]):
         if len(chosen) == MAX_SECTIONS:
             break
@@ -373,8 +381,8 @@ def checked_reply(raw: str, sources: list[dict[str, Any]]) -> tuple[str, str, li
     if not isinstance(reply, dict):
         raise ApiError(502, 'The assistant reply could not be read.', 'Bad Gateway')
     by_label = {source['id']: source for source in sources}
-    status = reply.get('status') if reply.get('status') in STATUSES else 'not_found'
-    citations = reply.get('citations') if isinstance(reply.get('citations'), list) else []
+    status = reply['status'] if reply.get('status') in STATUSES else 'not_found'
+    citations = reply['citations'] if isinstance(reply.get('citations'), list) else []
     labels = [] if status == 'not_found' else [
         label for label in dict.fromkeys(item for item in citations if isinstance(item, str)) if label in by_label
     ]

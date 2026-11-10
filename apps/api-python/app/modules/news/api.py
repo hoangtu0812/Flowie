@@ -12,10 +12,10 @@ from ...core.errors import ApiError
 from ...core.identifiers import cuid
 from ...core.utc_responses import UtcAPIRouter
 from ...db.session import get_session
-from ...domains.native_integrations import _send_teams_test
 from ...services.microsoft_teams import valid_teams_webhook
 from ..identity.auth import current_user
 from ..identity.password_reset import limit_request
+from ..integrations.api import _send_teams_test
 from .feeds import feed_url
 from .service import news_page, refresh_workspace, require_manager
 
