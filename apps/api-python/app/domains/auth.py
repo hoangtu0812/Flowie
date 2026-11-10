@@ -99,11 +99,18 @@ def _request_fingerprint(request: Request, secret: str) -> str | None:
     return sha256(f'{secret}:{request.client.host}'.encode()).hexdigest()
 
 
-def _normalized_email(value: str) -> str:
+def normalized_email(value: str) -> str:
     email = value.strip().lower()
     if not email or '@' not in email or len(email) > 320:
         raise ApiError(400, 'email must be an email', 'Bad Request')
     return email
+
+
+# shortcut: private alias kept for callers not yet moved out of app/domains; delete it once DTD-523
+# has switched every caller to `normalized_email`.
+# VI: shortcut: alias nội bộ giữ cho các nơi gọi chưa chuyển khỏi app/domains; xoá khi DTD-523 đã
+# VI: chuyển mọi nơi gọi sang `normalized_email`.
+_normalized_email = normalized_email
 
 
 def _valid_timezone(value: str | None) -> str | None:

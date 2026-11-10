@@ -13,9 +13,9 @@ from app.core.config import _async_database_url
 from app.core.errors import ApiError, api_error_handler
 from app.db.session import get_session
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap, current_user
-from app.domains.workspaces import router
 from app.modules.work_items.contracts import CreateIssueInput
 from app.modules.work_items.issues import create_issue
+from app.modules.workspaces.api import router
 
 
 @pytest.mark.skipif(

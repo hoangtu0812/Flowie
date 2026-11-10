@@ -15,7 +15,7 @@ from app.domains.auth import (
     _utcnow,
     create_workspace_bootstrap,
 )
-from app.domains.workspaces import (
+from app.modules.workspaces.api import (
     AutoJoinInput,
     auto_join_status,
     leave,
