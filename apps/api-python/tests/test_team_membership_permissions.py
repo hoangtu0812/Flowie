@@ -7,11 +7,13 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError, api_error_handler
+from app.core.identifiers import cuid
 from app.db.session import get_session
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap, current_user
 from app.domains.teams import router
+from app.modules.identity.auth import create_workspace_bootstrap, current_user
 
 
 @pytest.mark.skipif(
@@ -27,9 +29,9 @@ async def verify_membership_permissions():
     )
     try:
         async with async_sessionmaker(engine)() as db:
-            now = _utcnow()
+            now = utcnow()
             owner, admin, member, lead, outsider, target = [
-                {"id": _cuid(), "name": role}
+                {"id": cuid(), "name": role}
                 for role in [
                     "Owner",
                     "Admin",
@@ -44,20 +46,20 @@ async def verify_membership_permissions():
                     text(
                         "INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"
                     ),
-                    {**user, "email": _cuid() + "@example.test", "now": now},
+                    {**user, "email": cuid() + "@example.test", "now": now},
                 )
             seed = await create_workspace_bootstrap(
                 db,
                 user_id=owner["id"],
                 organization_name="Team access",
-                workspace_name=_cuid(),
+                workspace_name=cuid(),
                 now=now,
             )
             other = await create_workspace_bootstrap(
                 db,
                 user_id=outsider["id"],
                 organization_name="Other workspace",
-                workspace_name=_cuid(),
+                workspace_name=cuid(),
                 now=now,
             )
             workspace = seed["workspace_id"]
@@ -72,7 +74,7 @@ async def verify_membership_permissions():
                         "INSERT INTO workspace_members(id,workspace_id,user_id,role,status,created_at,updated_at) VALUES (:id,:workspace,:user,:role,'ACTIVE',:now,:now)"
                     ),
                     {
-                        "id": _cuid(),
+                        "id": cuid(),
                         "workspace": workspace,
                         "user": user["id"],
                         "role": role,

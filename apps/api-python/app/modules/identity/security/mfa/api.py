@@ -8,14 +8,14 @@ from pydantic import BaseModel, Field
 from .....core.errors import ApiError
 from .....core.utc_responses import UtcAPIRouter
 from .....db.session import get_session
-from .....domains.auth import (
+from .....services.auth_policy import microsoft_sign_in_enabled
+from ...auth import (
     _authenticated_user,
     _first_workspace,
     _runtime_user,
     _set_cookies,
     current_user,
 )
-from .....services.auth_policy import microsoft_sign_in_enabled
 from ...password_reset import limit_request
 from ..api import private_response
 from . import commands

@@ -9,10 +9,12 @@ from pydantic import ValidationError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import Settings, _async_database_url
+from app.core.identifiers import cuid
 from app.db.session import get_session
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
 from app.main import create_app
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.workspaces.api import UpdateWorkspaceInput
 
 
@@ -32,22 +34,22 @@ async def verify_workspace_name():
     engine = create_async_engine(_async_database_url(os.environ['MCP_TEST_DATABASE_URL']))
     factory = async_sessionmaker(engine, expire_on_commit=False)
     settings = replace(Settings.from_environment(), auth_jwt_secret='workspace-name-test-secret-at-least-32-characters', auth_cookie_secure=False)
-    user_ids = [_cuid() for _ in range(6)]
+    user_ids = [cuid() for _ in range(6)]
     owner, admin, member, viewer, inactive, outsider = user_ids
     organization_id = None
     clients = []
     password = 'Synthetic-name-test-password-2026'
     try:
         async with factory() as db:
-            now = _utcnow()
+            now = utcnow()
             password_hash = PasswordHasher().hash(password)
             for user_id in user_ids:
                 await db.execute(text("INSERT INTO users(id,email,name,password_hash,status,created_at,updated_at) VALUES (:id,:email,'Synthetic rename user',:hash,'ACTIVE',:now,:now)"), {'id': user_id, 'email': user_id + '@example.test', 'hash': password_hash, 'now': now})
-            seed = await create_workspace_bootstrap(db, user_id=owner, organization_name='Synthetic name organization', workspace_name='Original ' + _cuid(), now=now)
+            seed = await create_workspace_bootstrap(db, user_id=owner, organization_name='Synthetic name organization', workspace_name='Original ' + cuid(), now=now)
             workspace = seed['workspace_id']
             organization_id = await db.scalar(text('SELECT organization_id FROM workspaces WHERE id=:id'), {'id': workspace})
             for user_id, role, status in [(admin, 'ADMIN', 'ACTIVE'), (member, 'MEMBER', 'ACTIVE'), (viewer, 'ADMIN_VIEWER', 'ACTIVE'), (inactive, 'ADMIN', 'INVITED')]:
-                await db.execute(text('INSERT INTO workspace_members(id,workspace_id,user_id,role,status,created_at,updated_at) VALUES (:id,:workspace,:user,:role,:status,:now,:now)'), {'id': _cuid(), 'workspace': workspace, 'user': user_id, 'role': role, 'status': status, 'now': now})
+                await db.execute(text('INSERT INTO workspace_members(id,workspace_id,user_id,role,status,created_at,updated_at) VALUES (:id,:workspace,:user,:role,:status,:now,:now)'), {'id': cuid(), 'workspace': workspace, 'user': user_id, 'role': role, 'status': status, 'now': now})
             await db.execute(text('UPDATE users SET is_platform_admin=true WHERE id=:id'), {'id': outsider})
             await db.commit()
 
@@ -67,7 +69,7 @@ async def verify_workspace_name():
         memberships = (await owner_client.get('/api/v1/workspaces/me')).json()['data']
         before = next(item['workspace'] for item in memberships if item['workspace']['id'] == workspace)
         old_slug = before['slug']
-        current_slug = 'renamed-' + _cuid()[-8:]
+        current_slug = 'renamed-' + cuid()[-8:]
         changed = await owner_client.patch(url, json={'icon': '🏭', 'slug': current_slug})
         assert changed.status_code == 200, changed.text
         async with factory() as db:

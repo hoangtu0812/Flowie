@@ -9,9 +9,11 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.work_items.contracts import CreateDocumentInput, UpdateDocumentInput
 from app.modules.work_items.document_history import (
     list_revisions,
@@ -34,18 +36,18 @@ class DocumentHistoryTests(unittest.IsolatedAsyncioTestCase):
         factory = async_sessionmaker(engine, expire_on_commit=False)
         try:
             async with factory() as db:
-                user = {"id": _cuid(), "name": "Document test"}
+                user = {"id": cuid(), "name": "Document test"}
                 await db.execute(
                     text("""INSERT INTO users (id,name,email,status,created_at,updated_at)
                     VALUES (:id,:name,:email,'ACTIVE',:now,:now)"""),
-                    {**user, "email": _cuid() + "@example.test", "now": _utcnow()},
+                    {**user, "email": cuid() + "@example.test", "now": utcnow()},
                 )
                 seed = await create_workspace_bootstrap(
                     db,
                     user_id=user["id"],
                     organization_name="Revision test",
-                    workspace_name=_cuid(),
-                    now=_utcnow(),
+                    workspace_name=cuid(),
+                    now=utcnow(),
                 )
                 workspace = seed["workspace_id"]
                 document = (

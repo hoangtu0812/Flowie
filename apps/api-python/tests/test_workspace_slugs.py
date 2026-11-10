@@ -6,9 +6,11 @@ from pydantic import ValidationError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.workspaces.api import (
     UpdateWorkspaceInput,
     resolve_workspace,
@@ -29,16 +31,16 @@ def test_workspace_slugs_rename_alias_permissions_and_conflicts():
 async def verify_workspace_slugs():
     engine = create_async_engine(_async_database_url(os.environ['MCP_TEST_DATABASE_URL']))
     factory = async_sessionmaker(engine)
-    run = _cuid()[-8:]
+    run = cuid()[-8:]
     try:
         async with factory() as db:
-            now = _utcnow()
-            owner, other_owner, member = _cuid(), _cuid(), _cuid()
+            now = utcnow()
+            owner, other_owner, member = cuid(), cuid(), cuid()
             for user_id in (owner, other_owner, member):
-                await db.execute(text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,'Slug user',:email,'ACTIVE',:now,:now)"), {'id': user_id, 'email': _cuid() + '@example.test', 'now': now})
+                await db.execute(text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,'Slug user',:email,'ACTIVE',:now,:now)"), {'id': user_id, 'email': cuid() + '@example.test', 'now': now})
             first = (await create_workspace_bootstrap(db, user_id=owner, organization_name='First', workspace_name=f'First {run}', now=now))['workspace_id']
             second = (await create_workspace_bootstrap(db, user_id=other_owner, organization_name='Second', workspace_name=f'Second {run}', now=now))['workspace_id']
-            await db.execute(text("INSERT INTO workspace_members(id,workspace_id,user_id,role,status,created_at,updated_at) VALUES (:id,:workspace,:user,'MEMBER','ACTIVE',:now,:now)"), {'id': _cuid(), 'workspace': first, 'user': member, 'now': now})
+            await db.execute(text("INSERT INTO workspace_members(id,workspace_id,user_id,role,status,created_at,updated_at) VALUES (:id,:workspace,:user,'MEMBER','ACTIVE',:now,:now)"), {'id': cuid(), 'workspace': first, 'user': member, 'now': now})
             await db.commit()
             actor = {'id': owner}
             original = (await resolve_workspace(first, actor, db))['data']['slug']

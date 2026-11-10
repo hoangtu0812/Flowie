@@ -9,8 +9,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.core.clock import _utcnow
 from app.core.config import _async_database_url
 from app.core.identifiers import _cuid
-from app.domains.auth import create_workspace_bootstrap
 from app.jobs.team_policies import policy_cutoff, run_team_policies
+from app.modules.identity.auth import create_workspace_bootstrap
 
 
 def test_policy_cutoff_uses_exact_whole_day_intervals():

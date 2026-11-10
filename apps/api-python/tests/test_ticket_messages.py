@@ -5,9 +5,10 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
 from app.domains.native_asks import (
     AskMessageInput,
     AskTransitionInput,
@@ -26,6 +27,7 @@ from app.domains.native_asks import (
 from app.domains.native_attachments import _authorize_entity
 from app.domains.native_notifications import list_notifications
 from app.jobs.ticket_status import notify_ticket_status_changes
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.work_items.comments import create_comment
 from app.modules.work_items.contracts import CreateCommentInput
 from tests.document_review_support import add_member
@@ -73,21 +75,21 @@ async def verify_conversation():
     try:
         factory = async_sessionmaker(engine, expire_on_commit=False)
         async with factory() as db:
-            now = _utcnow()
-            owner = {"id": _cuid(), "name": "Owner"}
+            now = utcnow()
+            owner = {"id": cuid(), "name": "Owner"}
             await db.execute(
                 text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"),
-                {**owner, "email": _cuid() + "@example.test", "now": now},
+                {**owner, "email": cuid() + "@example.test", "now": now},
             )
             seed = await create_workspace_bootstrap(
-                db, user_id=owner["id"], organization_name="Desk", workspace_name=_cuid(), now=now
+                db, user_id=owner["id"], organization_name="Desk", workspace_name=cuid(), now=now
             )
             workspace, team = seed["workspace_id"], seed["team_id"]
             handler = await add_member(db, workspace, team, name="Handler")
             colleague = await add_member(db, workspace, team, name="Colleague")
             requester = await add_member(db, workspace, None, name="Requester")
             other = await add_member(db, workspace, None, name="Other")
-            stranger = {"id": _cuid(), "name": "Stranger"}
+            stranger = {"id": cuid(), "name": "Stranger"}
             await db.commit()
             project = await add_project(db, workspace, team, enabled=True)
             ticket = CreateAskInput(workspaceId=workspace, teamId=team, projectId=project, title="Cannot sign in")

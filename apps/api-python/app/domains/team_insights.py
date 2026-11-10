@@ -19,10 +19,11 @@ from fastapi import Depends, Query
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.clock import utcnow
 from ..core.errors import ApiError
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
-from .auth import _utcnow, current_user
+from ..modules.identity.auth import current_user
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ DUE_SOON_DAYS = 3
 
 
 def hcm_today(value: datetime | None = None) -> str:
-    return (value or _utcnow()).astimezone(HCM).date().isoformat()
+    return (value or utcnow()).astimezone(HCM).date().isoformat()
 
 
 async def _app_links(
@@ -127,7 +128,7 @@ def pick_candidate(
 
 def seconds_until_next_digest(now: datetime | None = None) -> float:
     """Seconds from now until the next 08:00 Asia/Ho_Chi_Minh digest run."""
-    current = (now or _utcnow()).astimezone(HCM)
+    current = (now or utcnow()).astimezone(HCM)
     target = current.replace(hour=DIGEST_HOUR, minute=0, second=0, microsecond=0)
     if target <= current:
         target += timedelta(days=1)
@@ -138,11 +139,11 @@ def digest_cutoff_utc(now: datetime | None = None) -> datetime:
     """Start of today's digest window (08:00 +07) as naive UTC.
 
     Timestamp columns are `timestamp without time zone`, so the cutoff must
-    stay offset-naive like `_utcnow()` or asyncpg refuses the comparison.
+    stay offset-naive like `utcnow()` or asyncpg refuses the comparison.
     A workspace whose digest was sent at or after this instant already
     received today's report, so restarts never double-send.
     """
-    current = (now or _utcnow()).astimezone(HCM)
+    current = (now or utcnow()).astimezone(HCM)
     return (
         current.replace(hour=DIGEST_HOUR, minute=0, second=0, microsecond=0)
         .astimezone(UTC)
@@ -312,8 +313,8 @@ async def workload_report(
     await _require_team(db, team_id, workspace_id)
     members = await _team_members(db, team_id)
     open_issues = await _open_team_issues(db, team_id)
-    since_velocity = _utcnow() - timedelta(days=VELOCITY_WINDOW_DAYS)
-    since_skill = _utcnow() - timedelta(days=SKILL_WINDOW_DAYS)
+    since_velocity = utcnow() - timedelta(days=VELOCITY_WINDOW_DAYS)
+    since_skill = utcnow() - timedelta(days=SKILL_WINDOW_DAYS)
     velocities, top_labels = await _velocities(
         db, team_id, since_velocity
     ), await _member_top_labels(db, team_id, since_skill)
@@ -448,7 +449,7 @@ async def build_digest(
     db: AsyncSession, workspace_id: str, today: str
 ) -> dict[str, Any]:
     open_issues = await _workspace_open_issues(db, workspace_id)
-    since = _utcnow() - timedelta(days=RECENT_WINDOW_DAYS)
+    since = utcnow() - timedelta(days=RECENT_WINDOW_DAYS)
     done_recent = await _recent_completions(db, workspace_id, since)
     soon_limit = (
         (datetime.fromisoformat(today) + timedelta(days=DUE_SOON_DAYS))
@@ -608,7 +609,7 @@ async def send_digest_for_workspace(
         text(
             "UPDATE discord_webhooks SET daily_digest_sent_at = :now WHERE workspace_id = :workspace_id"
         ),
-        {"now": _utcnow(), "workspace_id": workspace_id},
+        {"now": utcnow(), "workspace_id": workspace_id},
     )
     await db.commit()
     return True

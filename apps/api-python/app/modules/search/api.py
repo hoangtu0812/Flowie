@@ -4,7 +4,7 @@ from fastapi import Depends, Query, Request
 
 from ...core.utc_responses import UtcAPIRouter
 from ...db.session import get_session
-from ...domains.auth import current_user
+from ..identity.auth import current_user
 from .service import search
 
 router = UtcAPIRouter(prefix="/api/v1/search", tags=["workspace-search"])

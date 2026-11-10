@@ -7,7 +7,7 @@ from fastapi import Depends, Query
 
 from ...core.errors import ApiError
 from ...core.utc_responses import UtcAPIRouter as APIRouter
-from ...domains.auth import current_user
+from ..identity.auth import current_user
 from .service import page_title, public_url
 
 router = APIRouter(prefix='/api/v1/link-metadata', tags=['link-metadata'])

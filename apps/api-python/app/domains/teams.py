@@ -11,13 +11,15 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.clock import utcnow
 from ..core.errors import ApiError
+from ..core.identifiers import cuid
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
 from ..modules.access.membership import _manager as _manager
 from ..modules.access.membership import _owner
 from ..modules.access.membership import _workspace_role as _workspace_role
-from .auth import _cuid, _utcnow, current_user
+from ..modules.identity.auth import current_user
 
 router = APIRouter(prefix='/api/v1/teams', tags=['teams'])
 RESTORE_WINDOW_DAYS = 30
@@ -108,7 +110,7 @@ async def _detail(db: AsyncSession, team_id: str, workspace_id: str) -> dict[str
 
 
 async def _audit(db: AsyncSession, workspace_id: str, actor_id: str, action: str, team_id: str, metadata: str = '{}') -> None:
-    await db.execute(text("INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at) VALUES (:id, :workspace_id, :actor_id, :action, 'team', :team_id, CAST(:metadata AS jsonb), :now)"), {'id': _cuid(), 'workspace_id': workspace_id, 'actor_id': actor_id, 'action': action, 'team_id': team_id, 'metadata': metadata, 'now': _utcnow()})
+    await db.execute(text("INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at) VALUES (:id, :workspace_id, :actor_id, :action, 'team', :team_id, CAST(:metadata AS jsonb), :now)"), {'id': cuid(), 'workspace_id': workspace_id, 'actor_id': actor_id, 'action': action, 'team_id': team_id, 'metadata': metadata, 'now': utcnow()})
 
 
 @router.get('')
@@ -132,14 +134,14 @@ async def create_team(payload: CreateTeamInput, user: Any = Depends(current_user
     name, identifier = payload.name.strip(), payload.identifier.strip().upper()
     if not identifier:
         raise ApiError(400, 'identifier must not be empty', 'Bad Request')
-    team_id, now = _cuid(), _utcnow()
+    team_id, now = cuid(), utcnow()
     try:
         await db.execute(text('''INSERT INTO teams (id, workspace_id, name, identifier, description, icon, color, created_at, updated_at) VALUES (:id, :workspace_id, :name, :identifier, :description, :icon, :color, :now, :now)'''), {'id': team_id, 'workspace_id': payload.workspaceId, 'name': name, 'identifier': identifier, 'description': payload.description, 'icon': payload.icon or '👥', 'color': payload.color or '#6366f1', 'now': now})
         # Administrators may create teams, but only an owner can grant membership.
         if await _workspace_role(db, payload.workspaceId, user['id']) == 'OWNER':
             await _owner(db, payload.workspaceId, user['id'])
             await db.execute(text("INSERT INTO team_members (team_id, user_id, role) VALUES (:team_id, :user_id, 'LEAD')"), {'team_id': team_id, 'user_id': user['id']})
-        await db.execute(text("INSERT INTO document_folders (id, workspace_id, team_id, name, icon, position, created_at, updated_at) VALUES (:id, :workspace_id, :team_id, 'Team documents', '📁', 0, :now, :now)"), {'id': _cuid(), 'workspace_id': payload.workspaceId, 'team_id': team_id, 'now': now})
+        await db.execute(text("INSERT INTO document_folders (id, workspace_id, team_id, name, icon, position, created_at, updated_at) VALUES (:id, :workspace_id, :team_id, 'Team documents', '📁', 0, :now, :now)"), {'id': cuid(), 'workspace_id': payload.workspaceId, 'team_id': team_id, 'now': now})
         await db.commit()
     except IntegrityError as error:
         await db.rollback()
@@ -150,7 +152,7 @@ async def create_team(payload: CreateTeamInput, user: Any = Depends(current_user
 @router.get('/deleted')
 async def list_deleted(workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
     await _manager(db, workspaceId, user['id'])
-    since = _utcnow() - timedelta(days=RESTORE_WINDOW_DAYS)
+    since = utcnow() - timedelta(days=RESTORE_WINDOW_DAYS)
     result = await db.execute(text('SELECT id, name, identifier, icon, deleted_at FROM teams WHERE workspace_id = :workspace_id AND deleted_at >= :since ORDER BY deleted_at DESC'), {'workspace_id': workspaceId, 'since': since})
     return {'data': [{'id': row['id'], 'name': row['name'], 'identifier': row['identifier'], 'icon': row['icon'], 'deletedAt': row['deleted_at']} for row in result.mappings().all()]}
 
@@ -195,7 +197,7 @@ async def update_team(team_id: str, payload: UpdateTeamInput, workspaceId: str =
     archive_days = values.get('autoArchiveDays', current['auto_archive_days'])
     if close_days and archive_days and archive_days < close_days: raise ApiError(400, 'Auto-archive must not run before auto-close.', 'Bad Request')
     columns = {'name': 'name', 'description': 'description', 'icon': 'icon', 'color': 'color', 'triageEnabled': 'triage_enabled', 'joinPolicy': 'join_policy', 'cycleCadenceWeeks': 'cycle_cadence_weeks', 'autoCloseDays': 'auto_close_days', 'autoArchiveDays': 'auto_archive_days', 'parentTeamId': 'parent_team_id', 'defaultIssueTemplateId': 'default_issue_template_id'}
-    sets, params = [], {'id': team_id, 'now': _utcnow()}
+    sets, params = [], {'id': team_id, 'now': utcnow()}
     for field, column in columns.items():
         if field in values:
             params[field] = values[field].strip() if field in {'name', 'description', 'icon'} and isinstance(values[field], str) else values[field]
@@ -234,7 +236,7 @@ async def update_team(team_id: str, payload: UpdateTeamInput, workspaceId: str =
 
 
 async def _retire(db: AsyncSession, team_id: str, workspace_id: str, user_id: str, *, deletion: bool) -> dict[str, Any]:
-    now = _utcnow()
+    now = utcnow()
     if deletion:
         result = await db.execute(text('UPDATE teams SET archived_at = :now, deleted_at = :now, updated_at = :now WHERE id = :id AND workspace_id = :workspace_id AND deleted_at IS NULL RETURNING *'), {'id': team_id, 'workspace_id': workspace_id, 'now': now})
         action, metadata = 'team.deletion_scheduled', '{"restoreWindowDays":30}'
@@ -265,8 +267,8 @@ async def restore_team(team_id: str, workspaceId: str = Query(min_length=1), use
     await _manager(db, workspaceId, user['id'])
     row = await _team_row(db, team_id, workspaceId, include_archived=True)
     if not row or not row['deleted_at']: raise ApiError(404, 'Deleted team not found.', 'Not Found')
-    if row['deleted_at'] + timedelta(days=RESTORE_WINDOW_DAYS) <= _utcnow(): raise ApiError(400, 'The 30-day restoration window has expired.', 'Bad Request')
-    result = await db.execute(text('UPDATE teams SET archived_at = NULL, deleted_at = NULL, updated_at = :now WHERE id = :id RETURNING *'), {'id': team_id, 'now': _utcnow()})
+    if row['deleted_at'] + timedelta(days=RESTORE_WINDOW_DAYS) <= utcnow(): raise ApiError(400, 'The 30-day restoration window has expired.', 'Bad Request')
+    result = await db.execute(text('UPDATE teams SET archived_at = NULL, deleted_at = NULL, updated_at = :now WHERE id = :id RETURNING *'), {'id': team_id, 'now': utcnow()})
     restored = result.mappings().one()
     await _audit(db, workspaceId, user['id'], 'team.restored', team_id)
     await db.commit()

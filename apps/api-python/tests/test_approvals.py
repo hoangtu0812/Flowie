@@ -5,9 +5,11 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.work_items.approvals_api import list_approvals
 from app.modules.work_items.contracts import CreateDocumentInput, UpdateDocumentInput
 from app.modules.work_items.document_review import (
@@ -32,21 +34,21 @@ async def verify_lists():
     engine = create_async_engine(_async_database_url(os.environ["MCP_TEST_DATABASE_URL"]))
     try:
         async with async_sessionmaker(engine, expire_on_commit=False)() as db:
-            now = _utcnow()
-            owner = {"id": _cuid(), "name": "Owner"}
+            now = utcnow()
+            owner = {"id": cuid(), "name": "Owner"}
             await db.execute(
                 text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"),
-                {**owner, "email": _cuid() + "@example.test", "now": now},
+                {**owner, "email": cuid() + "@example.test", "now": now},
             )
             seed = await create_workspace_bootstrap(
-                db, user_id=owner["id"], organization_name="Approvals", workspace_name=_cuid(), now=now
+                db, user_id=owner["id"], organization_name="Approvals", workspace_name=cuid(), now=now
             )
             workspace, team = seed["workspace_id"], seed["team_id"]
             lead = await add_member(db, workspace, team, team_role="LEAD", name="Lead")
             author = await add_member(db, workspace, team, name="Author")
             reviewer = await add_member(db, workspace, team, name="Reviewer")
             outsider = await add_member(db, workspace, None, name="Outsider")
-            stranger = {"id": _cuid(), "name": "Stranger"}
+            stranger = {"id": cuid(), "name": "Stranger"}
 
             async def lists(user):
                 return (await list_approvals(workspaceId=workspace, user=user, db=db))["data"]
@@ -142,7 +144,7 @@ async def verify_lists():
             assert draft not in await ids(author, "submitted")
             assert await lists(outsider) == {"waiting": [], "submitted": [], "done": []}
             await db.execute(
-                text("UPDATE documents SET archived_at=:now WHERE id=:id"), {"id": own, "now": _utcnow()}
+                text("UPDATE documents SET archived_at=:now WHERE id=:id"), {"id": own, "now": utcnow()}
             )
             assert own not in await ids(owner, "waiting")
             assert own not in await ids(lead, "submitted")

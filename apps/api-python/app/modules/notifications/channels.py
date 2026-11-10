@@ -8,9 +8,9 @@ from ...core.clock import _utcnow
 from ...core.errors import ApiError
 from ...core.utc_responses import UtcAPIRouter
 from ...db.session import get_session
-from ...domains.auth import current_user
 from ...services.microsoft_teams import teams_available
 from ..access.membership import _workspace_role
+from ..identity.auth import current_user
 from ..identity.reset_delivery import delivery_enabled
 from .access import notification_scope
 

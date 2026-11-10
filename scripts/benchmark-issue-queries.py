@@ -15,8 +15,10 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "apps/api-python"))
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
+from app.modules.identity.auth import create_workspace_bootstrap
 
 
 def baseline_list(ref):
@@ -95,8 +97,8 @@ async def main(args):
     try:
         for size in (1000, 10000):
             async with factory() as db:
-                user = {"id": _cuid(), "name": "Performance fixture"}
-                now = _utcnow()
+                user = {"id": cuid(), "name": "Performance fixture"}
+                now = utcnow()
                 await db.execute(
                     text(
                         "INSERT INTO users(id,email,name,status,created_at,updated_at) VALUES (:id,:email,:name,'ACTIVE',:now,:now)"
@@ -107,7 +109,7 @@ async def main(args):
                     db,
                     user_id=user["id"],
                     organization_name="Benchmark",
-                    workspace_name=_cuid(),
+                    workspace_name=cuid(),
                     now=now,
                 )
                 status = (

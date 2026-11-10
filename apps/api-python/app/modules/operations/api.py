@@ -10,8 +10,8 @@ from ...core.clock import _utcnow
 from ...core.identifiers import _cuid
 from ...core.utc_responses import UtcAPIRouter
 from ...db.session import get_session
-from ...domains.auth import current_user
 from ..access.projects import _workspace_access, _workspace_manager
+from ..identity.auth import current_user
 from ..identity.password_reset import limit_request
 from .diagnostics import build_identity
 from .job_query import visible_jobs

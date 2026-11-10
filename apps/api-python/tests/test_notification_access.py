@@ -6,9 +6,11 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
 from app.domains.native_notifications import list_notifications
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.notifications.access import readable_records
 from app.modules.notifications.outbox import process_one, stage_notifications
 from app.services.notification_events import create_notification_batch
@@ -26,23 +28,23 @@ async def verify_access():
         _async_database_url(os.environ["MCP_TEST_DATABASE_URL"])
     )
     factory = async_sessionmaker(engine)
-    owner, reader = [{"id": _cuid(), "name": "Notification access"} for _ in range(2)]
+    owner, reader = [{"id": cuid(), "name": "Notification access"} for _ in range(2)]
     workspace = None
     try:
         async with factory() as db:
-            now = _utcnow()
+            now = utcnow()
             for user in [owner, reader]:
                 await db.execute(
                     text(
                         "INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"
                     ),
-                    {**user, "email": _cuid() + "@example.test", "now": now},
+                    {**user, "email": cuid() + "@example.test", "now": now},
                 )
             seed = await create_workspace_bootstrap(
                 db,
                 user_id=owner["id"],
                 organization_name="Notification access",
-                workspace_name=_cuid(),
+                workspace_name=cuid(),
                 now=now,
             )
             workspace, team = seed["workspace_id"], seed["team_id"]
@@ -51,13 +53,13 @@ async def verify_access():
                     "INSERT INTO workspace_members(id,workspace_id,user_id,role,status,created_at,updated_at) VALUES (:id,:workspace,:user,'ADMIN','ACTIVE',:now,:now)"
                 ),
                 {
-                    "id": _cuid(),
+                    "id": cuid(),
                     "workspace": workspace,
                     "user": reader["id"],
                     "now": now,
                 },
             )
-            project = _cuid()
+            project = cuid()
             await db.execute(
                 text(
                     "INSERT INTO projects(id,workspace_id,team_id,name,identifier,created_at,updated_at) VALUES (:id,:workspace,:team,'Private project',:id,:now,:now)"

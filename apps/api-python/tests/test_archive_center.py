@@ -6,11 +6,13 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
 from app.modules.archive.repository import archive_page
 from app.modules.archive.service import archive_project, restore, restore_preview
+from app.modules.identity.auth import create_workspace_bootstrap
 
 
 @pytest.mark.skipif(
@@ -26,20 +28,20 @@ async def verify_archive():
     )
     try:
         async with async_sessionmaker(engine)() as db:
-            now = _utcnow()
-            owner, reader = [{"id": _cuid(), "name": "Archive test"} for _ in range(2)]
+            now = utcnow()
+            owner, reader = [{"id": cuid(), "name": "Archive test"} for _ in range(2)]
             for user in [owner, reader]:
                 await db.execute(
                     text(
                         "INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"
                     ),
-                    {**user, "email": _cuid() + "@example.test", "now": now},
+                    {**user, "email": cuid() + "@example.test", "now": now},
                 )
             seed = await create_workspace_bootstrap(
                 db,
                 user_id=owner["id"],
                 organization_name="Archive test",
-                workspace_name=_cuid(),
+                workspace_name=cuid(),
                 now=now,
             )
             workspace, team = seed["workspace_id"], seed["team_id"]
@@ -48,13 +50,13 @@ async def verify_archive():
                     "INSERT INTO workspace_members(id,workspace_id,user_id,status,role,created_at,updated_at) VALUES (:id,:workspace,:user,'ACTIVE','MEMBER',:now,:now)"
                 ),
                 {
-                    "id": _cuid(),
+                    "id": cuid(),
                     "workspace": workspace,
                     "user": reader["id"],
                     "now": now,
                 },
             )
-            project, issue, doc, initiative = [_cuid() for _ in range(4)]
+            project, issue, doc, initiative = [cuid() for _ in range(4)]
             await db.execute(
                 text(
                     "INSERT INTO projects(id,workspace_id,name,identifier,created_at,updated_at) VALUES (:id,:workspace,'Shared archive test','ARCH',:now,:now)"

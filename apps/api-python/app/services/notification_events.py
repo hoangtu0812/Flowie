@@ -34,7 +34,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.audit_context import audit_agent
-from ..domains.auth import _cuid, _utcnow
+from ..core.clock import utcnow
+from ..core.identifiers import cuid
 from .microsoft_teams import teams_available, teams_mention_message, teams_message
 
 logger = logging.getLogger(__name__)
@@ -238,7 +239,7 @@ async def project_teams_batch(
         actor_data=actor_payload(actor),
         details=[('Project', channel['name'])],
         body=None,
-        now=_utcnow(),
+        now=utcnow(),
     )
     return NotificationBatch(teams_cards=[{'url': channel['webhook_url'], 'message': teams_message(embed)}])
 
@@ -411,7 +412,7 @@ async def create_notification_batch(
     VI: gửi đích danh như giao việc hoặc mention trong comment.
     """
 
-    now = _utcnow()
+    now = utcnow()
     actor_data = actor_payload(actor)
     body_excerpt = _excerpt(body)
     data: dict[str, Any] = {
@@ -439,7 +440,7 @@ async def create_notification_batch(
     from ..modules.notifications.access import readable_recipients
     recipients=await readable_recipients(db,workspace_id,entity_type,entity_id,set(recipient_ids)-(set() if agent else {actor['id']}))
     for recipient_id in recipients:
-        notification_id = _cuid()
+        notification_id = cuid()
         await db.execute(
             text(
                 '''INSERT INTO notifications

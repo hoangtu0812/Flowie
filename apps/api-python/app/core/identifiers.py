@@ -15,5 +15,12 @@ def cuid() -> str:
 _cuid = cuid
 
 
-def _hash_token(token: str) -> str:
+def hash_token(token: str) -> str:
     return sha256(token.encode("utf-8")).hexdigest()
+
+
+# shortcut: private alias kept for callers not yet switched to the public name; delete it once DTD-523
+# has switched every caller to `hash_token`.
+# VI: shortcut: alias nội bộ giữ cho các nơi gọi chưa chuyển sang tên công khai; xoá khi DTD-523 đã
+# VI: chuyển mọi nơi gọi sang `hash_token`.
+_hash_token = hash_token

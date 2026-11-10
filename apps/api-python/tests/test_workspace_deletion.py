@@ -9,10 +9,12 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError, api_error_handler
+from app.core.identifiers import cuid
 from app.db.session import get_session
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap, current_user
+from app.modules.identity.auth import create_workspace_bootstrap, current_user
 from app.modules.work_items.contracts import CreateIssueInput
 from app.modules.work_items.issues import create_issue
 from app.modules.workspaces.api import router
@@ -31,9 +33,9 @@ async def verify_deletion():
     )
     try:
         async with async_sessionmaker(engine)() as db:
-            now = _utcnow()
+            now = utcnow()
             owner, admin, member, outsider = [
-                {"id": _cuid(), "name": role}
+                {"id": cuid(), "name": role}
                 for role in ["Owner", "Admin", "Member", "Outsider"]
             ]
             for user in [owner, admin, member, outsider]:
@@ -41,9 +43,9 @@ async def verify_deletion():
                     text(
                         "INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"
                     ),
-                    {**user, "email": _cuid() + "@example.test", "now": now},
+                    {**user, "email": cuid() + "@example.test", "now": now},
                 )
-            name = "Phòng Chuyển đổi số " + _cuid()
+            name = "Phòng Chuyển đổi số " + cuid()
             seed = await create_workspace_bootstrap(
                 db,
                 user_id=owner["id"],
@@ -55,7 +57,7 @@ async def verify_deletion():
                 db,
                 user_id=owner["id"],
                 organization_name="Other",
-                workspace_name=_cuid(),
+                workspace_name=cuid(),
                 now=now,
             )
             workspace = seed["workspace_id"]
@@ -65,7 +67,7 @@ async def verify_deletion():
                         "INSERT INTO workspace_members(id,workspace_id,user_id,role,status,created_at,updated_at) VALUES (:id,:workspace,:user,:role,'ACTIVE',:now,:now)"
                     ),
                     {
-                        "id": _cuid(),
+                        "id": cuid(),
                         "workspace": workspace,
                         "user": user["id"],
                         "role": role,
@@ -94,7 +96,7 @@ async def verify_deletion():
                     db,
                 )
             )["data"]
-            project = _cuid()
+            project = cuid()
             await db.execute(
                 text(
                     "INSERT INTO projects(id,workspace_id,team_id,name,identifier,created_at,updated_at) VALUES (:id,:workspace,:team,'Deleted project','DEL',:now,:now)"
@@ -111,7 +113,7 @@ async def verify_deletion():
                     "INSERT INTO documents(id,workspace_id,team_id,title,content,created_by,updated_by,created_at,updated_at) VALUES (:id,:workspace,:team,'Deleted document','content',:user,:user,:now,:now)"
                 ),
                 {
-                    "id": _cuid(),
+                    "id": cuid(),
                     "workspace": workspace,
                     "team": seed["team_id"],
                     "user": owner["id"],

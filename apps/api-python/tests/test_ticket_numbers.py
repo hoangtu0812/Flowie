@@ -6,8 +6,9 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
 from app.domains.native_asks import (
     CreateAskInput,
     archive_ask,
@@ -15,6 +16,7 @@ from app.domains.native_asks import (
     list_asks,
     record_ticket_file,
 )
+from app.modules.identity.auth import create_workspace_bootstrap
 from tests.document_review_support import add_member
 from tests.test_service_desk_asks import add_project
 from tests.test_ticket_messages import inbox
@@ -28,13 +30,13 @@ def test_ticket_numbers_and_file_notices():
 
 
 async def add_workspace(db):
-    now = _utcnow()
-    owner = {"id": _cuid(), "name": "Owner"}
+    now = utcnow()
+    owner = {"id": cuid(), "name": "Owner"}
     await db.execute(
         text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"),
-        {**owner, "email": _cuid() + "@example.test", "now": now},
+        {**owner, "email": cuid() + "@example.test", "now": now},
     )
-    seed = await create_workspace_bootstrap(db, user_id=owner["id"], organization_name="Desk", workspace_name=_cuid(), now=now)
+    seed = await create_workspace_bootstrap(db, user_id=owner["id"], organization_name="Desk", workspace_name=cuid(), now=now)
     return owner, seed["workspace_id"], seed["team_id"]
 
 
@@ -105,7 +107,7 @@ async def verify_numbers():
 
             # A later file is news again.
             # VI: File thêm sau đó lại là tin mới.
-            await db.execute(text("UPDATE audit_logs SET created_at = :old WHERE entity_id = :id"), {"old": _utcnow() - timedelta(minutes=2), "id": first["id"]})
+            await db.execute(text("UPDATE audit_logs SET created_at = :old WHERE entity_id = :id"), {"old": utcnow() - timedelta(minutes=2), "id": first["id"]})
             await record_ticket_file(db, first["id"], workspace, handler, "later.txt")
             await db.commit()
             assert len(await files(requester)) == 2

@@ -6,9 +6,11 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.work_items.issue_search import search_page
 from app.modules.work_items.issue_sort import SORT_COLUMNS, parse_sort
 
@@ -42,18 +44,18 @@ async def verify_sort():
     )
     try:
         async with async_sessionmaker(engine)() as db:
-            now, user = _utcnow(), _cuid()
+            now, user = utcnow(), cuid()
             await db.execute(
                 text(
                     "INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,'Sort owner',:email,'ACTIVE',:now,:now)"
                 ),
-                {"id": user, "email": _cuid() + "@example.test", "now": now},
+                {"id": user, "email": cuid() + "@example.test", "now": now},
             )
             seed = await create_workspace_bootstrap(
                 db,
                 user_id=user,
                 organization_name="Sorting",
-                workspace_name=_cuid(),
+                workspace_name=cuid(),
                 now=now,
             )
             workspace, team = seed["workspace_id"], seed["team_id"]
@@ -67,7 +69,7 @@ async def verify_sort():
             ).scalar_one()
             fixtures = [
                 {
-                    "id": _cuid(),
+                    "id": cuid(),
                     "number": n + 1,
                     "title": f"Title {n % 7:02}",
                     "effort": None if n % 11 == 0 else n % 5,

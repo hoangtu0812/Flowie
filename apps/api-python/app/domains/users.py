@@ -11,11 +11,12 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.clock import utcnow
 from ..core.errors import ApiError
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
+from ..modules.identity.auth import current_user
 from ..storage.minio import MinioStorage
-from .auth import _utcnow, current_user
 
 router = APIRouter(prefix='/api/v1/users', tags=['users'])
 MAX_AVATAR_BYTES = 5 * 1024 * 1024
@@ -277,7 +278,7 @@ async def _workspace_members(
             'joinedAt': row['joined_at'] or row['member_created_at'],
             'lastSeenAt': row['last_seen_at'],
             'isOnline': bool(
-                row['last_seen_at'] and row['last_seen_at'] >= _utcnow() - timedelta(minutes=2)
+                row['last_seen_at'] and row['last_seen_at'] >= utcnow() - timedelta(minutes=2)
             ),
             'teams': team_rows.get(row['id'], []),
             'projects': project_rows.get(row['id'], []),

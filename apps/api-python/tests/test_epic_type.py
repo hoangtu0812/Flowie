@@ -6,8 +6,10 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.mcp.contracts import (
     CreateIssueTool,
     SearchIssuesInput,
@@ -62,19 +64,19 @@ async def verify_epic():
     )
     try:
         async with async_sessionmaker(engine)() as db:
-            (now, user_id) = (_utcnow(), _cuid())
+            (now, user_id) = (utcnow(), cuid())
             user = {"id": user_id, "name": "Epic owner"}
             await db.execute(
                 text(
                     "INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,'Epic owner',:email,'ACTIVE',:now,:now)"
                 ),
-                {"id": user_id, "email": _cuid() + "@example.test", "now": now},
+                {"id": user_id, "email": cuid() + "@example.test", "now": now},
             )
             seed = await create_workspace_bootstrap(
                 db,
                 user_id=user_id,
                 organization_name="Epic",
-                workspace_name=_cuid(),
+                workspace_name=cuid(),
                 now=now,
             )
             (workspace, team) = (seed["workspace_id"], seed["team_id"])

@@ -7,11 +7,13 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
 from app.modules.audit.contracts import AuditFilters
 from app.modules.audit.query import audit_page
+from app.modules.identity.auth import create_workspace_bootstrap
 
 
 @pytest.mark.skipif(
@@ -27,20 +29,20 @@ async def verify_audit():
     )
     try:
         async with async_sessionmaker(engine)() as db:
-            now = _utcnow()
-            owner, reader = [{"id": _cuid(), "name": "Audit test"} for _ in range(2)]
+            now = utcnow()
+            owner, reader = [{"id": cuid(), "name": "Audit test"} for _ in range(2)]
             for user in [owner, reader]:
                 await db.execute(
                     text(
                         "INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"
                     ),
-                    {**user, "email": _cuid() + "@example.test", "now": now},
+                    {**user, "email": cuid() + "@example.test", "now": now},
                 )
             seed = await create_workspace_bootstrap(
                 db,
                 user_id=owner["id"],
                 organization_name="Audit",
-                workspace_name=_cuid(),
+                workspace_name=cuid(),
                 now=now,
             )
             workspace, team = seed["workspace_id"], seed["team_id"]
@@ -49,13 +51,13 @@ async def verify_audit():
                     "INSERT INTO workspace_members(id,workspace_id,user_id,status,role,created_at,updated_at) VALUES (:id,:workspace,:user,'ACTIVE','ADMIN',:now,:now)"
                 ),
                 {
-                    "id": _cuid(),
+                    "id": cuid(),
                     "workspace": workspace,
                     "user": reader["id"],
                     "now": now,
                 },
             )
-            visible, private = _cuid(), _cuid()
+            visible, private = cuid(), cuid()
             for identifier, project_team in [(visible, None), (private, team)]:
                 await db.execute(
                     text(
@@ -153,14 +155,14 @@ async def verify_audit():
                 ("project", visible, {}, None, "SYSTEM"),
                 (
                     "issue-status",
-                    _cuid(),
+                    cuid(),
                     {"source": "WEB", "scope": "WORKSPACE"},
                     owner["id"],
                     "WEB",
                 ),
                 (
                     "issue-status",
-                    _cuid(),
+                    cuid(),
                     {"source": "WEB", "scope": "TEAM", "teamId": team},
                     owner["id"],
                     None,
@@ -168,7 +170,7 @@ async def verify_audit():
                 ("unresolved-type", visible, {"source": "WEB"}, owner["id"], None),
                 ("mcp-tool", private, {"source": "AI"}, owner["id"], None),
             ]:
-                identifier = _cuid()
+                identifier = cuid()
                 await db.execute(
                     text("""INSERT INTO audit_logs(id,workspace_id,actor_id,action,entity_type,entity_id,metadata,created_at)
                     VALUES (:id,:workspace,:actor,'audit.acceptance',:entity,:entity_id,CAST(:metadata AS jsonb),:now)"""),

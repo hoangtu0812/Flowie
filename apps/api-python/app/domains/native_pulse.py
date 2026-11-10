@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
 from ..modules.access.projects import workspace_access
-from .auth import current_user
+from ..modules.identity.auth import current_user
 
 router=APIRouter(prefix='/api/v1/pulse',tags=['pulse'])
 LABELS={'issue.created':'created an issue','issue.updated':'updated an issue','issue.archived':'archived an issue','issue.moved':'moved an issue','project.created':'created a project','project.updated':'updated a project','project.archived':'archived a project'}

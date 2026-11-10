@@ -7,15 +7,10 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.domains.auth import (
-    _cuid,
-    _find_user_by_id,
-    _platform_role,
-    _runtime_user,
-    _utcnow,
-)
+from app.core.identifiers import cuid
 from app.domains.native_admin import (
     UpdateAdminUserInput,
     audit_logs,
@@ -23,6 +18,7 @@ from app.domains.native_admin import (
     update_user,
     users,
 )
+from app.modules.identity.auth import _find_user_by_id, _platform_role, _runtime_user
 
 
 @dataclass
@@ -57,20 +53,20 @@ def test_platform_role_permissions_and_audit():
 
 async def verify_permissions():
     engine = create_async_engine(_async_database_url(os.environ['MCP_TEST_DATABASE_URL']))
-    root_email = f'{_cuid()}@example.test'
+    root_email = f'{cuid()}@example.test'
     settings = FakeSettings(root_email)
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(settings=settings)))
     try:
         async with async_sessionmaker(engine)() as db:
-            now = _utcnow()
+            now = utcnow()
             people = {}
             for name, email, role in [
                 ('root', root_email, None),
-                ('super', f'{_cuid()}@example.test', 'SUPER_ADMIN'),
-                ('viewer', f'{_cuid()}@example.test', 'VIEWER'),
-                ('plain', f'{_cuid()}@example.test', None),
+                ('super', f'{cuid()}@example.test', 'SUPER_ADMIN'),
+                ('viewer', f'{cuid()}@example.test', 'VIEWER'),
+                ('plain', f'{cuid()}@example.test', None),
             ]:
-                people[name] = _cuid()
+                people[name] = cuid()
                 await db.execute(
                     text(
                         """INSERT INTO users(id,name,email,status,is_platform_admin,platform_role,created_at,updated_at)

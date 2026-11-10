@@ -7,10 +7,11 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
+from app.core.identifiers import cuid
 from app.domains import service_desk_assistant as assistant
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
 from app.domains.native_asks import ask_assistant, get_assistant_status
 from app.domains.service_desk_assistant import (
     MAX_DESCRIPTION_CHARS,
@@ -26,6 +27,7 @@ from app.domains.service_desk_assistant import (
     split_sections,
     ticket_draft,
 )
+from app.modules.identity.auth import create_workspace_bootstrap
 from tests.document_review_support import add_member
 
 
@@ -84,21 +86,21 @@ def test_knowledge_scope_only_reaches_latest_approved_guides_and_fds():
 
 
 async def add_project(db, workspace, team, *, enabled=True, archived=False):
-    project_id = _cuid()
+    project_id = cuid()
     await db.execute(
         text("""INSERT INTO projects(id,workspace_id,team_id,name,identifier,slug,service_desk_enabled,archived_at,created_at,updated_at)
         VALUES (:id,:workspace,:team,:name,:identifier,:slug,:enabled,:archived,:now,:now)"""),
         {
             'id': project_id, 'workspace': workspace, 'team': team, 'name': 'App ' + project_id[-6:],
             'identifier': project_id[-6:].upper(), 'slug': project_id[-12:], 'enabled': enabled,
-            'archived': _utcnow() if archived else None, 'now': _utcnow(),
+            'archived': utcnow() if archived else None, 'now': utcnow(),
         },
     )
-    folder_id = _cuid()
+    folder_id = cuid()
     await db.execute(
         text("""INSERT INTO document_folders(id,workspace_id,team_id,project_id,kind,name,created_at,updated_at)
         VALUES (:id,:workspace,:team,:project,'project',:name,:now,:now)"""),
-        {'id': folder_id, 'workspace': workspace, 'team': team, 'project': project_id, 'name': 'Docs', 'now': _utcnow()},
+        {'id': folder_id, 'workspace': workspace, 'team': team, 'project': project_id, 'name': 'Docs', 'now': utcnow()},
     )
     return project_id, folder_id
 
@@ -106,13 +108,13 @@ async def add_project(db, workspace, team, *, enabled=True, archived=False):
 async def add_document(db, workspace, team, folder, author, content, *, doc_type='GUIDE', status='APPROVED'):
     # Inserting an Approved document makes the database trigger write release v1.
     # VI: Thêm tài liệu Đã duyệt thì trigger của DB ghi bản phát hành v1.
-    document_id = _cuid()
+    document_id = cuid()
     await db.execute(
         text("""INSERT INTO documents(id,workspace_id,team_id,folder_id,title,content,doc_type,status,created_by,updated_by,created_at,updated_at)
         VALUES (:id,:workspace,:team,:folder,:title,:content,:type,:status,:author,:author,:now,:now)"""),
         {
             'id': document_id, 'workspace': workspace, 'team': team, 'folder': folder, 'title': 'Hướng dẫn',
-            'content': content, 'type': doc_type, 'status': status, 'author': author, 'now': _utcnow(),
+            'content': content, 'type': doc_type, 'status': status, 'author': author, 'now': utcnow(),
         },
     )
     return document_id
@@ -122,14 +124,14 @@ async def verify_scope():
     engine = create_async_engine(_async_database_url(os.environ['MCP_TEST_DATABASE_URL']))
     try:
         async with async_sessionmaker(engine, expire_on_commit=False)() as db:
-            now = _utcnow()
-            owner = {'id': _cuid(), 'name': 'Owner'}
+            now = utcnow()
+            owner = {'id': cuid(), 'name': 'Owner'}
             await db.execute(
                 text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"),
-                {**owner, 'email': _cuid() + '@example.test', 'now': now},
+                {**owner, 'email': cuid() + '@example.test', 'now': now},
             )
             seed = await create_workspace_bootstrap(
-                db, user_id=owner['id'], organization_name='Desk', workspace_name=_cuid(), now=now
+                db, user_id=owner['id'], organization_name='Desk', workspace_name=cuid(), now=now
             )
             workspace, team = seed['workspace_id'], seed['team_id']
             member = await add_member(db, workspace, team, name='Member')
@@ -156,7 +158,7 @@ async def verify_scope():
             _, archived_folder = await add_project(db, workspace, team, archived=True)
             excluded.add(await add_document(db, workspace, team, archived_folder, author, body))
 
-            other_team = _cuid()
+            other_team = cuid()
             await db.execute(
                 text("""INSERT INTO teams(id,workspace_id,name,identifier,archived_at,created_at,updated_at)
                 VALUES (:id,:workspace,'Old','OLD' || substr(:id, 20),:now,:now,:now)"""),
@@ -279,16 +281,16 @@ async def verify_assistant(monkeypatch):
 
     try:
         async with async_sessionmaker(engine, expire_on_commit=False)() as db:
-            now = _utcnow()
-            owner = {'id': _cuid(), 'name': 'Owner'}
+            now = utcnow()
+            owner = {'id': cuid(), 'name': 'Owner'}
             await db.execute(
                 text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"),
-                {**owner, 'email': _cuid() + '@example.test', 'now': now},
+                {**owner, 'email': cuid() + '@example.test', 'now': now},
             )
-            seed = await create_workspace_bootstrap(db, user_id=owner['id'], organization_name='Desk', workspace_name=_cuid(), now=now)
+            seed = await create_workspace_bootstrap(db, user_id=owner['id'], organization_name='Desk', workspace_name=cuid(), now=now)
             workspace, team = seed['workspace_id'], seed['team_id']
             requester = await add_member(db, workspace, None, name='Requester')
-            stranger = {'id': _cuid(), 'name': 'Stranger'}
+            stranger = {'id': cuid(), 'name': 'Stranger'}
             app, folder = await add_project(db, workspace, team)
             await add_document(db, workspace, team, folder, owner['id'], '# Đăng nhập\n## Quên mật khẩu\nBấm "Quên mật khẩu" để nhận email.')
             await db.commit()
@@ -306,7 +308,7 @@ async def verify_assistant(monkeypatch):
             await db.execute(
                 text("""INSERT INTO workspace_agent_providers(id,workspace_id,provider,endpoint,model,api_key_encrypted,enabled,updated_at)
                 VALUES (:id,:workspace,'OPENAI','https://api.openai.com/v1','m','k',true,:now)"""),
-                {'id': _cuid(), 'workspace': workspace, 'now': now},
+                {'id': cuid(), 'workspace': workspace, 'now': now},
             )
             await db.commit()
             assert (await get_assistant_status(workspace, requester, db))['data']['available'] is True

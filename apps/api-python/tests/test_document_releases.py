@@ -6,9 +6,11 @@ from pydantic import ValidationError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.mcp.contracts import UpdateDocumentTool
 from app.modules.work_items.contracts import CreateDocumentInput, UpdateDocumentInput
 from app.modules.work_items.document_history import list_releases, release_row
@@ -29,15 +31,15 @@ def test_approval_creates_releases_and_edits_return_to_draft():
 async def verify_releases():
     engine = create_async_engine(_async_database_url(os.environ["MCP_TEST_DATABASE_URL"]))
     factory = async_sessionmaker(engine, expire_on_commit=False)
-    user = {"id": _cuid(), "name": "Reviewer"}
+    user = {"id": cuid(), "name": "Reviewer"}
     try:
         async with factory() as db:
-            now = _utcnow()
+            now = utcnow()
             await db.execute(
                 text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"),
-                {**user, "email": _cuid() + "@example.test", "now": now},
+                {**user, "email": cuid() + "@example.test", "now": now},
             )
-            seed = await create_workspace_bootstrap(db, user_id=user["id"], organization_name="Rel", workspace_name=_cuid(), now=now)
+            seed = await create_workspace_bootstrap(db, user_id=user["id"], organization_name="Rel", workspace_name=cuid(), now=now)
             workspace = seed["workspace_id"]
 
             async def update(**values):

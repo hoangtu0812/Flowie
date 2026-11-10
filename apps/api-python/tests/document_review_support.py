@@ -4,7 +4,8 @@ VI: Chạy đủ một vòng duyệt tài liệu cho các test có chủ đề l
 
 from sqlalchemy import text
 
-from app.domains.auth import _cuid, _utcnow
+from app.core.clock import utcnow
+from app.core.identifiers import cuid
 from app.modules.work_items.contracts import UpdateDocumentInput
 from app.modules.work_items.document_review import (
     DecisionInput,
@@ -16,16 +17,16 @@ from app.modules.work_items.documents import update_document
 
 
 async def add_member(db, workspace, team=None, *, role="MEMBER", team_role="MEMBER", name="Member"):
-    user = {"id": _cuid(), "name": name}
-    now = _utcnow()
+    user = {"id": cuid(), "name": name}
+    now = utcnow()
     await db.execute(
         text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"),
-        {**user, "email": _cuid() + "@example.test", "now": now},
+        {**user, "email": cuid() + "@example.test", "now": now},
     )
     await db.execute(
         text("""INSERT INTO workspace_members(id,workspace_id,user_id,status,role,created_at,updated_at)
         VALUES (:id,:workspace,:user,'ACTIVE',:role,:now,:now)"""),
-        {"id": _cuid(), "workspace": workspace, "user": user["id"], "role": role, "now": now},
+        {"id": cuid(), "workspace": workspace, "user": user["id"], "role": role, "now": now},
     )
     if team:
         await db.execute(

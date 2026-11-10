@@ -5,9 +5,11 @@ import pytest
 from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.portfolio.history import history_page
 from app.modules.portfolio.initiatives import initiative_page
 from app.modules.portfolio.projects import project_page
@@ -27,22 +29,22 @@ async def verify_pages():
     statements = []
     try:
         async with async_sessionmaker(engine)() as db:
-            now = _utcnow()
+            now = utcnow()
             owner, reader = [
-                {"id": _cuid(), "name": "Portfolio test"} for _ in range(2)
+                {"id": cuid(), "name": "Portfolio test"} for _ in range(2)
             ]
             for user in [owner, reader]:
                 await db.execute(
                     text(
                         "INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"
                     ),
-                    {**user, "email": _cuid() + "@example.test", "now": now},
+                    {**user, "email": cuid() + "@example.test", "now": now},
                 )
             seed = await create_workspace_bootstrap(
                 db,
                 user_id=owner["id"],
                 organization_name="Portfolio pages",
-                workspace_name=_cuid(),
+                workspace_name=cuid(),
                 now=now,
             )
             workspace, hidden_team = seed["workspace_id"], seed["team_id"]
@@ -51,7 +53,7 @@ async def verify_pages():
                     "INSERT INTO workspace_members(id,workspace_id,user_id,status,role,created_at,updated_at) VALUES (:id,:workspace,:user,'ACTIVE','MEMBER',:now,:now)"
                 ),
                 {
-                    "id": _cuid(),
+                    "id": cuid(),
                     "workspace": workspace,
                     "user": reader["id"],
                     "now": now,
@@ -122,7 +124,7 @@ async def verify_pages():
             assert len(more["data"]) == 25
             project = first["data"][0]["id"]
             initiative = initiatives["data"][0]["id"]
-            private = _cuid()
+            private = cuid()
             await db.execute(
                 text(
                     "INSERT INTO projects(id,workspace_id,team_id,name,identifier,created_at,updated_at) VALUES (:id,:workspace,:team,'Private','PRIVATE',:now,:now)"

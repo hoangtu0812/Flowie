@@ -6,8 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.utc_responses import UtcAPIRouter
 from ...db.session import get_session
-from ...domains.auth import current_user
 from ..access.projects import _workspace_access
+from ..identity.auth import current_user
 from ..identity.password_reset import limit_request
 from .bulk_contracts import BulkPreview
 from .bulk_service import bulk_command, bulk_preview, bulk_result

@@ -11,11 +11,13 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ...core.clock import utcnow
 from ...core.errors import ApiError
+from ...core.identifiers import cuid
 from ...core.utc_responses import UtcAPIRouter as APIRouter
 from ...db.session import get_session
 from ...modules.access.projects import workspace_manager
-from ..auth import _cuid, _utcnow, current_user
+from ...modules.identity.auth import current_user
 from .contracts import read_only_capabilities
 from .security import (
     decrypt_secret_bundle,
@@ -89,13 +91,13 @@ async def _audit(
                )'''
         ),
         {
-            'id': _cuid(),
+            'id': cuid(),
             'workspace_id': workspace_id,
             'actor_id': actor_id,
             'action': action,
             'entity_id': entity_id,
             'metadata': json.dumps(metadata),
-            'now': _utcnow(),
+            'now': utcnow(),
         },
     )
 
@@ -190,8 +192,8 @@ async def create_connection(
 ) -> dict[str, Any]:
     await workspace_manager(db, payload.workspaceId, user['id'])
     connection_settings, bundle = _validated_connection(payload, request)
-    now = _utcnow()
-    connection_id = _cuid()
+    now = utcnow()
+    connection_id = cuid()
     try:
         await db.execute(
             text(
@@ -224,7 +226,7 @@ async def create_connection(
                        ) VALUES (:id, :connection_id, :encrypted_value, 1, :now, :now)'''
                 ),
                 {
-                    'id': _cuid(),
+                    'id': cuid(),
                     'connection_id': connection_id,
                     'encrypted_value': encrypt_secret_bundle(request.app.state.settings, bundle),
                     'now': now,
@@ -360,7 +362,7 @@ async def save_identity(
     )
     if member.scalar_one_or_none() is None:
         raise ApiError(400, 'The selected user is not an active workspace member.', 'Bad Request')
-    now = _utcnow()
+    now = utcnow()
     try:
         result = await db.execute(
             text(
@@ -377,7 +379,7 @@ async def save_identity(
                    RETURNING id, user_id, external_user_id, display_name, email, updated_at'''
             ),
             {
-                'id': _cuid(),
+                'id': cuid(),
                 'workspace_id': workspaceId,
                 'connection_id': connection_id,
                 'user_id': user_id,
@@ -470,7 +472,7 @@ async def delete_identity(
                  AND repository.connection_id = :connection_id
                  AND reviewer.flowie_user_id = :user_id'''
         ),
-        {'connection_id': connection_id, 'user_id': user_id, 'now': _utcnow()},
+        {'connection_id': connection_id, 'user_id': user_id, 'now': utcnow()},
     )
     await _audit(
         db,
@@ -517,7 +519,7 @@ async def rotate_connection_credentials(
         {
             'connection_id': connection_id,
             'encrypted_value': encrypt_secret_bundle(request.app.state.settings, bundle),
-            'now': _utcnow(),
+            'now': utcnow(),
         },
     )
     await _audit(
@@ -548,7 +550,7 @@ async def reactivate_connection(
 ) -> dict[str, dict[str, Any]]:
     await workspace_manager(db, workspaceId, user['id'])
     await connection_row(db, connection_id, workspaceId)
-    now = _utcnow()
+    now = utcnow()
     await db.execute(
         text(
             '''UPDATE scm_connections
@@ -601,7 +603,7 @@ async def update_repository(
             '''UPDATE scm_repositories SET enabled = :enabled, team_id = :team_id, updated_at = :now
                WHERE id = :id'''
         ),
-        {'id': repository_id, 'enabled': payload.enabled, 'team_id': team_id, 'now': _utcnow()},
+        {'id': repository_id, 'enabled': payload.enabled, 'team_id': team_id, 'now': utcnow()},
     )
     await _audit(
         db,
@@ -643,7 +645,7 @@ async def disconnect(
 ) -> dict[str, dict[str, Any]]:
     await workspace_manager(db, workspaceId, user['id'])
     await connection_row(db, connection_id, workspaceId)
-    now = _utcnow()
+    now = utcnow()
     await db.execute(
         text("UPDATE scm_connections SET status = 'REVOKED', updated_at = :now WHERE id = :id"),
         {'id': connection_id, 'now': now},
@@ -701,7 +703,7 @@ async def _save_delivery(
                RETURNING id'''
         ),
         {
-            'id': _cuid(),
+            'id': cuid(),
             'connection_id': connection['id'],
             'external_delivery_id': external_delivery_id,
             'event_type': event_type,
@@ -709,7 +711,7 @@ async def _save_delivery(
             'status': 'PENDING' if relevant else 'IGNORED',
             'payload': json.dumps(payload if relevant else {}),
             'payload_hash': payload_hash(raw),
-            'now': _utcnow(),
+            'now': utcnow(),
         },
     )
     created = result.scalar_one_or_none() is not None

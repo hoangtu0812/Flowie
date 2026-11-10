@@ -12,7 +12,7 @@ from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.core.identifiers import _cuid
 from app.core.readiness import database_ready
-from app.domains.auth import create_workspace_bootstrap
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.operations import heartbeats
 from app.modules.operations.api import overview
 

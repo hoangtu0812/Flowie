@@ -14,10 +14,12 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from app.core.clock import utcnow
 from app.core.config import Settings, _async_database_url
 from app.core.errors import ApiError
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
 from app.main import create_app
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.mcp.application import ToolApplication
 from app.modules.mcp.connections import authenticate, create, revoke
 from app.modules.mcp.contracts import (
@@ -45,7 +47,7 @@ PASSING_TEST = {
 class McpContractTests(unittest.TestCase):
     def test_cursor_is_bound_to_connection_and_query(self):
         codec = CursorCodec("secret", "connection", "search_issues", {"projectId": "A"})
-        cursor = codec.encode(_utcnow(), "issue")
+        cursor = codec.encode(utcnow(), "issue")
         self.assertEqual(codec.decode(cursor)[1], "issue")
         for other in [
             CursorCodec("secret", "other", "search_issues", {"projectId": "A"}),
@@ -150,7 +152,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         transaction = connection.transaction()
         await transaction.start()
         try:
-            schema = "upgrade_" + _cuid()
+            schema = "upgrade_" + cuid()
             await connection.execute(f'CREATE SCHEMA "{schema}"')
             await connection.execute(f'SET LOCAL search_path TO "{schema}"')
             migrations = sorted(
@@ -250,14 +252,14 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             auth_jwt_secret="test-only-mcp-jwt-secret-with-at-least-32-characters",
         )
         self.user = {
-            "id": _cuid(),
+            "id": cuid(),
             "name": "MCP integration test",
-            "email": f"{_cuid()}@example.test",
+            "email": f"{cuid()}@example.test",
             "avatarUrl": None,
         }
-        self.project, self.other_project, self.private_team = _cuid(), _cuid(), _cuid()
+        self.project, self.other_project, self.private_team = cuid(), cuid(), cuid()
         async with self.factory() as db:
-            now = _utcnow()
+            now = utcnow()
             await db.execute(
                 text("""INSERT INTO users (id,name,email,status,created_at,updated_at)
                 VALUES (:id,:name,:email,'ACTIVE',:now,:now)"""),
@@ -267,7 +269,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 db,
                 user_id=self.user["id"],
                 organization_name="MCP test",
-                workspace_name=f"MCP test {_cuid()}",
+                workspace_name=f"MCP test {cuid()}",
                 now=now,
             )
             self.workspace, self.team = self.seed["workspace_id"], self.seed["team_id"]
@@ -275,7 +277,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 text("""INSERT INTO document_folders (id,workspace_id,team_id,name,created_at,updated_at)
                 VALUES (:id,:workspace,:team,'General',:now,:now)"""),
                 {
-                    "id": _cuid(),
+                    "id": cuid(),
                     "workspace": self.workspace,
                     "team": self.team,
                     "now": now,
@@ -431,7 +433,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(error.exception.status_code, 409)
 
     async def test_web_issue_pages_preserve_scope_filters_and_direct_lookup(self):
-        from app.domains.auth import current_user
+        from app.modules.identity.auth import current_user
 
         bug = (
             await self.call(
@@ -497,7 +499,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
     ):
         from unittest.mock import AsyncMock, patch
 
-        from app.domains.auth import password_hasher
+        from app.modules.identity.auth import password_hasher
 
         host = create_app(
             replace(
@@ -551,7 +553,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_password_reset_expires_is_single_use_and_revokes_credentials(self):
         from app.core.identifiers import _hash_token
-        from app.domains.auth import password_hasher
+        from app.modules.identity.auth import password_hasher
         from app.modules.identity.password_reset import (
             consume_reset,
             issue_reset,
@@ -583,7 +585,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 text(
                     "UPDATE password_reset_tokens SET expires_at=:expired WHERE user_id=:id"
                 ),
-                {"expired": _utcnow() - timedelta(seconds=1), "id": self.user["id"]},
+                {"expired": utcnow() - timedelta(seconds=1), "id": self.user["id"]},
             )
             await db.commit()
             with self.assertRaises(ApiError):
@@ -895,7 +897,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             ],
             document["id"],
         )
-        private_doc = _cuid()
+        private_doc = cuid()
         async with self.factory() as db:
             await db.execute(
                 text("""INSERT INTO documents (id,workspace_id,team_id,title,content,created_by,updated_by,created_at,updated_at)
@@ -905,7 +907,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                     "workspace": self.workspace,
                     "team": self.private_team,
                     "user": self.user["id"],
-                    "now": _utcnow(),
+                    "now": utcnow(),
                 },
             )
             await db.commit()
@@ -920,9 +922,9 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         folders = {"allowed": self.project, "other": self.other_project, "plain": None}
         documents = {}
         async with self.factory() as db:
-            now = _utcnow()
+            now = utcnow()
             for name, project in folders.items():
-                folder, document = _cuid(), _cuid()
+                folder, document = cuid(), cuid()
                 await db.execute(
                     text("""INSERT INTO document_folders (id,workspace_id,team_id,project_id,name,created_at,updated_at)
                     VALUES (:id,:workspace,:team,:project,:name,:now,:now)"""),
@@ -1037,7 +1039,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         async with self.factory() as db:
             await db.execute(
                 text("UPDATE mcp_connections SET expires_at=:expired WHERE id=:id"),
-                {"id": self.connection["id"], "expired": _utcnow() - timedelta(days=1)},
+                {"id": self.connection["id"], "expired": utcnow() - timedelta(days=1)},
             )
             await db.commit()
             with self.assertRaises(ApiError):
@@ -1265,7 +1267,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                     self.user,
                     self.connection["id"],
                     ConnectionUpdateInput(
-                        name="Unknown", scopes=["issues:read"], projectIds=[_cuid()]
+                        name="Unknown", scopes=["issues:read"], projectIds=[cuid()]
                     ),
                 )
             await db.rollback()
@@ -1310,10 +1312,10 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(response.status_code, 200, response.text)
             return response.json()["result"]["instructions"]
 
-        member = {"id": _cuid(), "name": "Member", "email": f"{_cuid()}@example.test"}
-        other = {"id": _cuid(), "name": "Other", "email": f"{_cuid()}@example.test"}
+        member = {"id": cuid(), "name": "Member", "email": f"{cuid()}@example.test"}
+        other = {"id": cuid(), "name": "Other", "email": f"{cuid()}@example.test"}
         async with self.factory() as db:
-            now = _utcnow()
+            now = utcnow()
             for person in (member, other):
                 await db.execute(
                     text("""INSERT INTO users (id,name,email,status,created_at,updated_at)
@@ -1323,13 +1325,13 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             await db.execute(
                 text("""INSERT INTO workspace_members(id,workspace_id,user_id,role,status,created_at,updated_at)
                 VALUES (:id,:workspace,:user,'MEMBER','ACTIVE',:now,:now)"""),
-                {"id": _cuid(), "workspace": self.workspace, "user": member["id"], "now": now},
+                {"id": cuid(), "workspace": self.workspace, "user": member["id"], "now": now},
             )
             other_seed = await create_workspace_bootstrap(
                 db,
                 user_id=other["id"],
                 organization_name="Other",
-                workspace_name=f"Other {_cuid()}",
+                workspace_name=f"Other {cuid()}",
                 now=now,
             )
             await db.commit()
@@ -1439,9 +1441,9 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 await self.call("get_issue", issueId=self.other_issue["id"])
         self.assertIn(kept.exception.status_code, {403, 404})
 
-        member = {"id": _cuid(), "name": "Log member", "email": f"{_cuid()}@example.test"}
+        member = {"id": cuid(), "name": "Log member", "email": f"{cuid()}@example.test"}
         async with self.factory() as db:
-            now = _utcnow()
+            now = utcnow()
             await db.execute(
                 text("""INSERT INTO users (id,name,email,status,created_at,updated_at)
                 VALUES (:id,:name,:email,'ACTIVE',:now,:now)"""),
@@ -1450,7 +1452,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             await db.execute(
                 text("""INSERT INTO workspace_members(id,workspace_id,user_id,role,status,created_at,updated_at)
                 VALUES (:id,:workspace,:user,'MEMBER','ACTIVE',:now,:now)"""),
-                {"id": _cuid(), "workspace": self.workspace, "user": member["id"], "now": now},
+                {"id": cuid(), "workspace": self.workspace, "user": member["id"], "now": now},
             )
             await db.commit()
             member_connection = await create(
@@ -1761,7 +1763,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         from app.modules.notifications.outbox import process_one
 
         async with self.factory() as db:
-            identifier = _cuid()
+            identifier = cuid()
             await db.execute(
                 text(
                     "INSERT INTO notification_outbox (id,workspace_id,payload) VALUES (:id,:workspace,'{}'::jsonb)"
@@ -1789,7 +1791,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(row["attempts"], 1)
             await db.execute(
                 text("UPDATE notification_outbox SET available_at=:now WHERE id=:id"),
-                {"id": identifier, "now": _utcnow()},
+                {"id": identifier, "now": utcnow()},
             )
             await db.commit()
         with patch("app.modules.notifications.outbox.deliver", AsyncMock()):
@@ -1817,16 +1819,16 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 SELECT :prefix||n,:workspace,:team,:status,:project,:prefix||'-'||n,1000+n,'Bulk issue '||n,:user,:now,:now
                 FROM generate_series(1,1000) n"""),
                 {
-                    "prefix": _cuid(),
+                    "prefix": cuid(),
                     "workspace": self.workspace,
                     "team": self.team,
                     "status": self.status,
                     "project": self.project,
                     "user": self.user["id"],
-                    "now": _utcnow(),
+                    "now": utcnow(),
                 },
             )
-            private_doc = _cuid()
+            private_doc = cuid()
             await db.execute(
                 text("""INSERT INTO documents (id,workspace_id,team_id,title,content,created_by,updated_by,created_at,updated_at)
                 VALUES (:id,:workspace,:team,'Private','Never expose',:user,:user,:now,:now)"""),
@@ -1835,7 +1837,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                     "workspace": self.workspace,
                     "team": self.private_team,
                     "user": self.user["id"],
-                    "now": _utcnow(),
+                    "now": utcnow(),
                 },
             )
             await db.commit()
@@ -1877,7 +1879,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def test_attachment_authorization_before_storage_and_chunks(self):
         from unittest.mock import AsyncMock, patch
 
-        allowed, denied = _cuid(), _cuid()
+        allowed, denied = cuid(), cuid()
         async with self.factory() as db:
             for identifier, issue in [
                 (allowed, self.issue),
@@ -1891,7 +1893,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                         "workspace": self.workspace,
                         "user": self.user["id"],
                         "issue": issue["id"],
-                        "now": _utcnow(),
+                        "now": utcnow(),
                     },
                 )
             await db.commit()
@@ -1911,7 +1913,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def test_image_attachment_reader_checks_access_type_and_size(self):
         from unittest.mock import AsyncMock, patch
 
-        image, denied, text_file, huge = _cuid(), _cuid(), _cuid(), _cuid()
+        image, denied, text_file, huge = cuid(), cuid(), cuid(), cuid()
         async with self.factory() as db:
             for identifier, issue, mime, size in [
                 (image, self.issue, "image/png", 4),
@@ -1929,7 +1931,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                         "issue": issue["id"],
                         "mime": mime,
                         "size": size,
-                        "now": _utcnow(),
+                        "now": utcnow(),
                     },
                 )
             await db.commit()
@@ -2264,7 +2266,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 text("UPDATE mcp_connections SET expires_at=:expired WHERE id=:id"),
                 {
                     "id": self.principal.connection_id,
-                    "expired": _utcnow() - timedelta(days=8),
+                    "expired": utcnow() - timedelta(days=8),
                 },
             )
             await db.commit()

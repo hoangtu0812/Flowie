@@ -11,10 +11,11 @@ import httpx
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from ...core.clock import utcnow
 from ...core.config import Settings
 from ...core.errors import ApiError
+from ...core.identifiers import cuid
 from ...services.notification_events import notification_hub
-from ..auth import _cuid, _utcnow
 from .contracts import ProviderRepository, ProviderReview, ReviewProvider
 from .providers import AzureDevOpsProvider, GitHubProvider
 from .security import decrypt_secret_bundle
@@ -79,7 +80,7 @@ async def upsert_repository(
     connection: Any,
     repository: ProviderRepository,
 ) -> str:
-    now = _utcnow()
+    now = utcnow()
     result = await db.execute(
         text(
             '''INSERT INTO scm_repositories (
@@ -96,7 +97,7 @@ async def upsert_repository(
                RETURNING id'''
         ),
         {
-            'id': _cuid(),
+            'id': cuid(),
             'workspace_id': connection['workspace_id'],
             'connection_id': connection['id'],
             'external_project_id': repository.externalProjectId,
@@ -112,7 +113,7 @@ async def upsert_repository(
 
 
 async def upsert_review(db: AsyncSession, repository: Any, review: ProviderReview) -> str:
-    now = _utcnow()
+    now = utcnow()
     result = await db.execute(
         text(
             '''INSERT INTO code_reviews (
@@ -141,7 +142,7 @@ async def upsert_review(db: AsyncSession, repository: Any, review: ProviderRevie
                RETURNING id'''
         ),
         {
-            'id': _cuid(),
+            'id': cuid(),
             'workspace_id': repository['workspace_id'],
             'repository_id': repository['id'],
             'external_review_id': review.externalReviewId,
@@ -197,7 +198,7 @@ async def upsert_review(db: AsyncSession, repository: Any, review: ProviderRevie
                        updated_at = EXCLUDED.updated_at'''
             ),
             {
-                'id': _cuid(),
+                'id': cuid(),
                 'code_review_id': review_id,
                 'flowie_user_id': identity.scalar_one_or_none(),
                 'external_user_id': reviewer.externalUserId,
@@ -238,7 +239,7 @@ async def upsert_review(db: AsyncSession, repository: Any, review: ProviderRevie
                        external_created_at = EXCLUDED.external_created_at'''
             ),
             {
-                'id': _cuid(),
+                'id': cuid(),
                 'code_review_id': review_id,
                 'external_revision_id': revision.externalRevisionId,
                 'sequence': revision.sequence,
@@ -301,7 +302,7 @@ async def link_detected_issues(
                  AND upper(issue.identifier) = ANY(:keys)
                ON CONFLICT (code_review_id, issue_id) DO NOTHING'''
         ),
-        {'review_id': review_id, 'repository_id': repository['id'], 'keys': keys, 'now': _utcnow()},
+        {'review_id': review_id, 'repository_id': repository['id'], 'keys': keys, 'now': utcnow()},
     )
 
 
@@ -341,7 +342,7 @@ async def sync_connection(db: AsyncSession, connection_id: str, settings: Settin
             text('SELECT id, external_repository_id FROM scm_repositories WHERE connection_id = :connection_id'),
             {'connection_id': connection_id},
         )
-        now = _utcnow()
+        now = utcnow()
         for row in existing.mappings():
             if row['external_repository_id'] not in seen_ids:
                 await db.execute(
@@ -381,7 +382,7 @@ async def sync_connection(db: AsyncSession, connection_id: str, settings: Settin
                    SET last_synced_at = :now, last_error = NULL, status = 'ACTIVE', updated_at = :now
                    WHERE id = :id'''
             ),
-            {'id': connection_id, 'now': _utcnow()},
+            {'id': connection_id, 'now': utcnow()},
         )
         await db.commit()
         return {'repositories': len(repositories), 'reviews': review_count}
@@ -392,7 +393,7 @@ async def sync_connection(db: AsyncSession, connection_id: str, settings: Settin
                 '''UPDATE scm_connections SET status = 'ERROR', last_error = :error, updated_at = :now
                    WHERE id = :id'''
             ),
-            {'id': connection_id, 'error': str(error)[:1000], 'now': _utcnow()},
+            {'id': connection_id, 'error': str(error)[:1000], 'now': utcnow()},
         )
         await db.commit()
         raise ApiError(502, f'The provider synchronization failed: {error}', 'Bad Gateway') from error
@@ -472,7 +473,7 @@ async def sync_delivery_review(db: AsyncSession, delivery: Any, settings: Settin
     notification_records: list[dict[str, Any]] = []
     if review.state == 'OPEN':
         event_type = 'review.assigned' if not existing else 'review.updated'
-        now = _utcnow()
+        now = utcnow()
         data = {
             'title': review.title,
             'message': 'assigned you a review' if not existing else 'updated a review that needs your attention',
@@ -482,7 +483,7 @@ async def sync_delivery_review(db: AsyncSession, delivery: Any, settings: Settin
             'number': review.number,
         }
         for recipient_id in recipients:
-            notification_id = _cuid()
+            notification_id = cuid()
             await db.execute(
                 text(
                     '''INSERT INTO notifications (

@@ -6,9 +6,11 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.portfolio.projects import project_page
 from app.modules.work_items.issue_search import search_page
 from app.modules.work_items.manual_order import ReorderInput, reorder
@@ -25,23 +27,23 @@ async def verify_order():
     engine = create_async_engine(
         _async_database_url(os.environ["MCP_TEST_DATABASE_URL"])
     )
-    owner, reader = _cuid(), _cuid()
+    owner, reader = cuid(), cuid()
     workspace = None
     try:
         async with async_sessionmaker(engine)() as db:
-            now = _utcnow()
+            now = utcnow()
             for user in [owner, reader]:
                 await db.execute(
                     text(
                         "INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,'Order user',:email,'ACTIVE',:now,:now)"
                     ),
-                    {"id": user, "email": _cuid() + "@example.test", "now": now},
+                    {"id": user, "email": cuid() + "@example.test", "now": now},
                 )
             seed = await create_workspace_bootstrap(
                 db,
                 user_id=owner,
                 organization_name="Order",
-                workspace_name=_cuid(),
+                workspace_name=cuid(),
                 now=now,
             )
             workspace, team = seed["workspace_id"], seed["team_id"]
@@ -49,7 +51,7 @@ async def verify_order():
                 text(
                     "INSERT INTO workspace_members(id,workspace_id,user_id,role,status,created_at,updated_at) VALUES (:id,:w,:u,'MEMBER','ACTIVE',:now,:now)"
                 ),
-                {"id": _cuid(), "w": workspace, "u": reader, "now": now},
+                {"id": cuid(), "w": workspace, "u": reader, "now": now},
             )
             status = (
                 await db.execute(
@@ -59,7 +61,7 @@ async def verify_order():
                     {"w": workspace},
                 )
             ).scalar_one()
-            issues = [_cuid() for _ in range(105)]
+            issues = [cuid() for _ in range(105)]
             for index, identifier in enumerate(issues):
                 await db.execute(
                     text("""INSERT INTO issues(id,workspace_id,team_id,status_id,identifier,number,title,creator_id,manual_order,created_at,updated_at)
@@ -77,7 +79,7 @@ async def verify_order():
                         "now": now + timedelta(seconds=index),
                     },
                 )
-            projects = [_cuid() for _ in range(3)]
+            projects = [cuid() for _ in range(3)]
             for index, identifier in enumerate(projects):
                 await db.execute(
                     text(
@@ -91,7 +93,7 @@ async def verify_order():
                         "now": now,
                     },
                 )
-            child = _cuid()
+            child = cuid()
             await db.execute(
                 text("""INSERT INTO issues(id,workspace_id,team_id,parent_issue_id,status_id,identifier,number,title,creator_id,created_at,updated_at)
                 VALUES (:id,:w,:team,:parent,:status,'ORD-child',106,'Child',:u,:now,:now)"""),

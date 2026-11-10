@@ -8,11 +8,13 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.clock import utcnow
 from ..core.errors import ApiError
+from ..core.identifiers import cuid
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
 from ..modules.access.projects import workspace_access
-from .auth import _cuid, _utcnow, current_user
+from ..modules.identity.auth import current_user
 
 router = APIRouter(prefix='/api/v1/customer-requests', tags=['customer-requests'])
 RequestSource = Literal['manual', 'interview', 'support', 'sales', 'other']
@@ -67,7 +69,7 @@ async def _references(db: AsyncSession, workspace_id: str, project_id: str | Non
 
 async def _audit(db: AsyncSession, workspace_id: str, actor_id: str, action: str, request_id: str, metadata: dict[str, Any]) -> None:
     await db.execute(text('''INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at)
-                             VALUES (:id, :workspace_id, :actor_id, :action, 'customer-request', :entity_id, CAST(:metadata AS jsonb), :now)'''), {'id': _cuid(), 'workspace_id': workspace_id, 'actor_id': actor_id, 'action': action, 'entity_id': request_id, 'metadata': json.dumps(metadata), 'now': _utcnow()})
+                             VALUES (:id, :workspace_id, :actor_id, :action, 'customer-request', :entity_id, CAST(:metadata AS jsonb), :now)'''), {'id': cuid(), 'workspace_id': workspace_id, 'actor_id': actor_id, 'action': action, 'entity_id': request_id, 'metadata': json.dumps(metadata), 'now': utcnow()})
 
 
 async def _request(db: AsyncSession, request_id: str, workspace_id: str) -> dict[str, Any]:
@@ -107,7 +109,7 @@ async def list_customer_requests(workspaceId: str = Query(min_length=1), user: A
 async def create_customer_request(payload: CreateCustomerRequestInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     await workspace_access(db, payload.workspaceId, user['id'])
     await _references(db, payload.workspaceId, payload.projectId, payload.issueId)
-    request_id, now = _cuid(), _utcnow()
+    request_id, now = cuid(), utcnow()
     await db.execute(text('''INSERT INTO customer_requests (id, workspace_id, title, description, customer, source, status, priority, project_id, issue_id, created_by, created_at, updated_at)
                              VALUES (:id, :workspace_id, :title, :description, :customer, :source, :status, :priority, :project_id, :issue_id, :created_by, :now, :now)'''), {'id': request_id, 'workspace_id': payload.workspaceId, 'title': payload.title.strip(), 'description': payload.description.strip() if payload.description else None, 'customer': payload.customer.strip(), 'source': payload.source, 'status': payload.status, 'priority': payload.priority, 'project_id': payload.projectId, 'issue_id': payload.issueId, 'created_by': user['id'], 'now': now})
     await _audit(db, payload.workspaceId, user['id'], 'customer-request.created', request_id, {'title': payload.title.strip(), 'customer': payload.customer.strip()})
@@ -122,7 +124,7 @@ async def update_customer_request(request_id: str, payload: UpdateCustomerReques
     values = payload.model_dump(exclude_unset=True)
     await _references(db, workspaceId, values.get('projectId', current['projectId']), values.get('issueId', current['issueId']))
     columns = {'title': 'title', 'description': 'description', 'customer': 'customer', 'source': 'source', 'status': 'status', 'priority': 'priority', 'projectId': 'project_id', 'issueId': 'issue_id'}
-    sets, params = [], {'request_id': request_id, 'now': _utcnow()}
+    sets, params = [], {'request_id': request_id, 'now': utcnow()}
     for field, column in columns.items():
         if field not in values:
             continue
@@ -142,7 +144,7 @@ async def update_customer_request(request_id: str, payload: UpdateCustomerReques
 async def archive_customer_request(request_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     current = await _request(db, request_id, workspaceId)
     await _can_manage(db, current, workspaceId, user['id'])
-    now = _utcnow()
+    now = utcnow()
     await db.execute(text('UPDATE customer_requests SET archived_at = :now, updated_at = :now WHERE id = :request_id'), {'request_id': request_id, 'now': now})
     await _audit(db, workspaceId, user['id'], 'customer-request.archived', request_id, {'title': current['title'], 'customer': current['customer']})
     await db.commit()

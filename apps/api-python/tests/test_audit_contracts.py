@@ -6,8 +6,8 @@ from fastapi import FastAPI
 
 from app.core.audit_context import audit_source
 from app.db.session import get_session
-from app.domains.auth import current_user
 from app.modules.audit.api import router
+from app.modules.identity.auth import current_user
 from app.modules.operations.diagnostics import install_diagnostics
 
 

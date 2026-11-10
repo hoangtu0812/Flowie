@@ -5,10 +5,12 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
 from app.domains.native_documents import get_document, list_folders
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.work_items.contracts import (
     CreateDocumentInput,
     CreateIssueInput,
@@ -41,23 +43,23 @@ async def verify_document_tree():
     )
     try:
         async with async_sessionmaker(engine)() as db:
-            now = _utcnow()
-            user = {"id": _cuid(), "name": "Docs owner"}
+            now = utcnow()
+            user = {"id": cuid(), "name": "Docs owner"}
             await db.execute(
                 text(
                     "INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"
                 ),
-                {**user, "email": _cuid() + "@example.test", "now": now},
+                {**user, "email": cuid() + "@example.test", "now": now},
             )
             seed = await create_workspace_bootstrap(
                 db,
                 user_id=user["id"],
                 organization_name="Docs",
-                workspace_name=_cuid(),
+                workspace_name=cuid(),
                 now=now,
             )
             workspace, team = seed["workspace_id"], seed["team_id"]
-            project = _cuid()
+            project = cuid()
             await db.execute(
                 text(
                     "INSERT INTO projects(id,workspace_id,team_id,name,identifier,created_at,updated_at) VALUES (:id,:workspace,:team,'Flowie',:id,:now,:now)"
@@ -174,7 +176,7 @@ async def verify_document_tree():
                 text(
                     "INSERT INTO document_links(id,document_id,workspace_id,issue_id) VALUES (:id,:doc,:workspace,:issue)"
                 ),
-                {"id": _cuid(), "doc": first["id"], "workspace": workspace, "issue": issue["id"]},
+                {"id": cuid(), "doc": first["id"], "workspace": workspace, "issue": issue["id"]},
             )
             tree = await project_tree(db, workspace_id=workspace, user_id=user["id"], project_id=project)
             by_id = {document["id"]: document for document in tree["documents"]}
@@ -185,7 +187,7 @@ async def verify_document_tree():
                 text(
                     "INSERT INTO attachments(id,workspace_id,uploaded_by,entity_type,entity_id,object_key,filename,mime_type,size,created_at) VALUES (:id,:workspace,:user,'document-folder',:folder,'k','spec.pdf','application/pdf',5,:now)"
                 ),
-                {"id": _cuid(), "workspace": workspace, "user": user["id"], "folder": feature["id"], "now": now},
+                {"id": cuid(), "workspace": workspace, "user": user["id"], "folder": feature["id"], "now": now},
             )
             tree = await project_tree(db, workspace_id=workspace, user_id=user["id"], project_id=project)
             assert [(f["folderId"], f["filename"]) for f in tree["files"]] == [(feature["id"], "spec.pdf")]
@@ -206,12 +208,12 @@ async def verify_document_tree():
             for _ in range(2):
                 await link_issue_document(**link, document_id=fds["id"], linked=False)
             assert await document_issues(db, workspace_id=workspace, user_id=user["id"], document_id=fds["id"]) == []
-            stranger = _cuid()
+            stranger = cuid()
             await db.execute(
                 text(
                     "INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,'Stranger',:email,'ACTIVE',:now,:now)"
                 ),
-                {"id": stranger, "email": _cuid() + "@example.test", "now": now},
+                {"id": stranger, "email": cuid() + "@example.test", "now": now},
             )
             assert await rejected(
                 document_issues(db, workspace_id=workspace, user_id=stranger, document_id=first["id"])

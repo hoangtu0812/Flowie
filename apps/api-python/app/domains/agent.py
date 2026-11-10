@@ -23,11 +23,14 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.clock import utcnow
 from ..core.errors import ApiError
+from ..core.identifiers import cuid
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
 from ..modules.access.projects import team_access, workspace_access, workspace_manager
 from ..modules.ai.calls import PROVIDER_LABELS, call_provider
+from ..modules.identity.auth import current_user
 from ..modules.identity.password_reset import limit_request
 from ..modules.portfolio.projects_api import (
     CreateProjectInput,
@@ -36,7 +39,6 @@ from ..modules.portfolio.projects_api import (
     update_project,
 )
 from ..modules.work_items.issues_api import CreateIssueInput, create_issue
-from .auth import _cuid, _utcnow, current_user
 from .team_insights import (
     assignment_suggestions,
     hcm_today,
@@ -1228,9 +1230,9 @@ async def _persist_turn(
     proposal: dict[str, Any] | None,
     source_text: str | None = None,
 ) -> dict[str, Any]:
-    now = _utcnow()
-    user_message_id = _cuid()
-    assistant_id = _cuid()
+    now = utcnow()
+    user_message_id = cuid()
+    assistant_id = cuid()
     if is_new_conversation:
         await db.execute(text('''INSERT INTO agent_conversations (id, workspace_id, user_id, title, created_at, updated_at)
                 VALUES (:id, :workspace_id, :user_id, :title, :now, :now)'''), {'id': conversation_id, 'workspace_id': workspace_id, 'user_id': user_id, 'title': conversation['title'], 'now': now})
@@ -1342,20 +1344,20 @@ async def save_provider(provider: ProviderName, payload: ProviderInput, request:
         raise ApiError(400, 'An API key is required when configuring a provider for the first time.', 'Bad Request')
     key = _cipher(request).encrypt(payload.apiKey.strip().encode('utf-8')).decode('ascii') if payload.apiKey else existing_key
     if payload.enabled:
-        await db.execute(text('UPDATE workspace_agent_providers SET enabled = false, updated_at = :now WHERE workspace_id = :workspace_id'), {'workspace_id': workspaceId, 'now': _utcnow()})
+        await db.execute(text('UPDATE workspace_agent_providers SET enabled = false, updated_at = :now WHERE workspace_id = :workspace_id'), {'workspace_id': workspaceId, 'now': utcnow()})
     await db.execute(text('''INSERT INTO workspace_agent_providers
             (id, workspace_id, provider, endpoint, model, api_key_encrypted, enabled, created_at, updated_at)
             VALUES (:id, :workspace_id, CAST(:provider AS "AgentProvider"), :endpoint, :model, :api_key, :enabled, :now, :now)
             ON CONFLICT (workspace_id, provider) DO UPDATE SET endpoint = EXCLUDED.endpoint,
             model = EXCLUDED.model, api_key_encrypted = EXCLUDED.api_key_encrypted,
             enabled = EXCLUDED.enabled, updated_at = EXCLUDED.updated_at'''), {
-        'id': _cuid(), 'workspace_id': workspaceId, 'provider': provider, 'endpoint': endpoint,
-        'model': payload.model.strip(), 'api_key': key, 'enabled': payload.enabled, 'now': _utcnow(),
+        'id': cuid(), 'workspace_id': workspaceId, 'provider': provider, 'endpoint': endpoint,
+        'model': payload.model.strip(), 'api_key': key, 'enabled': payload.enabled, 'now': utcnow(),
     })
     await db.execute(text('''INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at)
             VALUES (:id, :workspace_id, :actor_id, 'agent.provider.updated', 'workspace_agent_provider', :entity_id, CAST(:metadata AS jsonb), :now)'''), {
-        'id': _cuid(), 'workspace_id': workspaceId, 'actor_id': user['id'], 'entity_id': provider,
-        'metadata': json.dumps({'provider': provider, 'enabled': payload.enabled}), 'now': _utcnow(),
+        'id': cuid(), 'workspace_id': workspaceId, 'actor_id': user['id'], 'entity_id': provider,
+        'metadata': json.dumps({'provider': provider, 'enabled': payload.enabled}), 'now': utcnow(),
     })
     await db.commit()
     row = await db.execute(text('SELECT * FROM workspace_agent_providers WHERE workspace_id = :workspace_id AND provider = CAST(:provider AS "AgentProvider")'), {'workspace_id': workspaceId, 'provider': provider})
@@ -1410,12 +1412,12 @@ async def install_tool(tool_key: str, workspaceId: str = Query(min_length=1), us
     if tool_key not in TOOL_DETAILS:
         raise ApiError(404, 'Agent tool not found.', 'Not Found')
     await workspace_manager(db, workspaceId, user['id'])
-    now = _utcnow()
+    now = utcnow()
     await db.execute(text('''INSERT INTO workspace_agent_tools (id, workspace_id, tool_key, created_at, updated_at)
             VALUES (:id, :workspace_id, :tool_key, :now, :now)
-            ON CONFLICT (workspace_id, tool_key) DO NOTHING'''), {'id': _cuid(), 'workspace_id': workspaceId, 'tool_key': tool_key, 'now': now})
+            ON CONFLICT (workspace_id, tool_key) DO NOTHING'''), {'id': cuid(), 'workspace_id': workspaceId, 'tool_key': tool_key, 'now': now})
     await db.execute(text('''INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at)
-            VALUES (:id, :workspace_id, :actor_id, 'agent.tool.installed', 'workspace_agent_tool', :entity_id, '{}'::jsonb, :now)'''), {'id': _cuid(), 'workspace_id': workspaceId, 'actor_id': user['id'], 'entity_id': tool_key, 'now': now})
+            VALUES (:id, :workspace_id, :actor_id, 'agent.tool.installed', 'workspace_agent_tool', :entity_id, '{}'::jsonb, :now)'''), {'id': cuid(), 'workspace_id': workspaceId, 'actor_id': user['id'], 'entity_id': tool_key, 'now': now})
     await db.commit()
     title, description = TOOL_DETAILS[tool_key]
     return {'data': {'key': tool_key, 'title': title, 'description': description, 'installed': True}}
@@ -1428,7 +1430,7 @@ async def remove_tool(tool_key: str, workspaceId: str = Query(min_length=1), use
     await workspace_manager(db, workspaceId, user['id'])
     await db.execute(text('DELETE FROM workspace_agent_tools WHERE workspace_id = :workspace_id AND tool_key = :tool_key'), {'workspace_id': workspaceId, 'tool_key': tool_key})
     await db.execute(text('''INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at)
-            VALUES (:id, :workspace_id, :actor_id, 'agent.tool.removed', 'workspace_agent_tool', :entity_id, '{}'::jsonb, :now)'''), {'id': _cuid(), 'workspace_id': workspaceId, 'actor_id': user['id'], 'entity_id': tool_key, 'now': _utcnow()})
+            VALUES (:id, :workspace_id, :actor_id, 'agent.tool.removed', 'workspace_agent_tool', :entity_id, '{}'::jsonb, :now)'''), {'id': cuid(), 'workspace_id': workspaceId, 'actor_id': user['id'], 'entity_id': tool_key, 'now': utcnow()})
     await db.commit()
     title, description = TOOL_DETAILS[tool_key]
     return {'data': {'key': tool_key, 'title': title, 'description': description, 'installed': False}}
@@ -1458,11 +1460,11 @@ async def list_skills(user: Any = Depends(current_user), db: AsyncSession = Depe
 
 @router.post('/skills')
 async def create_personal_skill(payload: PersonalSkillInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
-    key, now = f'custom.{_cuid()}', _utcnow()
+    key, now = f'custom.{cuid()}', utcnow()
     await db.execute(text('''INSERT INTO user_agent_skills
             (id, user_id, skill_key, name, description, instructions, config, created_at, updated_at)
             VALUES (:id, :user_id, :skill_key, :name, :description, :instructions, '{}'::jsonb, :now, :now)'''), {
-        'id': _cuid(), 'user_id': user['id'], 'skill_key': key, 'name': payload.name.strip(),
+        'id': cuid(), 'user_id': user['id'], 'skill_key': key, 'name': payload.name.strip(),
         'description': payload.description.strip() if payload.description else None,
         'instructions': payload.instructions.strip(), 'now': now,
     })
@@ -1474,11 +1476,11 @@ async def create_personal_skill(payload: PersonalSkillInput, user: Any = Depends
 async def install_skill(skill_key: str, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
     if skill_key not in PERSONAL_SKILL_DETAILS:
         raise ApiError(404, 'Agent skill not found.', 'Not Found')
-    now = _utcnow()
+    now = utcnow()
     config = {'defaultPriority': 'NONE', 'dueInDays': None}
     await db.execute(text('''INSERT INTO user_agent_skills (id, user_id, skill_key, config, created_at, updated_at)
             VALUES (:id, :user_id, :skill_key, CAST(:config AS jsonb), :now, :now)
-            ON CONFLICT (user_id, skill_key) DO NOTHING'''), {'id': _cuid(), 'user_id': user['id'], 'skill_key': skill_key, 'config': json.dumps(config), 'now': now})
+            ON CONFLICT (user_id, skill_key) DO NOTHING'''), {'id': cuid(), 'user_id': user['id'], 'skill_key': skill_key, 'config': json.dumps(config), 'now': now})
     await db.commit()
     return {'data': _skill_view(skill_key, True, config)}
 
@@ -1488,7 +1490,7 @@ async def update_issue_defaults(payload: IssueDefaultsInput, user: Any = Depends
     skill_key = 'issue.defaults'
     config = payload.model_dump(mode='json')
     result = await db.execute(text('''UPDATE user_agent_skills SET config = CAST(:config AS jsonb), updated_at = :now
-            WHERE user_id = :user_id AND skill_key = :skill_key'''), {'user_id': user['id'], 'skill_key': skill_key, 'config': json.dumps(config), 'now': _utcnow()})
+            WHERE user_id = :user_id AND skill_key = :skill_key'''), {'user_id': user['id'], 'skill_key': skill_key, 'config': json.dumps(config), 'now': utcnow()})
     if result.rowcount != 1:
         raise ApiError(409, 'Install this personal skill before changing its settings.', 'Conflict')
     await db.commit()
@@ -1503,7 +1505,7 @@ async def update_personal_skill(skill_key: str, payload: PersonalSkillInput, use
             SET name = :name, description = :description, instructions = :instructions, updated_at = :now
             WHERE user_id = :user_id AND skill_key = :skill_key AND skill_key LIKE 'custom.%' '''), {
         'name': payload.name.strip(), 'description': payload.description.strip() if payload.description else None,
-        'instructions': payload.instructions.strip(), 'now': _utcnow(), 'user_id': user['id'], 'skill_key': skill_key,
+        'instructions': payload.instructions.strip(), 'now': utcnow(), 'user_id': user['id'], 'skill_key': skill_key,
     })
     if result.rowcount != 1:
         raise ApiError(404, 'Agent skill not found.', 'Not Found')
@@ -1959,7 +1961,7 @@ async def apply_project_schedule(
     facts = await _project_schedule_facts(db, payload.workspaceId, project_id, user['id'])
     proposal = ProjectScheduleProposal(summary='Applied reviewed schedule.', schedules=payload.schedules)
     _validate_schedule_proposal(proposal, facts)
-    now = _utcnow()
+    now = utcnow()
     for schedule in payload.schedules:
         await db.execute(
             text(
@@ -1984,7 +1986,7 @@ async def apply_project_schedule(
                            CAST(:data AS jsonb), :now)'''
             ),
             {
-                'id': _cuid(),
+                'id': cuid(),
                 'workspace_id': payload.workspaceId,
                 'issue_id': schedule.issueId,
                 'actor_id': user['id'],
@@ -1999,7 +2001,7 @@ async def apply_project_schedule(
                        CAST(:metadata AS jsonb), :now)'''
         ),
         {
-            'id': _cuid(),
+            'id': cuid(),
             'workspace_id': payload.workspaceId,
             'actor_id': user['id'],
             'project_id': project_id,
@@ -2374,7 +2376,7 @@ async def _process_message(
             raise ApiError(404, 'Agent conversation not found.', 'Not Found')
         is_new_conversation = False
     else:
-        conversation_id = _cuid()
+        conversation_id = cuid()
         conversation_row = {'id': conversation_id, 'title': message.strip()[:80]}
         is_new_conversation = True
 
@@ -2630,7 +2632,7 @@ async def accept_proposal(message_id: str, workspaceId: str = Query(min_length=1
     catalog = await _workspace_catalog(db, workspaceId)
     _validate_proposal(proposal, catalog)
     progress = message['applied_result'] or {'projects': {}, 'issues': {}}
-    await db.execute(text('UPDATE agent_messages SET accepted_at = COALESCE(accepted_at, :now) WHERE id = :id'), {'id': message_id, 'now': _utcnow()})
+    await db.execute(text('UPDATE agent_messages SET accepted_at = COALESCE(accepted_at, :now) WHERE id = :id'), {'id': message_id, 'now': utcnow()})
     await db.commit()
     created_project_ids: dict[str, str] = dict(progress.get('projects') or {})
     issue_ids: dict[str, str] = dict(progress.get('issues') or {})
@@ -2656,9 +2658,9 @@ async def accept_proposal(message_id: str, workspaceId: str = Query(min_length=1
         await db.execute(text('UPDATE agent_messages SET applied_result = CAST(:result AS jsonb) WHERE id = :id'), {'id': message_id, 'result': json.dumps(progress)})
         await db.commit()
     applied_result = {'projects': created_project_ids, 'issues': issue_ids}
-    await db.execute(text('UPDATE agent_messages SET applied_at = :now, applied_result = CAST(:result AS jsonb) WHERE id = :id'), {'id': message_id, 'now': _utcnow(), 'result': json.dumps(applied_result)})
+    await db.execute(text('UPDATE agent_messages SET applied_at = :now, applied_result = CAST(:result AS jsonb) WHERE id = :id'), {'id': message_id, 'now': utcnow(), 'result': json.dumps(applied_result)})
     await db.execute(text('''INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at)
-            VALUES (:id, :workspace_id, :actor_id, 'agent.proposal.accepted', 'agent_message', :entity_id, CAST(:metadata AS jsonb), :now)'''), {'id': _cuid(), 'workspace_id': workspaceId, 'actor_id': user['id'], 'entity_id': message_id, 'metadata': json.dumps({'projects': len(proposal.projects), 'issues': len(proposal.issues)}), 'now': _utcnow()})
+            VALUES (:id, :workspace_id, :actor_id, 'agent.proposal.accepted', 'agent_message', :entity_id, CAST(:metadata AS jsonb), :now)'''), {'id': cuid(), 'workspace_id': workspaceId, 'actor_id': user['id'], 'entity_id': message_id, 'metadata': json.dumps({'projects': len(proposal.projects), 'issues': len(proposal.issues)}), 'now': utcnow()})
     await db.commit()
     return {'data': applied_result}
 
@@ -2702,7 +2704,7 @@ async def apply_assignment(payload: AssignmentApplyInput, user: Any = Depends(cu
     if member.scalar_one_or_none() is None:
         raise ApiError(400, 'The suggested person is not an active workspace member.', 'Bad Request')
     if not row['assignee_id']:
-        now = _utcnow()
+        now = utcnow()
         await db.execute(
             text('UPDATE issues SET assignee_id = :assignee_id, updated_at = :now WHERE id = :id'),
             {'assignee_id': payload.assigneeId, 'now': now, 'id': payload.issueId},
@@ -2712,7 +2714,7 @@ async def apply_assignment(payload: AssignmentApplyInput, user: Any = Depends(cu
                     VALUES (:id, :workspace_id, :actor_id, 'agent.assignment.applied', 'issue', :entity_id,
                             CAST(:metadata AS jsonb), :now)'''),
             {
-                'id': _cuid(), 'workspace_id': payload.workspaceId, 'actor_id': user['id'],
+                'id': cuid(), 'workspace_id': payload.workspaceId, 'actor_id': user['id'],
                 'entity_id': payload.issueId,
                 'metadata': json.dumps({'assigneeId': payload.assigneeId}), 'now': now,
             },

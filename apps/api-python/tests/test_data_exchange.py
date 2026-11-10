@@ -11,9 +11,10 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
 from app.modules.attachments.tables import xlsx_sheets
 from app.modules.data_exchange.contracts import (
     DocumentExport,
@@ -28,6 +29,7 @@ from app.modules.data_exchange.import_service import (
     import_result,
 )
 from app.modules.data_exchange.import_worker import process_import_row
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.work_items.contracts import CreateDocumentInput
 from app.modules.work_items.documents import create_document
 
@@ -68,22 +70,22 @@ async def verify_exchange():
         _async_database_url(os.environ["MCP_TEST_DATABASE_URL"])
     )
     factory = async_sessionmaker(engine)
-    user = {"id": _cuid(), "name": "Exchange owner"}
+    user = {"id": cuid(), "name": "Exchange owner"}
     workspace = None
     try:
         async with factory() as db:
-            now = _utcnow()
+            now = utcnow()
             await db.execute(
                 text(
                     "INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"
                 ),
-                {**user, "email": _cuid() + "@example.test", "now": now},
+                {**user, "email": cuid() + "@example.test", "now": now},
             )
             seed = await create_workspace_bootstrap(
                 db,
                 user_id=user["id"],
                 organization_name="Exchange tests",
-                workspace_name=_cuid(),
+                workspace_name=cuid(),
                 now=now,
             )
             workspace, team = seed["workspace_id"], seed["team_id"]
@@ -94,7 +96,7 @@ async def verify_exchange():
                 workspaceId=workspace,
                 teamId=team,
                 csv=content,
-                requestKey=extra.pop("requestKey", _cuid()),
+                requestKey=extra.pop("requestKey", cuid()),
                 sourceKey=extra.pop("sourceKey", "fixture"),
                 mapping=extra.pop(
                     "mapping",
@@ -136,7 +138,7 @@ async def verify_exchange():
                     payload.model_copy(update={"csv": payload.csv + "\nd,Other,HIGH"}),
                 )
             with pytest.raises(ApiError):
-                await import_result(db, {"id": _cuid()}, workspace, operation["id"])
+                await import_result(db, {"id": cuid()}, workspace, operation["id"])
         await command(operation["id"], "apply")
         await command(operation["id"], "apply")
         await asyncio.gather(process_import_row(factory), process_import_row(factory))
@@ -188,12 +190,12 @@ async def verify_exchange():
         assert len(seen) == 105
         await command(paged["id"], "cancel")
         async with factory() as db:
-            project = _cuid()
+            project = cuid()
             await db.execute(
                 text(
                     "INSERT INTO projects(id,workspace_id,name,identifier,created_at,updated_at) VALUES (:id,:workspace,'Import reference',:id,:now,:now)"
                 ),
-                {"id": project, "workspace": workspace, "now": _utcnow()},
+                {"id": project, "workspace": workspace, "now": utcnow()},
             )
             await db.commit()
         changed, _ = await preview(
@@ -205,7 +207,7 @@ async def verify_exchange():
         async with factory() as db:
             await db.execute(
                 text("UPDATE projects SET archived_at=:now WHERE id=:id"),
-                {"id": project, "now": _utcnow()},
+                {"id": project, "now": utcnow()},
             )
             await db.commit()
         await process_import_row(factory)
@@ -217,7 +219,7 @@ async def verify_exchange():
                 text(
                     "UPDATE issue_import_batches SET expires_at=:expired WHERE id=:id"
                 ),
-                {"id": expired["id"], "expired": _utcnow() - timedelta(seconds=1)},
+                {"id": expired["id"], "expired": utcnow() - timedelta(seconds=1)},
             )
             await db.commit()
         with pytest.raises(ApiError):
@@ -268,7 +270,7 @@ async def verify_exchange():
                     db,
                 )
             )["data"]
-            attachment = _cuid()
+            attachment = cuid()
             await db.execute(
                 text(
                     "INSERT INTO attachments(id,workspace_id,uploaded_by,entity_type,entity_id,object_key,filename,mime_type,size,created_at) VALUES (:id,:workspace,:actor,'document',:document,'fixture-object','../../escaped.txt','text/plain',7,:now)"
@@ -278,7 +280,7 @@ async def verify_exchange():
                     "workspace": workspace,
                     "actor": user["id"],
                     "document": document["id"],
-                    "now": _utcnow(),
+                    "now": utcnow(),
                 },
             )
             storage = type("Storage", (), {"get": AsyncMock(return_value=b"content")})()
@@ -306,7 +308,7 @@ async def verify_exchange():
                 await export_documents(
                     db,
                     user,
-                    DocumentExport(workspaceId=workspace, documentIds=[_cuid()]),
+                    DocumentExport(workspaceId=workspace, documentIds=[cuid()]),
                     storage,
                 )
             await db.commit()

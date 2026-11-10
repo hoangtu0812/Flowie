@@ -6,9 +6,11 @@ from pydantic import ValidationError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.portfolio.projects_api import (
     UpdateProjectInput,
     get_project,
@@ -31,14 +33,14 @@ async def verify_project_settings():
     engine = create_async_engine(_async_database_url(os.environ['MCP_TEST_DATABASE_URL']))
     try:
         async with async_sessionmaker(engine)() as db:
-            now = _utcnow()
-            owner, outsider = _cuid(), _cuid()
+            now = utcnow()
+            owner, outsider = cuid(), cuid()
             for user_id in (owner, outsider):
-                await db.execute(text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,'Settings user',:email,'ACTIVE',:now,:now)"), {'id': user_id, 'email': _cuid() + '@example.test', 'now': now})
-            seed = await create_workspace_bootstrap(db, user_id=owner, organization_name='Settings', workspace_name=_cuid(), now=now)
+                await db.execute(text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,'Settings user',:email,'ACTIVE',:now,:now)"), {'id': user_id, 'email': cuid() + '@example.test', 'now': now})
+            seed = await create_workspace_bootstrap(db, user_id=owner, organization_name='Settings', workspace_name=cuid(), now=now)
             workspace, team = seed['workspace_id'], seed['team_id']
             status = (await db.execute(text('SELECT id FROM issue_statuses WHERE workspace_id=:workspace ORDER BY position LIMIT 1'), {'workspace': workspace})).scalar_one()
-            project, issue, milestone = _cuid(), _cuid(), _cuid()
+            project, issue, milestone = cuid(), cuid(), cuid()
             # A project without a team: only the workspace membership check protects it.
             # VI: Dự án không thuộc team: chỉ kiểm tra thành viên workspace bảo vệ nó.
             await db.execute(text("INSERT INTO projects(id,workspace_id,name,identifier,created_at,updated_at) VALUES (:id,:workspace,'Original name',:identifier,:now,:now)"), {'id': project, 'workspace': workspace, 'identifier': project[-8:], 'now': now})
@@ -87,14 +89,14 @@ async def verify_project_slugs():
     factory = async_sessionmaker(engine)
     try:
         async with factory() as db:
-            now = _utcnow()
-            owner, outsider = _cuid(), _cuid()
+            now = utcnow()
+            owner, outsider = cuid(), cuid()
             for user_id in (owner, outsider):
-                await db.execute(text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,'Slug user',:email,'ACTIVE',:now,:now)"), {'id': user_id, 'email': _cuid() + '@example.test', 'now': now})
-            workspace = (await create_workspace_bootstrap(db, user_id=owner, organization_name='Slugs', workspace_name=_cuid(), now=now))['workspace_id']
+                await db.execute(text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,'Slug user',:email,'ACTIVE',:now,:now)"), {'id': user_id, 'email': cuid() + '@example.test', 'now': now})
+            workspace = (await create_workspace_bootstrap(db, user_id=owner, organization_name='Slugs', workspace_name=cuid(), now=now))['workspace_id']
             # Projects inserted without a slug get one from the identifier; a clash gets an id suffix.
             # VI: Dự án INSERT không kèm slug nhận slug từ identifier; bị trùng thì thêm hậu tố id.
-            first, second, third = _cuid(), _cuid(), _cuid()
+            first, second, third = cuid(), cuid(), cuid()
             for project, identifier in ((first, 'FLOWIE'), (second, 'Flowie'), (third, 'OPS_2')):
                 await db.execute(text("INSERT INTO projects(id,workspace_id,name,identifier,created_at,updated_at) VALUES (:id,:workspace,'Slug project',:identifier,:now,:now)"), {'id': project, 'workspace': workspace, 'identifier': identifier, 'now': now})
             await db.commit()

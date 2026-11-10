@@ -14,8 +14,8 @@ from ...core.errors import ApiError
 from ...core.identifiers import cuid
 from ...core.utc_responses import UtcAPIRouter as APIRouter
 from ...db.session import get_session
-from ...domains.auth import current_user
 from ..access.projects import team_access, workspace_access
+from ..identity.auth import current_user
 from ..work_items.saved_view_config import issue_view_config
 
 router = APIRouter(prefix="/api/v1/views", tags=["views"])

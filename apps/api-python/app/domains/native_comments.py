@@ -8,10 +8,13 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.clock import utcnow
 from ..core.errors import ApiError
+from ..core.identifiers import cuid
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
 from ..modules.access.projects import workspace_access
+from ..modules.identity.auth import current_user
 from ..modules.work_items.comment_repository import _comment as _comment
 from ..modules.work_items.comment_repository import _comment_input as _comment_input
 from ..modules.work_items.comment_repository import (
@@ -25,7 +28,6 @@ from ..services.notification_events import (
     issue_recipient_ids,
     publish_notification_batches,
 )
-from .auth import _cuid, _utcnow, current_user
 
 router = APIRouter(prefix='/api/v1/_native/comments', tags=['native-comments'])
 # Comments have no web UI adapter switched yet. Expose the audited native
@@ -126,7 +128,7 @@ async def remove_comment(
     current = await _comment(db, comment_id, workspaceId, user['id'])
     if current['authorId'] != user['id']:
         raise ApiError(403, 'Only the comment author can delete it.', 'Forbidden')
-    now = _utcnow()
+    now = utcnow()
     await db.execute(text('UPDATE comments SET deleted_at = :now, updated_at = :now WHERE id = :comment_id'), {'comment_id': comment_id, 'now': now})
     await db.commit()
     return {'data': {**current, 'deletedAt': now}}

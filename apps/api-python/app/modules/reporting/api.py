@@ -4,7 +4,7 @@ from fastapi import Depends, Query, Request
 
 from ...core.utc_responses import UtcAPIRouter
 from ...db.session import get_session
-from ...domains.auth import current_user
+from ..identity.auth import current_user
 from ..identity.password_reset import limit_request
 from .breakdowns import change_page, project_page
 from .contracts import WorkflowReport

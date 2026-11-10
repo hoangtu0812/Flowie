@@ -5,9 +5,11 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.work_items.contracts import CreateIssueInput, UpdateIssueInput
 from app.modules.work_items.issues import create_issue, update_issue
 from app.modules.work_items.workflow_statuses import mutate_status, statuses
@@ -26,19 +28,19 @@ async def verify_start_gate():
     )
     try:
         async with async_sessionmaker(engine)() as db:
-            now = _utcnow()
-            user = {"id": _cuid(), "name": "Gate owner"}
+            now = utcnow()
+            user = {"id": cuid(), "name": "Gate owner"}
             await db.execute(
                 text(
                     "INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"
                 ),
-                {**user, "email": _cuid() + "@example.test", "now": now},
+                {**user, "email": cuid() + "@example.test", "now": now},
             )
             seed = await create_workspace_bootstrap(
                 db,
                 user_id=user["id"],
                 organization_name="Gate",
-                workspace_name=_cuid(),
+                workspace_name=cuid(),
                 now=now,
             )
             workspace, team = seed["workspace_id"], seed["team_id"]

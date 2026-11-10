@@ -8,9 +8,11 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.news import ai, service, worker
 from app.modules.news.feeds import news_card, plain_text
 
@@ -105,17 +107,17 @@ async def verify_analyze_workspace(monkeypatch):
     engine = create_async_engine(_async_database_url(os.environ['MCP_TEST_DATABASE_URL']))
     try:
         async with async_sessionmaker(engine)() as db:
-            now = _utcnow()
-            user_id = _cuid()
+            now = utcnow()
+            user_id = cuid()
             await db.execute(
                 text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,'News',:email,'ACTIVE',:now,:now)"),
-                {'id': user_id, 'email': _cuid() + '@example.test', 'now': now},
+                {'id': user_id, 'email': cuid() + '@example.test', 'now': now},
             )
             seed = await create_workspace_bootstrap(
-                db, user_id=user_id, organization_name='News AI', workspace_name=_cuid(), now=now
+                db, user_id=user_id, organization_name='News AI', workspace_name=cuid(), now=now
             )
             workspace = seed['workspace_id']
-            category, source = _cuid(), _cuid()
+            category, source = cuid(), cuid()
             await db.execute(
                 text("INSERT INTO news_categories(id,workspace_id,name,updated_at) VALUES (:id,:w,'Security',:now)"),
                 {'id': category, 'w': workspace, 'now': now},
@@ -124,7 +126,7 @@ async def verify_analyze_workspace(monkeypatch):
                 text("INSERT INTO news_sources(id,workspace_id,category_id,name,feed_url) VALUES (:id,:w,:c,'Feed','https://www.cisa.gov/x.xml')"),
                 {'id': source, 'w': workspace, 'c': category},
             )
-            ids = [_cuid() for _ in range(2)]
+            ids = [cuid() for _ in range(2)]
             for index, item_id in enumerate(ids):
                 await db.execute(
                     text(
@@ -203,16 +205,16 @@ class _Teams:
 
 
 async def _news_workspace(db, count):
-    now = _utcnow()
-    user_id = _cuid()
+    now = utcnow()
+    user_id = cuid()
     await db.execute(
         text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,'News',:email,'ACTIVE',:now,:now)"),
-        {'id': user_id, 'email': _cuid() + '@example.test', 'now': now},
+        {'id': user_id, 'email': cuid() + '@example.test', 'now': now},
     )
     workspace = (
-        await create_workspace_bootstrap(db, user_id=user_id, organization_name='News', workspace_name=_cuid(), now=now)
+        await create_workspace_bootstrap(db, user_id=user_id, organization_name='News', workspace_name=cuid(), now=now)
     )['workspace_id']
-    category, source = _cuid(), _cuid()
+    category, source = cuid(), cuid()
     await db.execute(
         text(
             '''INSERT INTO news_categories(id,workspace_id,name,webhook_url,updated_at)
@@ -231,8 +233,8 @@ async def _news_workspace(db, count):
                    VALUES (:id,:w,:s,:title,:url,:at,:now)'''
             ),
             {
-                'id': _cuid(), 'w': workspace, 's': source, 'title': f'Item {index}',
-                'url': f'https://e.com/{_cuid()}', 'at': now - timedelta(minutes=index), 'now': now,
+                'id': cuid(), 'w': workspace, 's': source, 'title': f'Item {index}',
+                'url': f'https://e.com/{cuid()}', 'at': now - timedelta(minutes=index), 'now': now,
             },
         )
     await db.commit()
@@ -245,7 +247,7 @@ async def _enable_provider(db, workspace):
             '''INSERT INTO workspace_agent_providers(id,workspace_id,provider,endpoint,model,api_key_encrypted,enabled,updated_at)
                VALUES (:id,:w,'OPENAI','https://api.openai.com/v1','m','k',true,:now)'''
         ),
-        {'id': _cuid(), 'w': workspace, 'now': _utcnow()},
+        {'id': cuid(), 'w': workspace, 'now': utcnow()},
     )
     await db.commit()
 
@@ -332,7 +334,7 @@ async def verify_hold(db):
     await _enable_provider(db, workspace)
     await db.execute(
         text('UPDATE news_items SET created_at = :at WHERE source_id = :s'),
-        {'at': _utcnow() - service.NEWS_AI_GRACE - timedelta(minutes=1), 's': source},
+        {'at': utcnow() - service.NEWS_AI_GRACE - timedelta(minutes=1), 's': source},
     )
     await db.commit()
     assert await service.notify_workspace(db, workspace, teams, hold=True) == 1

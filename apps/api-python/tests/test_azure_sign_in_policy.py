@@ -15,9 +15,9 @@ from app.core.config import Settings, _async_database_url
 from app.core.errors import ApiError
 from app.core.identifiers import _cuid
 from app.db.session import get_session
-from app.domains.auth import _upsert_microsoft_user
 from app.main import create_app
 from app.modules.identity import password_reset
+from app.modules.identity.auth import _upsert_microsoft_user
 from app.modules.identity.security.mfa import login as mfa_login
 from app.modules.identity.security.mfa.proofs import first_factor
 from app.modules.workspaces.api import InviteMemberInput, invitation_candidates, invite

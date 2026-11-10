@@ -7,8 +7,8 @@ import httpx
 from fastapi import FastAPI
 
 from app.db.session import get_session
-from app.domains.auth import current_user
 from app.domains.scm.router import router
+from app.modules.identity.auth import current_user
 
 
 def test_creating_a_github_connection_returns_its_timestamps_as_utc_json():

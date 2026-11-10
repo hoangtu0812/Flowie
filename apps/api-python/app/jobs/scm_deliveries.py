@@ -8,8 +8,8 @@ from datetime import timedelta
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from ..core.clock import utcnow
 from ..core.config import Settings
-from ..domains.auth import _utcnow
 from ..domains.scm.service import sync_delivery_review
 from ..modules.operations.heartbeats import progress
 
@@ -30,7 +30,7 @@ async def process_scm_deliveries(
                    ORDER BY received_at ASC
                    FOR UPDATE SKIP LOCKED LIMIT 20'''
             ),
-            {'now': _utcnow(), 'max_attempts': MAX_ATTEMPTS},
+            {'now': utcnow(), 'max_attempts': MAX_ATTEMPTS},
         )
         ids = [str(value) for value in result.scalars().all()]
         if ids:
@@ -40,7 +40,7 @@ async def process_scm_deliveries(
                        SET status = 'PROCESSING', next_attempt_at = :lease_until
                        WHERE id = ANY(:ids)'''
                 ),
-                {'ids': ids, 'lease_until': _utcnow() + timedelta(minutes=5)},
+                {'ids': ids, 'lease_until': utcnow() + timedelta(minutes=5)},
             )
         await db.commit()
 
@@ -54,7 +54,7 @@ async def process_scm_deliveries(
             delivery = result.mappings().one()
             try:
                 synchronized = await sync_delivery_review(db, delivery, settings)
-                now = _utcnow()
+                now = utcnow()
                 await db.execute(
                     text(
                         '''UPDATE scm_webhook_deliveries
@@ -70,7 +70,7 @@ async def process_scm_deliveries(
                 await db.rollback()
                 attempts = int(delivery['attempts']) + 1
                 terminal = attempts >= MAX_ATTEMPTS
-                retry_at = _utcnow() + timedelta(seconds=min(30 * (2 ** max(attempts - 1, 0)), 3600))
+                retry_at = utcnow() + timedelta(seconds=min(30 * (2 ** max(attempts - 1, 0)), 3600))
                 await db.execute(
                     text(
                         '''UPDATE scm_webhook_deliveries
@@ -86,7 +86,7 @@ async def process_scm_deliveries(
                         'error': str(error)[:1000],
                         'retry_at': retry_at,
                         'terminal': terminal,
-                        'now': _utcnow(),
+                        'now': utcnow(),
                     },
                 )
                 await db.commit()

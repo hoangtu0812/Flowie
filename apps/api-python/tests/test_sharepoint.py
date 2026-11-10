@@ -10,8 +10,10 @@ from cryptography.fernet import Fernet
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import Settings, _async_database_url
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.sharepoint.attachments import numbered, publish_attachments_due
 from app.modules.sharepoint.graph import (
     SharePointError,
@@ -71,7 +73,7 @@ async def verify_publishing():
     engine = create_async_engine(_async_database_url(os.environ["MCP_TEST_DATABASE_URL"]))
     factory = async_sessionmaker(engine, expire_on_commit=False)
     settings = replace(Settings.from_environment(), scm_secrets_encryption_key=Fernet.generate_key().decode())
-    user = {"id": _cuid(), "name": "Publisher"}
+    user = {"id": cuid(), "name": "Publisher"}
     uploads, mode = [], {"fail": False}
 
     def graph(request: httpx.Request) -> httpx.Response:
@@ -96,13 +98,13 @@ async def verify_publishing():
     http = httpx.AsyncClient(transport=httpx.MockTransport(graph))
     try:
         async with factory() as db:
-            now = _utcnow()
+            now = utcnow()
             await db.execute(
                 text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"),
-                {**user, "email": _cuid() + "@example.test", "now": now},
+                {**user, "email": cuid() + "@example.test", "now": now},
             )
-            seed = await create_workspace_bootstrap(db, user_id=user["id"], organization_name="SP", workspace_name=_cuid(), now=now)
-            workspace, team, project = seed["workspace_id"], seed["team_id"], _cuid()
+            seed = await create_workspace_bootstrap(db, user_id=user["id"], organization_name="SP", workspace_name=cuid(), now=now)
+            workspace, team, project = seed["workspace_id"], seed["team_id"], cuid()
             await db.execute(
                 text("INSERT INTO projects(id,workspace_id,team_id,name,identifier,sharepoint_folder_url,created_at,updated_at) VALUES (:id,:w,:t,'Flowie',:id,:url,:now,:now)"),
                 {"id": project, "w": workspace, "t": team, "url": FOLDER, "now": now},
@@ -199,7 +201,7 @@ async def verify_attachment_copies():
     engine = create_async_engine(_async_database_url(os.environ["MCP_TEST_DATABASE_URL"]))
     factory = async_sessionmaker(engine, expire_on_commit=False)
     settings = replace(Settings.from_environment(), scm_secrets_encryption_key=Fernet.generate_key().decode())
-    user = {"id": _cuid(), "name": "Uploader"}
+    user = {"id": cuid(), "name": "Uploader"}
     storage, uploads, mode = MemoryStorage(), [], {"fail": False}
     large = b"x" * (5 * 1024 * 1024)
 
@@ -232,19 +234,19 @@ async def verify_attachment_copies():
     http = httpx.AsyncClient(transport=httpx.MockTransport(graph))
     try:
         async with factory() as db:
-            now = _utcnow()
+            now = utcnow()
             await db.execute(
                 text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"),
-                {**user, "email": _cuid() + "@example.test", "now": now},
+                {**user, "email": cuid() + "@example.test", "now": now},
             )
-            seed = await create_workspace_bootstrap(db, user_id=user["id"], organization_name="SP", workspace_name=_cuid(), now=now)
-            workspace, team, project = seed["workspace_id"], seed["team_id"], _cuid()
+            seed = await create_workspace_bootstrap(db, user_id=user["id"], organization_name="SP", workspace_name=cuid(), now=now)
+            workspace, team, project = seed["workspace_id"], seed["team_id"], cuid()
             await db.execute(
                 text("INSERT INTO projects(id,workspace_id,team_id,name,identifier,sharepoint_folder_url,created_at,updated_at) VALUES (:id,:w,:t,'Flowie',:id,:url,:now,:now)"),
                 {"id": project, "w": workspace, "t": team, "url": FOLDER, "now": now},
             )
             status = (await db.execute(text("SELECT id FROM issue_statuses WHERE workspace_id=:w LIMIT 1"), {"w": workspace})).scalar_one()
-            issue, loose, comment, deleted = _cuid(), _cuid(), _cuid(), _cuid()
+            issue, loose, comment, deleted = cuid(), cuid(), cuid(), cuid()
             for id_, key, number, project_id in ((issue, "DTD-7", 7, project), (loose, "DTD-8", 8, None)):
                 await db.execute(
                     text("INSERT INTO issues(id,workspace_id,team_id,project_id,status_id,identifier,number,title,creator_id,created_at,updated_at) VALUES (:id,:w,:t,:p,:s,:key,:n,'Sync: files?',:u,:now,:now)"),
@@ -267,7 +269,7 @@ async def verify_attachment_copies():
             ]
             ids = []
             for offset, (entity_type, entity_id, name, body) in enumerate(files):
-                id_, key = _cuid(), _cuid()
+                id_, key = cuid(), cuid()
                 storage.files[key] = body
                 ids.append(id_)
                 await db.execute(

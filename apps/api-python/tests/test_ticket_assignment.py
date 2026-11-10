@@ -5,9 +5,10 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
 from app.domains.native_asks import (
     AskMessageInput,
     CreateAskInput,
@@ -20,6 +21,7 @@ from app.domains.native_asks import (
     update_ask,
 )
 from app.domains.native_notifications import list_notifications
+from app.modules.identity.auth import create_workspace_bootstrap
 from tests.document_review_support import add_member
 from tests.test_service_desk_asks import add_project, forbidden
 
@@ -39,14 +41,14 @@ async def verify_assignment():
     engine = create_async_engine(_async_database_url(os.environ["MCP_TEST_DATABASE_URL"]))
     try:
         async with async_sessionmaker(engine, expire_on_commit=False)() as db:
-            now = _utcnow()
-            owner = {"id": _cuid(), "name": "Owner"}
+            now = utcnow()
+            owner = {"id": cuid(), "name": "Owner"}
             await db.execute(
                 text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"),
-                {**owner, "email": _cuid() + "@example.test", "now": now},
+                {**owner, "email": cuid() + "@example.test", "now": now},
             )
             seed = await create_workspace_bootstrap(
-                db, user_id=owner["id"], organization_name="Desk", workspace_name=_cuid(), now=now
+                db, user_id=owner["id"], organization_name="Desk", workspace_name=cuid(), now=now
             )
             workspace, team = seed["workspace_id"], seed["team_id"]
             handler = await add_member(db, workspace, team, name="Handler")

@@ -5,9 +5,11 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.core.identifiers import cuid
+from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.notifications.access import readable_recipients
 from app.modules.portfolio.projects_api import _project, _project_issue_rows
 from app.modules.sla.alerts import escalation_actor
@@ -37,9 +39,9 @@ async def verify_workspace_issues():
     )
     try:
         async with async_sessionmaker(engine)() as db:
-            now = _utcnow()
+            now = utcnow()
             users = [
-                {"id": _cuid(), "name": name}
+                {"id": cuid(), "name": name}
                 for name in ("Owner", "Workspace member", "Outsider")
             ]
             for user in users:
@@ -48,14 +50,14 @@ async def verify_workspace_issues():
                         """INSERT INTO users(id,name,email,status,created_at,updated_at)
                     VALUES (:id,:name,:email,'ACTIVE',:now,:now)"""
                     ),
-                    {**user, "email": _cuid() + "@example.test", "now": now},
+                    {**user, "email": cuid() + "@example.test", "now": now},
                 )
             owner, member, outsider = users
             seed = await create_workspace_bootstrap(
                 db,
                 user_id=owner["id"],
                 organization_name="Workspace issues",
-                workspace_name=_cuid(),
+                workspace_name=cuid(),
                 now=now,
             )
             workspace, team = seed["workspace_id"], seed["team_id"]
@@ -65,7 +67,7 @@ async def verify_workspace_issues():
                 VALUES (:id,:workspace,:user,'MEMBER','ACTIVE',:now,:now)"""
                 ),
                 {
-                    "id": _cuid(),
+                    "id": cuid(),
                     "workspace": workspace,
                     "user": member["id"],
                     "now": now,
@@ -158,7 +160,7 @@ async def verify_workspace_issues():
             )["data"]
             children = await list_sub_issues(task["id"], workspace, member, db)
             assert child["id"] in [row["id"] for row in children["data"]]
-            project_id = _cuid()
+            project_id = cuid()
             await db.execute(
                 text(
                     """INSERT INTO projects(id,workspace_id,name,identifier,created_at,updated_at)
