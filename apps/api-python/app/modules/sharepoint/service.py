@@ -28,7 +28,7 @@ from sqlalchemy import text
 from ...core.clock import utcnow
 from ...core.config import Settings
 from ...core.errors import ApiError
-from ...domains.scm.security import decrypt_secret_bundle, encrypt_secret_bundle
+from ..scm.security import decrypt_secret_bundle, encrypt_secret_bundle
 from ..work_items.document_tree import folder_label
 from .graph import GraphClient, SharePointError, parse_folder_url, safe_name
 

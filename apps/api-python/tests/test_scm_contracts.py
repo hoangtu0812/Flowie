@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.domains.scm.contracts import (
+from app.modules.scm.contracts import (
     ProviderReview,
     read_only_capabilities,
     write_capabilities,

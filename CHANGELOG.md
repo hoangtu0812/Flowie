@@ -64,6 +64,8 @@ pull request and commit references, which are for us.
 
 ### Changed
 
+- The API code for source-code connections (GitHub and Azure DevOps repositories, pull request reviews and their webhooks) now lives in `app/modules/scm` instead of `app/domains/scm`. Every route, webhook, response and the SCM sync and delivery jobs stay the same. Rebuild `api`; no migration. (DTD-523, DTD-758)
+  VI: Mã API của kết nối mã nguồn (repository GitHub và Azure DevOps, review pull request và webhook của chúng) nay nằm trong `app/modules/scm` thay vì `app/domains/scm`. Mọi route, webhook, phản hồi và job đồng bộ, giao nhận SCM giữ nguyên. Build lại `api`; không có migration. (DTD-523, DTD-758)
 - The API code for Service Desk tickets, the Service Desk assistant and customer requests now lives in a new `app/modules/service_desk` module, and the Discord and Microsoft Teams integration settings in a new `app/modules/integrations` module, instead of `app/domains`. Every route, response, permission check and the ticket-status job stay the same. Rebuild `api`; no migration. (DTD-523, DTD-757, #264)
   VI: Mã API của ticket Service Desk, trợ lý Service Desk và yêu cầu khách hàng nay nằm trong module mới `app/modules/service_desk`, còn cấu hình tích hợp Discord và Microsoft Teams nằm trong module mới `app/modules/integrations`, thay vì `app/domains`. Mọi route, phản hồi, kiểm tra quyền và job trạng thái ticket giữ nguyên. Build lại `api`; không có migration. (DTD-523, DTD-757)
 - The API code for teams and team membership, the team insights and daily digest, and the team dispatcher now lives in a new `app/modules/teams` module instead of `app/domains`. Every route, response, permission check and scheduled job stays the same. Rebuild `api`; no migration. (DTD-523, DTD-756, #263)

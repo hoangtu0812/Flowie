@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import quote
 
@@ -12,19 +12,25 @@ from ..contracts import (
     ProviderReview,
     ProviderReviewer,
     ProviderRevision,
+    ReviewDecision,
+    ReviewState,
+    ScmProviderName,
 )
 
 AZURE_DEVOPS_RESOURCE = '499b84ac-1321-427f-aa17-267ca6975798'
-AZURE_VOTE_DECISIONS = {
+AZURE_VOTE_DECISIONS: dict[int, ReviewDecision] = {
     10: 'APPROVED',
     5: 'APPROVED_WITH_SUGGESTIONS',
     -5: 'WAITING_FOR_AUTHOR',
     -10: 'REJECTED',
 }
+# Pull request status -> review state; any other or missing status is CLOSED.
+# VI: Trạng thái pull request -> trạng thái review; trạng thái khác hoặc thiếu là CLOSED.
+AZURE_REVIEW_STATES: dict[str | None, ReviewState] = {'active': 'OPEN', 'completed': 'MERGED', 'abandoned': 'ABANDONED'}
 
 
 class AzureDevOpsProvider:
-    provider = 'AZURE_DEVOPS'
+    provider: ScmProviderName = 'AZURE_DEVOPS'
 
     def __init__(
         self,
@@ -163,7 +169,7 @@ class AzureDevOpsProvider:
         head = (item.get('lastMergeSourceCommit') or {}).get('commitId') or ''
         base = (item.get('lastMergeTargetCommit') or {}).get('commitId')
         status = item.get('status')
-        state = {'active': 'OPEN', 'completed': 'MERGED', 'abandoned': 'ABANDONED'}.get(status, 'CLOSED')
+        state = AZURE_REVIEW_STATES.get(status, 'CLOSED')
         iteration_values = iterations or []
         latest_iteration = max(iteration_values, key=lambda value: value.get('id', 0), default=None)
         iteration_key = f"iteration:{latest_iteration['id']}:{head}" if latest_iteration else head

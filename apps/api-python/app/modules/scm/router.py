@@ -16,8 +16,8 @@ from ...core.errors import ApiError
 from ...core.identifiers import cuid
 from ...core.utc_responses import UtcAPIRouter as APIRouter
 from ...db.session import get_session
-from ...modules.access.projects import workspace_manager
-from ...modules.identity.auth import current_user
+from ..access.projects import workspace_manager
+from ..identity.auth import current_user
 from .contracts import read_only_capabilities
 from .security import (
     decrypt_secret_bundle,

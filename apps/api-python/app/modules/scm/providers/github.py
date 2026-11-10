@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime, timedelta, timezone
-from typing import Any
+from datetime import UTC, datetime, timedelta
+from typing import Any, cast
 
 import httpx
 import jwt
@@ -12,11 +12,14 @@ from ..contracts import (
     ProviderReview,
     ProviderReviewer,
     ProviderRevision,
+    ReviewDecision,
+    ReviewState,
+    ScmProviderName,
 )
 
 
 class GitHubProvider:
-    provider = 'GITHUB'
+    provider: ScmProviderName = 'GITHUB'
 
     def __init__(
         self,
@@ -141,7 +144,9 @@ class GitHubProvider:
             decisions[external_user_id] = ProviderReviewer(
                 externalUserId=external_user_id,
                 displayName=user.get('login'),
-                decision=state,
+                # The filter above keeps only states that are valid review decisions.
+                # VI: Bộ lọc phía trên chỉ giữ trạng thái là quyết định review hợp lệ.
+                decision=cast(ReviewDecision, state),
                 providerDecision=state,
             )
         review.reviewers = list(decisions.values())
@@ -176,7 +181,7 @@ class GitHubProvider:
             for team in item.get('requested_teams') or []
         )
         merged_at = item.get('merged_at')
-        state = 'MERGED' if merged_at else ('OPEN' if item.get('state') == 'open' else 'CLOSED')
+        state: ReviewState = 'MERGED' if merged_at else ('OPEN' if item.get('state') == 'open' else 'CLOSED')
         return ProviderReview(
             externalReviewId=str(item.get('number') or item['id']),
             number=item.get('number'),

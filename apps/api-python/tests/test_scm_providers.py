@@ -13,10 +13,10 @@ import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.domains.scm.contracts import ProviderRepository
-from app.domains.scm.providers.azure_devops import AzureDevOpsProvider
-from app.domains.scm.providers.github import GitHubProvider
-from app.domains.scm.security import verify_azure_basic_auth, verify_github_signature
+from app.modules.scm.contracts import ProviderRepository
+from app.modules.scm.providers.azure_devops import AzureDevOpsProvider
+from app.modules.scm.providers.github import GitHubProvider
+from app.modules.scm.security import verify_azure_basic_auth, verify_github_signature
 
 
 class ScmProviderTests(unittest.TestCase):
