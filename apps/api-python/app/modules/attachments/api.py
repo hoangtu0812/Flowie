@@ -12,21 +12,24 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.clock import utcnow
-from ..core.errors import ApiError
-from ..core.identifiers import cuid
-from ..core.utc_responses import UtcAPIRouter as APIRouter
-from ..db.session import get_session
-from ..modules.access.projects import team_access, workspace_access
-from ..modules.attachments.tables import (
+from ...core.clock import utcnow
+from ...core.errors import ApiError
+from ...core.identifiers import cuid
+from ...core.utc_responses import UtcAPIRouter as APIRouter
+from ...db.session import get_session
+from ...storage.minio import MinioStorage
+from ..access.projects import (
+    team_access,
+    workspace_access,
+)
+from ..identity.auth import current_user
+from ..sharepoint.graph import viewer_url
+from .tables import (
     UnreadableSpreadsheet,
     csv_sheet,
     table_page,
     xlsx_sheets,
 )
-from ..modules.identity.auth import current_user
-from ..modules.sharepoint.graph import viewer_url
-from ..storage.minio import MinioStorage
 
 router = APIRouter(prefix='/api/v1/_native/attachments', tags=['native-attachments'])
 # Storage authorization is entity-aware and already native. Expose this
@@ -81,7 +84,10 @@ async def _authorize_entity(db: AsyncSession, workspace_id: str, entity_type: En
     # Requesters sit outside the ticket's team, so the team rule below would lock them out of their own files.
     # VI: Người yêu cầu ở ngoài team của ticket, nên quy tắc team bên dưới sẽ chặn họ khỏi tệp của chính mình.
     if entity_type == 'ticket':
-        from .native_asks import _ask, _manage
+        from ...domains.native_asks import (
+            _ask,
+            _manage,
+        )
 
         await _manage(db, await _ask(db, entity_id, workspace_id), workspace_id, user_id)
         return
@@ -118,7 +124,7 @@ async def create_attachment(request: Request, workspaceId: str = Form(), entityT
     body = await file.read(MAX_ATTACHMENT_BYTES + 1)
     data = await store_attachment(db, request.app.state.settings, workspaceId, user['id'], entityType, entityId, file.filename, file.content_type, body)
     if entityType == 'ticket':
-        from .native_asks import record_ticket_file
+        from ...domains.native_asks import record_ticket_file
 
         await record_ticket_file(db, entityId, workspaceId, user, data['filename'])
     await db.commit()
@@ -149,10 +155,12 @@ async def store_attachment(db: AsyncSession, settings: Any, workspace_id: str, u
         raise ApiError(400, 'Document folders accept PDF files only.', 'Bad Request')
     mime_type = content_type or 'application/octet-stream'
     if entity_type == 'document-folder':
-        from ..modules.work_items.document_tree import _lock_team_folders
+        from ..work_items.document_tree import _lock_team_folders
 
         team_id = await _entity_team_id(db, workspace_id, entity_type, entity_id)
-        await _lock_team_folders(db, team_id)
+        # document_folders.team_id is NOT NULL, so a folder always yields a team id here.
+        # VI: document_folders.team_id là NOT NULL nên thư mục luôn trả về team id ở đây.
+        await _lock_team_folders(db, team_id)  # type: ignore[arg-type]
         await _authorize_entity(db, workspace_id, entity_type, entity_id, user_id, writing=True)
     object_key = f'{workspace_id}/{user_id}/{token_urlsafe(18)}-{filename}'
     await MinioStorage(settings).put(object_key, body, mime_type)

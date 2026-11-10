@@ -10,7 +10,7 @@ from sqlalchemy import text
 
 from app.core.clock import utcnow
 from app.core.identifiers import cuid
-from app.domains.native_pulse import pulse
+from app.modules.work_items.pulse_api import pulse
 from tests.seeded_workspace import seeded_workspace
 
 pytestmark = pytest.mark.skipif(

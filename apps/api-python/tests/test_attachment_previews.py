@@ -6,7 +6,7 @@ from zipfile import ZipFile
 import pytest
 
 from app.core.errors import ApiError
-from app.domains import native_attachments
+from app.modules.attachments import api as native_attachments
 from app.modules.attachments.tables import (
     MAX_ROWS,
     UnreadableSpreadsheet,

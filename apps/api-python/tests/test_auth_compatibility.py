@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from pydantic import ValidationError
 
 from app.core.passwords import compatible_hash
-from app.domains.native_admin import UpdateAdminUserInput
+from app.modules.identity.admin_api import UpdateAdminUserInput
 from app.modules.identity.auth import (
     _is_environment_admin,
     _safe_app_path,

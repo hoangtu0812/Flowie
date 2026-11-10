@@ -20,8 +20,8 @@ from app.domains.native_asks import (
     ticket_for_issue,
     update_ask,
 )
-from app.domains.native_notifications import list_notifications
 from app.modules.identity.auth import create_workspace_bootstrap
+from app.modules.notifications.api import list_notifications
 from tests.document_review_support import add_member
 from tests.test_service_desk_asks import add_project, forbidden
 

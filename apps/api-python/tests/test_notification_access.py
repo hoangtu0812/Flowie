@@ -9,9 +9,9 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.identifiers import cuid
-from app.domains.native_notifications import list_notifications
 from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.notifications.access import readable_records
+from app.modules.notifications.api import list_notifications
 from app.modules.notifications.outbox import process_one, stage_notifications
 from app.services.notification_events import create_notification_batch
 

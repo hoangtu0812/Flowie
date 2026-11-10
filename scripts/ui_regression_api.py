@@ -12,8 +12,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'apps/api-python'))
 from cryptography.fernet import Fernet
 
 from app.core.config import Settings
-from app.domains import native_attachments
 from app.main import create_app
+from app.modules.attachments import api as native_attachments
 from app.modules.data_exchange import api as data_exchange_api
 from app.modules.emojis import api as native_emojis
 

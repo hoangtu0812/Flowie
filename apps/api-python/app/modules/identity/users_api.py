@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import timedelta
 from mimetypes import guess_type
 from secrets import token_urlsafe
+from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import Depends, File, Query, Request, UploadFile
@@ -11,12 +12,12 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.clock import utcnow
-from ..core.errors import ApiError
-from ..core.utc_responses import UtcAPIRouter as APIRouter
-from ..db.session import get_session
-from ..modules.identity.auth import current_user
-from ..storage.minio import MinioStorage
+from ...core.clock import utcnow
+from ...core.errors import ApiError
+from ...core.utc_responses import UtcAPIRouter as APIRouter
+from ...db.session import get_session
+from ...storage.minio import MinioStorage
+from .auth import current_user
 
 router = APIRouter(prefix='/api/v1/users', tags=['users'])
 MAX_AVATAR_BYTES = 5 * 1024 * 1024
@@ -44,7 +45,7 @@ class ProfileUpdate(BaseModel):
     timezone: str | None = Field(default=None, max_length=100)
 
 
-def _profile(row: object, profile_managed_by: str | None = None) -> dict[str, object]:
+def _profile(row: Any, profile_managed_by: str | None = None) -> dict[str, object]:
     stored_avatar_url = row['avatar_url']
     return {
         'id': row['id'],
@@ -73,7 +74,7 @@ async def _profile_managed_by(db: AsyncSession, user_id: str) -> str | None:
 
 @router.get('/me')
 async def me(
-    user: object = Depends(current_user), db: AsyncSession = Depends(get_session)
+    user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)
 ) -> dict[str, object]:
     return {'data': _profile(user, await _profile_managed_by(db, user['id']))}
 
@@ -81,7 +82,7 @@ async def me(
 @router.patch('/me')
 async def update_me(
     payload: ProfileUpdate,
-    user: object = Depends(current_user),
+    user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, object]:
     values = payload.model_dump(exclude_unset=True)
@@ -135,7 +136,7 @@ async def update_me(
 async def upload_avatar(
     request: Request,
     file: UploadFile = File(),
-    user: object = Depends(current_user),
+    user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, object]:
     if await _profile_managed_by(db, user['id']) == 'MICROSOFT':
@@ -290,7 +291,7 @@ async def _workspace_members(
 @router.get('')
 async def list_workspace_members(
     workspaceId: str = Query(min_length=1),
-    user: object = Depends(current_user),
+    user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, list[dict[str, object]]]:
     await _workspace_member_access(db, workspaceId, user['id'])
@@ -301,7 +302,7 @@ async def list_workspace_members(
 async def get_workspace_member(
     user_id: str,
     workspaceId: str = Query(min_length=1),
-    user: object = Depends(current_user),
+    user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, object]]:
     await _workspace_member_access(db, workspaceId, user['id'])

@@ -11,7 +11,7 @@ from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.core.identifiers import cuid
-from app.domains.native_admin import (
+from app.modules.identity.admin_api import (
     UpdateAdminUserInput,
     audit_logs,
     overview,
