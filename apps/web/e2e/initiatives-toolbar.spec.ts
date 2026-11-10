@@ -11,7 +11,13 @@ const fixture = JSON.parse(readFileSync('.e2e-fixture.json', 'utf8')) as {
 // VI: Các nút toolbar chỉ có icon nên được tìm theo class icon Lucide của chúng.
 test('initiatives toolbar opens the filter and display options menus', async ({ page }) => {
    const errors: string[] = [];
-   page.on('pageerror', (error) => errors.push(error.message));
+   // WebKit reports RSC prefetches cancelled by page.goto as page errors ending in
+   // "due to access control checks."; they are aborted loads, not app exceptions.
+   // VI: WebKit báo các RSC prefetch bị page.goto huỷ thành page error kết thúc bằng
+   // "due to access control checks."; đó là request bị huỷ, không phải exception của app.
+   page.on('pageerror', (error) => {
+      if (!/due to access control checks\.$/.test(error.message)) errors.push(error.message);
+   });
    await page.goto('/auth/login');
    await page.getByLabel('Email', { exact: true }).fill(fixture.email);
    await page.getByLabel('Password', { exact: true }).fill(fixture.password);
