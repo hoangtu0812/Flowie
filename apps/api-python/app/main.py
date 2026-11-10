@@ -13,12 +13,12 @@ from .core.config import Settings
 from .core.errors import ApiError, api_error_handler, validation_error_handler
 from .core.readiness import dependency_status
 from .db.session import create_session_factory
-from .domains.agent import router as agent_router
 from .jobs.digest import digest_loop
 from .jobs.dispatcher import dispatcher_loop
 from .jobs.reminders import reminder_loop
 from .jobs.scm_deliveries import scm_delivery_loop
 from .jobs.scm_sync import scm_sync_loop
+from .modules.agent.api import router as agent_router
 from .modules.agent_runs.api import router as agent_runs_router
 from .modules.attachments.api import public_router as attachments_router
 from .modules.attachments.api import router as native_attachments_router

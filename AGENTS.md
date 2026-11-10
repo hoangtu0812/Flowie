@@ -64,10 +64,10 @@
   from the repository root (rules in `ruff.toml`) and
   `pnpm --filter @flowie/web lint --max-warnings 0`. CI runs the same commands.
   Silence a finding only on its own line, with the reason beside it.
-- Every package except `app/domains` is checked including unannotated
-  function bodies. Never weaken the level of a package that passes, and never
-  add a blanket `# type: ignore`: fix the type, or ignore one error code on one
-  line with a comment saying why.
+- Every package is checked including unannotated function bodies. Never
+  weaken the level of a package that passes, and never add a blanket
+  `# type: ignore`: fix the type, or ignore one error code on one line with a
+  comment saying why.
 
 ## Change records
 

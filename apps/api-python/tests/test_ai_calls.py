@@ -12,7 +12,7 @@ from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.core.identifiers import cuid
-from app.domains import agent
+from app.modules.agent import api as agent
 from app.modules.ai import calls as ai_calls
 from app.modules.identity.auth import create_workspace_bootstrap
 

@@ -22,14 +22,6 @@ ignore = [
   "E731",
 ]
 
-[lint.per-file-ignores]
-# The legacy domain modules re-export private helpers on purpose
-# (`from ..modules.x import _y as _y` and plain imports other modules rely on),
-# so an "unused" import there may be load-bearing. DTD-523 folds them away.
-# VI: Các module domain cũ cố ý re-export helper nội bộ, nên một import "thừa" ở
-# VI: đó có thể đang được nơi khác dùng. DTD-523 sẽ dồn và xoá chúng.
-"apps/api-python/app/domains/*" = ["F401"]
-
 [lint.flake8-bugbear]
 # FastAPI declares dependencies and parameters as default values by design.
 # VI: FastAPI khai dependency và tham số bằng giá trị mặc định theo thiết kế.

@@ -88,7 +88,7 @@ removed tools are not callable and Agent reports that the workspace must
 install the relevant tool.
 
 New insights must be added as an explicit entry in `READ_ONLY_CAPABILITIES` in
-`apps/api-python/app/domains/agent.py`, with a narrow request matcher and a
+`apps/api-python/app/modules/agent/api.py`, with a narrow request matcher and a
 permission-scoped query. Insight replies are deliberately excluded from future
 planning context, preventing a report request from changing a later draft.
 

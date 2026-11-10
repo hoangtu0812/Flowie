@@ -76,7 +76,7 @@ Nguồn đối chiếu:
 - [Khởi tạo FastAPI](../apps/api-python/app/main.py), [xác thực](../apps/api-python/app/modules/identity/auth.py).
 - [Issue](../apps/api-python/app/modules/work_items/issues_api.py), [project](../apps/api-python/app/modules/portfolio/projects_api.py), [comment](../apps/api-python/app/modules/work_items/comments_api.py).
 - [Document](../apps/api-python/app/modules/work_items/documents_api.py), [schema Prisma](../packages/database/prisma/schema.prisma).
-- [Agent](../apps/api-python/app/domains/agent.py), [hướng dẫn Agent](agent-setup.md), [tích hợp SCM](reviews-integrations.md).
+- [Agent](../apps/api-python/app/modules/agent/api.py), [hướng dẫn Agent](agent-setup.md), [tích hợp SCM](reviews-integrations.md).
 
 ## 3. Phạm vi và nguyên tắc thiết kế
 
