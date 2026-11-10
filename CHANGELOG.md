@@ -51,7 +51,7 @@ pull request and commit references, which are for us.
 
 ### Changed
 
-- The web app's initiatives code now lives in `apps/web/features/initiatives/` instead of `components/common/`, the third of six moves, and the initiatives list's Filter and Display options menus moved unchanged into their own file. A new browser test opens both menus. Nothing changes for users. Rebuild `web`; no migration. (DTD-524, DTD-572)
+- The web app's initiatives code now lives in `apps/web/features/initiatives/` instead of `components/common/`, the third of six moves, and the initiatives list's Filter and Display options menus moved unchanged into their own file. A new browser test opens both menus. Nothing changes for users. Rebuild `web`; no migration. (DTD-524, DTD-572, #244)
   VI: Code initiatives của web nay nằm ở `apps/web/features/initiatives/` thay vì `components/common/`, là đợt thứ ba trong sáu đợt chuyển, và hai menu Filter và Display options của danh sách initiatives được chuyển nguyên văn sang file riêng. Một test trình duyệt mới mở cả hai menu. Người dùng không thấy gì thay đổi. Build lại `web`; không có migration. (DTD-524, DTD-572)
 
 - The web app's teams, inbox, my issues and agent code now lives in `apps/web/features/<domain>/` instead of `components/common/`, the second of six moves. Nothing changes for users. Rebuild `web`; no migration. (DTD-524, DTD-571, #243)
