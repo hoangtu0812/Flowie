@@ -9,7 +9,7 @@ import {
    joinWorkspaceTeam,
    loadCurrentWorkspaceTeams,
    type WorkspaceTeam,
-} from '@/components/common/teams/team-types';
+} from '@/features/teams/team-types';
 import { toast } from 'sonner';
 import { SettingsCard, SettingsRow, SettingsSection, SettingsShell } from './shared';
 

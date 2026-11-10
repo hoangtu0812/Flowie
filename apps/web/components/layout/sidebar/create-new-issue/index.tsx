@@ -53,7 +53,7 @@ import { LabelInterface } from '@/types/labels';
 import { Priority } from '@/lib/priority-presentations';
 import { User } from '@/types/users';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
-import { loadJoinedWorkspaceTeams, WorkspaceTeam } from '@/components/common/teams/team-types';
+import { loadJoinedWorkspaceTeams, WorkspaceTeam } from '@/features/teams/team-types';
 import { useUiPreferencesStore } from '@/store/ui-preferences-store';
 import { loadCurrentUser } from '@/features/identity/current-user';
 import { initialAssignee, issueMember } from '@/features/issues/create-defaults';

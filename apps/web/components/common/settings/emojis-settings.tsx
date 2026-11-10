@@ -1,6 +1,6 @@
 'use client';
 
-import { loadCurrentWorkspaceTeams } from '@/components/common/teams/team-types';
+import { loadCurrentWorkspaceTeams } from '@/features/teams/team-types';
 import { authenticatedFetch } from '@/lib/workspaces';
 import { Button } from '@/components/ui/button';
 import {

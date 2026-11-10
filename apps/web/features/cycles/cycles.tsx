@@ -12,7 +12,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { loadJoinedWorkspaceTeams, type WorkspaceTeam } from '@/components/common/teams/team-types';
+import { loadJoinedWorkspaceTeams, type WorkspaceTeam } from '@/features/teams/team-types';
 import { authenticatedFetch } from '@/lib/workspaces';
 import { type Cycle } from '@/types/cycles';
 import { format, parseISO } from 'date-fns';

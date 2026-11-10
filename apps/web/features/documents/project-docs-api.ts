@@ -1,6 +1,6 @@
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import { responseData } from '@/lib/http';
-import type { LiveDocument } from '@/components/common/teams/use-live-team';
+import type { LiveDocument } from '@/features/teams/use-live-team';
 import type { DocStatus, DocType, FolderKind, TreeFile, TreeFolder } from '@/lib/document-tree';
 import { uploadAttachment } from '@/lib/attachments';
 

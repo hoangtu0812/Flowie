@@ -1,8 +1,8 @@
 'use client';
 
 import { LoadingState } from '@/components/common/loading-state';
-import { useLiveTeam } from '@/components/common/teams/use-live-team';
-import type { WorkspaceTeam } from '@/components/common/teams/team-types';
+import { useLiveTeam } from '@/features/teams/use-live-team';
+import type { WorkspaceTeam } from '@/features/teams/team-types';
 import { authenticatedFetch } from '@/lib/workspaces';
 import { Button } from '@/components/ui/button';
 import {

@@ -1,7 +1,7 @@
 'use client';
 import { portfolioFetch } from '@/features/projects/portfolio-fetch';
 
-import { loadCurrentWorkspaceTeams } from '@/components/common/teams/team-types';
+import { loadCurrentWorkspaceTeams } from '@/features/teams/team-types';
 import { authenticatedFetch } from '@/lib/workspaces';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

@@ -11,7 +11,7 @@ import { QueryState } from '@/components/common/query-state';
 import {
    loadCurrentWorkspaceTeams,
    type WorkspaceTeam,
-} from '@/components/common/teams/team-types';
+} from '@/features/teams/team-types';
 import { Button } from '@/components/ui/button';
 import {
    Select,

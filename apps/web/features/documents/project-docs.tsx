@@ -36,8 +36,8 @@ import {
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { LoadingState } from '@/components/common/loading-state';
 import { QueryState } from '@/components/common/query-state';
-import { MarkdownDocumentEditor } from '@/components/common/teams/markdown-document-editor';
-import type { LiveDocument } from '@/components/common/teams/use-live-team';
+import { MarkdownDocumentEditor } from '@/features/teams/markdown-document-editor';
+import type { LiveDocument } from '@/features/teams/use-live-team';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useLocale } from '@/features/shared/use-locale';
 import { useMessages } from '@/features/shared/use-messages';

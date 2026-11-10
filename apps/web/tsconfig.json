@@ -58,8 +58,6 @@
       "components/common/settings/slas-settings.tsx",
       "components/common/settings/team-settings-dialog.tsx",
       "components/common/settings/workspace-feature-settings.tsx",
-      "components/common/teams/team-types.ts",
-      "components/common/teams/use-live-team.ts",
       "components/layout/ui-preferences-applier.tsx",
       "components/settings/discord-integration.tsx",
       "lib/priority-presentations.tsx",

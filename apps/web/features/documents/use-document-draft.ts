@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { useCurrentUserId } from '@/components/common/my-issues/use-my-issues';
+import { useCurrentUserId } from '@/features/my-issues/use-my-issues';
 import { ApiRequestError } from '@/lib/http';
 import { getDocument } from './document-api';
 import { AutosaveController, type SaveSnapshot } from './autosave-controller';

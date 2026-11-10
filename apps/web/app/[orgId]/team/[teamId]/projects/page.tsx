@@ -1,4 +1,4 @@
-import TeamProjects from '@/components/common/teams/team-projects';
+import TeamProjects from '@/features/teams/team-projects';
 import Header from '@/components/layout/headers/team-projects/header';
 import MainLayout from '@/components/layout/main-layout';
 import { ProjectsDataProvider } from '@/features/projects/projects-data';

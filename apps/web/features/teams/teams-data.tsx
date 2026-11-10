@@ -5,7 +5,7 @@ import {
    joinWorkspaceTeam,
    loadCurrentWorkspaceTeams,
    type WorkspaceTeam,
-} from '@/components/common/teams/team-types';
+} from '@/features/teams/team-types';
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 

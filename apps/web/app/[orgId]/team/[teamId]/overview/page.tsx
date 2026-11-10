@@ -1,4 +1,4 @@
-import TeamOverview from '@/components/common/teams/team-overview';
+import TeamOverview from '@/features/teams/team-overview';
 import Header from '@/components/layout/headers/team/header';
 import MainLayout from '@/components/layout/main-layout';
 

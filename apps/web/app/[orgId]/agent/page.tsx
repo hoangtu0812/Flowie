@@ -1,4 +1,4 @@
-import AgentChat from '@/components/common/agent/agent-chat';
+import AgentChat from '@/features/agent/agent-chat';
 import Header from '@/components/layout/headers/agent/header';
 import MainLayout from '@/components/layout/main-layout';
 

@@ -13,7 +13,7 @@ import {
    type Revision,
    type RevisionDiff,
 } from './document-api';
-import type { LiveDocument } from '@/components/common/teams/use-live-team';
+import type { LiveDocument } from '@/features/teams/use-live-team';
 import { useDateFormatter } from '@/features/shared/account-time';
 
 export function DocumentHistory({
