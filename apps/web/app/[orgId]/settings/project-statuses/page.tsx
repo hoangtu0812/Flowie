@@ -1,5 +1,5 @@
 import MainLayout from '@/components/layout/main-layout';
-import ProjectStatusesSettings from '@/components/common/settings/project-statuses-settings';
+import ProjectStatusesSettings from '@/features/settings/project-statuses-settings';
 import Header from '@/components/layout/headers/settings/header';
 
 export default function Page() {

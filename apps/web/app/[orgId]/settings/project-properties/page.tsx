@@ -1,4 +1,4 @@
-import ProjectPropertiesSettings from '@/components/common/settings/project-properties-settings';
+import ProjectPropertiesSettings from '@/features/settings/project-properties-settings';
 import MainLayout from '@/components/layout/main-layout';
 import Header from '@/components/layout/headers/settings/header';
 

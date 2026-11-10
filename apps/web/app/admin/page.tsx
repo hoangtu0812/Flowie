@@ -11,7 +11,7 @@ import {
    Users,
 } from 'lucide-react';
 
-import { AdminSidebar, type AdminSection } from '@/components/admin/admin-sidebar';
+import { AdminSidebar, type AdminSection } from '@/components/layout/admin-sidebar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';

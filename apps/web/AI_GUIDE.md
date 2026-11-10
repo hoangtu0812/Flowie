@@ -49,8 +49,9 @@ app/                          # Next.js routes (thin wrappers around components)
       cycles/                                   # Cycles timeline + burn-up chart
       overview/  documents/  members/           # Team Home tabs
 components/
-  common/                     # Feature components still waiting to move to features/ (DTD-524)
-    settings/    markdown/
+  common/                     # UI shared by several domains (markdown, timeline, states, viewers)
+  brand/                      # Flowie logo
+  data-table-filter/          # Vendored bazza/ui filter (lint-exempted)
   layout/
     main-layout.tsx           # Sidebar + rounded content shell used by every page
     sidebar/                  # App sidebar (nav, org switcher, create-issue modal)
@@ -136,8 +137,7 @@ projects/teams/members store to mutate yet.
 
 ## Feature inventory (what to grab if you only want one part)
 
-Each feature is self-contained under `features/<feature>` (or, until DTD-524 finishes,
-`components/common/<feature>`) + its header under
+Each feature is self-contained under `features/<feature>` + its header under
 `components/layout/headers/<feature>`. Dependencies below are in addition to
 `components/ui/*`, `lib/utils.ts` and Tailwind.
 
@@ -182,7 +182,7 @@ Each feature is self-contained under `features/<feature>` (or, until DTD-524 fin
   (`InboxItem extends Issue`) and the preview pane renders the actual issue (live store
   data + rich description + properties column). Needs `notifications-store`,
   `features/inbox/notification-data.ts`, `react-resizable-panels`, the issue-details renderer.
-- **Projects / Teams / Members tables** (`components/common/{projects,teams,members}/`)
+- **Projects / Teams / Members tables** (`features/{projects,teams,members}/`)
   — plain sorted/filtered tables + their filter stores.
 - **Member profile** (`features/members/member-profile.tsx` +
   `components/layout/headers/profile/` + `app/[orgId]/profiles/[memberId]/`) —
@@ -210,7 +210,7 @@ Each feature is self-contained under `features/<feature>` (or, until DTD-524 fin
   Source files are Markdown, DOCX, or XLSX and must not be persisted in the
   conversation payload. Provider API keys are server-side secrets and must
   never be returned to the browser.
-- **Settings** (`components/common/settings/` + `app/[orgId]/settings/`) — Linear-style
+- **Settings** (`features/settings/` + `app/[orgId]/settings/`) — Linear-style
   settings area. The app sidebar swaps to a settings nav (`sidebar/nav-settings.tsx`,
   groups Personal / Issues / Projects / Features, plus `nav-teams-settings.tsx`) whenever
   the pathname contains `/settings`. Shared primitives live in `settings/shared.tsx`
@@ -227,7 +227,7 @@ Each feature is self-contained under `features/<feature>` (or, until DTD-524 fin
   `settings/settings-placeholder.tsx` empty state configured by
   `settings/placeholder-sections.ts`.
 - **Theme system** (`store/theme-store.ts` + `components/layout/theme-applier.tsx` +
-  `components/common/settings/theme-preferences.tsx`) — Linear-style themes: next-themes
+  `features/settings/theme-preferences.tsx`) — Linear-style themes: next-themes
   keeps resolving light/dark/system, the persisted store adds named variants
   (Pure Light, Magic Blue, Classic Dark — CSS under `[data-app-theme=…]` in
   `app/globals.css`) and a fully custom theme (accent/background/contrast per surface,
@@ -267,7 +267,7 @@ Each feature is self-contained under `features/<feature>` (or, until DTD-524 fin
   persisted `order` per section) opened from the sidebar "More" menu and from
   Preferences; `nav-inbox`/`nav-workspace` respect the persisted prefs and hidden
   workspace items fall back into the "More" dropdown.
-- **Integration logos** (`components/common/settings/integration-logos.tsx`) — brand SVG
+- **Integration logos** (`features/settings/integration-logos.tsx`) — brand SVG
   icons (sourced from logos.lndev.me) used by the integrations directory and connected
   accounts; unknown brands fall back to colored initial chips.
 - **Create issue modal** (`components/layout/sidebar/create-new-issue/`) — dialog with

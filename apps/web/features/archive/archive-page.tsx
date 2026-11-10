@@ -16,7 +16,7 @@ import { responseData } from '@/lib/http';
 import { RecoveryScreen } from '@/features/shared/recovery-screen';
 import { ResourcePagination } from '@/features/shared/resource-pagination';
 import { usePagedResource } from '@/features/shared/use-paged-resource';
-import { SettingsRow, SettingsShell } from '@/components/common/settings/shared';
+import { SettingsRow, SettingsShell } from '@/features/settings/shared';
 
 type Archived = { id: string; title: string; kind: string; archivedAt: string; updatedAt: string };
 type Preview = Archived & {

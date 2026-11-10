@@ -10,7 +10,7 @@ import { Text } from '@astryxdesign/core/Text';
 import { Selector } from '@astryxdesign/core/Selector';
 import { authenticatedFetch } from '@/lib/workspaces';
 import { responseData } from '@/lib/http';
-import { SettingsSection } from '@/components/common/settings/shared';
+import { SettingsSection } from '@/features/settings/shared';
 import { RefreshIconButton } from '@/features/shared/refresh-icon-button';
 import { slaApi } from './types';
 

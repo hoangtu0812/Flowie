@@ -9,7 +9,7 @@ import { Text } from '@astryxdesign/core/Text';
 import { Button } from '@astryxdesign/core/Button';
 import { TextInput } from '@astryxdesign/core/TextInput';
 import { Selector } from '@astryxdesign/core/Selector';
-import { AuthCard } from '@/components/auth/auth-card';
+import { AuthCard } from '@/features/identity/auth-card';
 import { responseData } from '@/lib/http';
 import { authApi } from './types';
 import { useFactorOptions, type FactorKind } from './mfa-client';

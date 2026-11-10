@@ -1,4 +1,4 @@
-import ProjectUpdatesSettings from '@/components/common/settings/project-updates-settings';
+import ProjectUpdatesSettings from '@/features/settings/project-updates-settings';
 import MainLayout from '@/components/layout/main-layout';
 import Header from '@/components/layout/headers/settings/header';
 

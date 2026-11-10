@@ -7,7 +7,7 @@ import {
    microsoftSignInEnabled,
    withTeamsToast,
    type TeamsStatus,
-} from '@/components/settings/teams-integration';
+} from '@/features/settings/teams-integration';
 import { Button } from '@/components/ui/button';
 import {
    Dialog,

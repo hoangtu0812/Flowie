@@ -1,5 +1,5 @@
 import MainLayout from '@/components/layout/main-layout';
-import Profile from '@/components/common/settings/profile';
+import Profile from '@/features/settings/profile';
 import Header from '@/components/layout/headers/settings/header';
 
 export default function Page() {

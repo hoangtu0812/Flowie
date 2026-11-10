@@ -13,12 +13,16 @@ Project-specific guidance for AI coding agents.
 - `components/ui/`: primitives that know nothing about the business (shadcn).
 - `components/layout/`: the application frame (sidebar, headers, command
   palette, main layout).
-- `components/common/` and other `components/<name>/`: only UI shared by
-  several domains and owned by none (query/loading states, image viewer,
-  sandboxed HTML frame, timeline/gantt, markdown).
-- `components/common/<domain>/` folders still exist for domains that have not
-  moved yet (DTD-524). Add new domain code under `features/<domain>/`, never
-  there. Moving a folder keeps file names, `data-testid` values and roles.
+- `components/common/`: only UI shared by several domains and owned by none
+  (query/loading states, image viewer, sandboxed HTML frame, timeline/gantt,
+  markdown editor and preview). Never add a `components/common/<domain>/`
+  folder; domain code goes under `features/<domain>/`.
+- `components/brand/` (logo) and `components/data-table-filter/` (vendored
+  bazza/ui filter, lint-exempted) are the only other `components/` folders.
+- `features/settings/` holds the settings pages, including integrations and
+  MCP (`mcp/`).
+- Moving code between folders keeps file names, `data-testid` values and
+  roles, so e2e selectors stay valid.
 
 <!-- ASTRYX:START -->
 

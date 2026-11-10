@@ -9,7 +9,7 @@ import { VStack } from '@astryxdesign/core/Layout';
 import { Text } from '@astryxdesign/core/Text';
 import { Selector } from '@astryxdesign/core/Selector';
 import { RefreshIconButton } from '@/features/shared/refresh-icon-button';
-import { SettingsSection } from '@/components/common/settings/shared';
+import { SettingsSection } from '@/features/settings/shared';
 import { usePagedResource } from '@/features/shared/use-paged-resource';
 import { ResourcePagination } from '@/features/shared/resource-pagination';
 import { securityApi, deviceLabel, type SecurityEvent } from './types';

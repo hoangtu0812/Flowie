@@ -13,7 +13,7 @@ import {
    SettingsRow,
    SettingsSection,
    SettingsShell,
-} from '@/components/common/settings/shared';
+} from '@/features/settings/shared';
 type ChannelState = {
    emailAvailable: boolean;
    emailEnabled: boolean;

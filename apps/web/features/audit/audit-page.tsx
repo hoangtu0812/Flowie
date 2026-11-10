@@ -13,7 +13,7 @@ import { RecoveryScreen } from '@/features/shared/recovery-screen';
 import { ResourcePagination } from '@/features/shared/resource-pagination';
 import { usePagedResource } from '@/features/shared/use-paged-resource';
 import { downloadFile } from '@/features/shared/download-file';
-import { SettingsShell } from '@/components/common/settings/shared';
+import { SettingsShell } from '@/features/settings/shared';
 
 type AuditEvent = {
    id: string;

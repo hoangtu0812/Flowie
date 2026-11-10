@@ -1,5 +1,5 @@
 import MainLayout from '@/components/layout/main-layout';
-import AiAgents from '@/components/common/settings/ai-agents';
+import AiAgents from '@/features/settings/ai-agents';
 import Header from '@/components/layout/headers/settings/header';
 
 export default function Page() {

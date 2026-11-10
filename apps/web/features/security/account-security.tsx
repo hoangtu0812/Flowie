@@ -14,7 +14,7 @@ import { DeviceSessions } from './device-sessions';
 import { LoginHistory } from './login-history';
 import { CredentialInventory } from './credential-inventory';
 import { Authenticator } from './authenticator';
-import { SettingsShell } from '@/components/common/settings/shared';
+import { SettingsShell } from '@/features/settings/shared';
 
 export default function AccountSecurity() {
    const tx = useMessages(messages);

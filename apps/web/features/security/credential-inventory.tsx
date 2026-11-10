@@ -14,7 +14,7 @@ import { responseData } from '@/lib/http';
 import { usePagedResource } from '@/features/shared/use-paged-resource';
 import { ResourcePagination } from '@/features/shared/resource-pagination';
 import { RefreshIconButton } from '@/features/shared/refresh-icon-button';
-import { SettingsRow, SettingsSection } from '@/components/common/settings/shared';
+import { SettingsRow, SettingsSection } from '@/features/settings/shared';
 import { securityApi, type Credential } from './types';
 import { ConfirmRow } from './confirm-row';
 

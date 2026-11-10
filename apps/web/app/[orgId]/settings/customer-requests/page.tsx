@@ -1,4 +1,4 @@
-import CustomerRequestsSettings from '@/components/common/settings/customer-requests-settings';
+import CustomerRequestsSettings from '@/features/settings/customer-requests-settings';
 import MainLayout from '@/components/layout/main-layout';
 import Header from '@/components/layout/headers/settings/header';
 

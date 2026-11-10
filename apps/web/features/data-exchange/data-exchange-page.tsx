@@ -12,7 +12,7 @@ import { authenticatedFetch, loadCurrentWorkspaceMembership } from '@/lib/worksp
 import { responseData } from '@/lib/http';
 import { ImportPanel } from './import-panel';
 import { DocumentExportPanel } from './export-panel';
-import { SettingsShell } from '@/components/common/settings/shared';
+import { SettingsShell } from '@/features/settings/shared';
 
 export default function DataExchangePage() {
    const tx = useMessages(messages);

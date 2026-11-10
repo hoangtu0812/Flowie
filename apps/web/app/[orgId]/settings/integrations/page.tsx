@@ -1,4 +1,4 @@
-import Integrations from '@/components/common/settings/integrations';
+import Integrations from '@/features/settings/integrations';
 import Header from '@/components/layout/headers/settings/header';
 import MainLayout from '@/components/layout/main-layout';
 

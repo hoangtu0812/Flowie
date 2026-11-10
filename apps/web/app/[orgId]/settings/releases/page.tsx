@@ -1,4 +1,4 @@
-import ReleasesSettings from '@/components/common/settings/releases-settings';
+import ReleasesSettings from '@/features/settings/releases-settings';
 import MainLayout from '@/components/layout/main-layout';
 import Header from '@/components/layout/headers/settings/header';
 

@@ -6,7 +6,7 @@ import { Token } from '@astryxdesign/core/Token';
 import { DesignSurface } from '@/components/common/design-surface';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import { responseData } from '@/lib/http';
-import { SettingsSection, SettingsShell } from '@/components/common/settings/shared';
+import { SettingsSection, SettingsShell } from '@/features/settings/shared';
 import { RefreshIconButton } from '@/features/shared/refresh-icon-button';
 import { formatLag } from './format-lag';
 
