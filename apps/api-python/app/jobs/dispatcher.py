@@ -7,13 +7,13 @@ from collections.abc import Awaitable, Callable
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from ..domains.team_dispatcher import (
+from ..modules.operations.heartbeats import progress
+from ..modules.teams.dispatcher_api import (
     dispatch_cutoff_utc,
     hcm_today,
     run_team_dispatcher,
     seconds_until_next_dispatch,
 )
-from ..modules.operations.heartbeats import progress
 
 logger = logging.getLogger(__name__)
 

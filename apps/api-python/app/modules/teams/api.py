@@ -11,13 +11,13 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.clock import utcnow
-from ..core.errors import ApiError
-from ..core.identifiers import cuid
-from ..core.utc_responses import UtcAPIRouter as APIRouter
-from ..db.session import get_session
-from ..modules.access.membership import _owner, manager, workspace_role
-from ..modules.identity.auth import current_user
+from ...core.clock import utcnow
+from ...core.errors import ApiError
+from ...core.identifiers import cuid
+from ...core.utc_responses import UtcAPIRouter as APIRouter
+from ...db.session import get_session
+from ..access.membership import manager, owner, workspace_role
+from ..identity.auth import current_user
 
 router = APIRouter(prefix='/api/v1/teams', tags=['teams'])
 RESTORE_WINDOW_DAYS = 30
@@ -130,7 +130,7 @@ async def create_team(payload: CreateTeamInput, user: Any = Depends(current_user
         await db.execute(text('''INSERT INTO teams (id, workspace_id, name, identifier, description, icon, color, created_at, updated_at) VALUES (:id, :workspace_id, :name, :identifier, :description, :icon, :color, :now, :now)'''), {'id': team_id, 'workspace_id': payload.workspaceId, 'name': name, 'identifier': identifier, 'description': payload.description, 'icon': payload.icon or '👥', 'color': payload.color or '#6366f1', 'now': now})
         # Administrators may create teams, but only an owner can grant membership.
         if await workspace_role(db, payload.workspaceId, user['id']) == 'OWNER':
-            await _owner(db, payload.workspaceId, user['id'])
+            await owner(db, payload.workspaceId, user['id'])
             await db.execute(text("INSERT INTO team_members (team_id, user_id, role) VALUES (:team_id, :user_id, 'LEAD')"), {'team_id': team_id, 'user_id': user['id']})
         await db.execute(text("INSERT INTO document_folders (id, workspace_id, team_id, name, icon, position, created_at, updated_at) VALUES (:id, :workspace_id, :team_id, 'Team documents', '📁', 0, :now, :now)"), {'id': cuid(), 'workspace_id': payload.workspaceId, 'team_id': team_id, 'now': now})
         await db.commit()
@@ -268,7 +268,7 @@ async def restore_team(team_id: str, workspaceId: str = Query(min_length=1), use
 
 @router.post('/{team_id}/members')
 async def add_member(team_id: str, payload: TeamMemberInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    await _owner(db, payload.workspaceId, user['id'])
+    await owner(db, payload.workspaceId, user['id'])
     if not await _team_row(db, team_id, payload.workspaceId): raise ApiError(404, 'Team not found.', 'Not Found')
     active = await db.execute(text("SELECT 1 FROM workspace_members WHERE workspace_id = :workspace_id AND user_id = :user_id AND status = 'ACTIVE'"), {'workspace_id': payload.workspaceId, 'user_id': payload.userId})
     if active.scalar_one_or_none() is None: raise ApiError(404, 'Workspace member not found.', 'Not Found')
@@ -282,7 +282,7 @@ async def add_member(team_id: str, payload: TeamMemberInput, user: Any = Depends
 
 @router.post('/{team_id}/join')
 async def join_team(team_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    await _owner(db, workspaceId, user['id'])
+    await owner(db, workspaceId, user['id'])
     team = await _team_row(db, team_id, workspaceId)
     if not team: raise ApiError(404, 'Team not found.', 'Not Found')
     await db.execute(text("INSERT INTO team_members (team_id, user_id, role) VALUES (:team_id, :user_id, 'MEMBER') ON CONFLICT (team_id, user_id) DO NOTHING"), {'team_id': team_id, 'user_id': user['id']})

@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.domains.team_insights import (
+from app.modules.teams.insights_api import (
     digest_cutoff_utc,
     digest_embeds,
     issue_link,

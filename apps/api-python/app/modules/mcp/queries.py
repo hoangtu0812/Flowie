@@ -541,7 +541,7 @@ class QueryService:
             )
         ).mappings()
         related = [dict(row) for row in relations]
-        from ...domains.team_insights import hcm_today
+        from ..teams.insights_api import hcm_today
         from .planning import planning_summary
 
         detail = await self.issue(payload)
