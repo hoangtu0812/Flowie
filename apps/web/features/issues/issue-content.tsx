@@ -9,25 +9,25 @@ import { IssueDocuments } from '@/features/documents/issue-documents';
 import { IssueDocumentLinks } from '@/features/documents/issue-document-links';
 import { useIssueDocuments } from '@/features/documents/use-issue-documents';
 import { DocumentView } from '@/features/documents/document-page';
-import { ActivityEvents, CommentsSection } from '@/components/common/issues/details/activity-feed';
+import { ActivityEvents, CommentsSection } from '@/features/issues/details/activity-feed';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useLocale } from '@/features/shared/use-locale';
 import { useIssuesStore } from '@/store/issues-store';
 import { useIssueActivity } from './use-issue-activity';
 import { useIssueAttachments } from './use-issue-attachments';
 import { IssueTicketLink } from '@/features/service-desk/issue-ticket-link';
-import { IssueDescription } from '@/components/common/issues/details/issue-description';
-import { IssueAttachments } from '@/components/common/issues/details/issue-attachments';
-import { IssueReactions } from '@/components/common/issues/details/issue-reactions';
-import { IssueSubIssues } from '@/components/common/issues/details/issue-sub-issues';
-import { IssueParent } from '@/components/common/issues/details/issue-parent';
-import { IssuePropertiesPanel } from '@/components/common/issues/details/issue-properties-panel';
-import { MobileIssueProperties } from '@/components/common/issues/details/mobile-issue-properties';
+import { IssueDescription } from '@/features/issues/details/issue-description';
+import { IssueAttachments } from '@/features/issues/details/issue-attachments';
+import { IssueReactions } from '@/features/issues/details/issue-reactions';
+import { IssueSubIssues } from '@/features/issues/details/issue-sub-issues';
+import { IssueParent } from '@/features/issues/details/issue-parent';
+import { IssuePropertiesPanel } from '@/features/issues/details/issue-properties-panel';
+import { MobileIssueProperties } from '@/features/issues/details/mobile-issue-properties';
 import { IssueSlaPanel } from '@/features/sla/issue-sla-panel';
 import {
    IssuePullRequests,
    useIssueReviews,
-} from '@/components/common/issues/details/issue-pull-requests';
+} from '@/features/issues/details/issue-pull-requests';
 
 const TABS = ['overview', 'activity', 'attachments'] as const;
 type IssueTab = (typeof TABS)[number];

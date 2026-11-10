@@ -1,4 +1,4 @@
-import { CycleView } from '@/components/common/issues/cycle-issues';
+import { CycleView } from '@/features/issues/cycle-issues';
 import HeaderNav from './header-nav';
 import HeaderOptions from './header-options';
 

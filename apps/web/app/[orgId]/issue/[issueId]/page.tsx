@@ -1,4 +1,4 @@
-import IssueDetails from '@/components/common/issues/details/issue-details';
+import IssueDetails from '@/features/issues/details/issue-details';
 import Header from '@/components/layout/headers/issue/header';
 import MainLayout from '@/components/layout/main-layout';
 

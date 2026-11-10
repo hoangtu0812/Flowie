@@ -31,11 +31,11 @@ Key facts for coding agents:
 ## Key UI
 
 - [components/layout/main-layout.tsx](./components/layout/main-layout.tsx): app shell used by every page
-- [components/common/issues/all-issues.tsx](./components/common/issues/all-issues.tsx): grouped issue views (list/board, category tabs, insights panel)
-- [components/common/issues/cycle-issues.tsx](./components/common/issues/cycle-issues.tsx): cycle-scoped issue view with side panels
-- [components/common/issues/details/issue-details.tsx](./components/common/issues/details/issue-details.tsx): issue detail page (blocks renderer, activity, properties panel)
+- [features/issues/all-issues.tsx](./features/issues/all-issues.tsx): grouped issue views (list/board, category tabs, insights panel)
+- [features/issues/cycle-issues.tsx](./features/issues/cycle-issues.tsx): cycle-scoped issue view with side panels
+- [features/issues/details/issue-details.tsx](./features/issues/details/issue-details.tsx): issue detail page (blocks renderer, activity, properties panel)
 - [components/layout/headers/display-options.tsx](./components/layout/headers/display-options.tsx): Linear-style Display popover (grouping, ordering, display properties)
-- [components/common/issues/issue-filter-columns.tsx](./components/common/issues/issue-filter-columns.tsx): filterable columns config + applyIssueFilters (operators)
+- [features/issues/issue-filter-columns.tsx](./features/issues/issue-filter-columns.tsx): filterable columns config + applyIssueFilters (operators)
 - [components/data-table-filter](./components/data-table-filter): vendored bazza/ui filter component (chips UI, filter fns)
 - [features/cycles/cycles.tsx](./features/cycles/cycles.tsx): cycles timeline with burn-up chart
 - [features/members/member-profile.tsx](./features/members/member-profile.tsx): member profile (Assigned/Created tabs, identity panel, breakdowns)

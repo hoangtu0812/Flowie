@@ -9,7 +9,7 @@ import {
    useMyIssuesTab,
 } from '@/features/my-issues/use-my-issues';
 import { IssueListActions } from '@/features/issues/issue-list-actions';
-import { IssueFilterTrigger } from '@/components/common/issues/issue-filter-trigger';
+import { IssueFilterTrigger } from '@/features/issues/issue-filter-trigger';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { SidebarTrigger } from '@/components/ui/sidebar';

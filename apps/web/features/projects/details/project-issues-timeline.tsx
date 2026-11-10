@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 import { issueSpan } from '@/lib/issue-span';
 import { issueTree } from '@/lib/issue-tree';
 import { TimelineIssueBar } from '@/components/common/timeline/timeline-issue-bar';
-import { IssuePeekPanel } from '@/components/common/issues/issue-peek-panel';
+import { IssuePeekPanel } from '@/features/issues/issue-peek-panel';
 import type { ProjectDetailUiIssue } from './project-detail-ui-adapter';
 import { format, parseISO } from 'date-fns';
 import { ChevronRight } from 'lucide-react';

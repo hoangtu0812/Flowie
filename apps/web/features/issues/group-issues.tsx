@@ -10,7 +10,7 @@ import { ChevronDown, Plus } from 'lucide-react';
 import { FC, ReactNode, useEffect, useRef, useState } from 'react';
 import { useDrop } from 'react-dnd';
 import { AnimatePresence, motion } from 'motion/react';
-import { Button } from '../../ui/button';
+import { Button } from '@/components/ui/button';
 import { IssueDragType, IssueGrid } from './issue-grid';
 import { IssueLine } from './issue-line';
 import { ReorderRow, ReorderProvider } from '@/features/manual-order/reorder-row';

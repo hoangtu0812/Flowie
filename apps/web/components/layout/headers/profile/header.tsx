@@ -1,7 +1,7 @@
 'use client';
 
 import { IssueListActions } from '@/features/issues/issue-list-actions';
-import { IssueFilterTrigger } from '@/components/common/issues/issue-filter-trigger';
+import { IssueFilterTrigger } from '@/features/issues/issue-filter-trigger';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

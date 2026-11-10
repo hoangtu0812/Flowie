@@ -4,7 +4,7 @@ import { ResourcePagination } from '@/features/shared/resource-pagination';
 import type { LiveProjectUpdate } from './use-live-project';
 
 import { LoadingState } from '@/components/common/loading-state';
-import { ContentBlocks } from '@/components/common/issues/details/content-blocks';
+import { ContentBlocks } from '@/features/issues/details/content-blocks';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {

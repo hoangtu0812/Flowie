@@ -1,10 +1,10 @@
 'use client';
 
 import { useIssueQuery } from '@/features/issues/use-issue-query';
-import { applyIssueFilters } from '@/components/common/issues/issue-filter-columns';
-import { IssueFilterBar } from '@/components/common/issues/issue-filter-bar';
-import { GroupedIssuesView } from '@/components/common/issues/grouped-issues-view';
-import { InsightsPanel } from '@/components/common/issues/insights-panel';
+import { applyIssueFilters } from '@/features/issues/issue-filter-columns';
+import { IssueFilterBar } from '@/features/issues/issue-filter-bar';
+import { GroupedIssuesView } from '@/features/issues/grouped-issues-view';
+import { InsightsPanel } from '@/features/issues/insights-panel';
 import { BreakdownPanel } from './breakdown-panel';
 import { useFilterStore } from '@/store/filter-store';
 import { useIssuesStore } from '@/store/issues-store';

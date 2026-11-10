@@ -19,7 +19,7 @@ import {
    SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { PanelFilterTarget, usePanelFilter } from '@/components/common/issues/use-panel-filter';
+import { PanelFilterTarget, usePanelFilter } from '@/features/issues/use-panel-filter';
 import { priorities } from '@/lib/priority-presentations';
 import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
