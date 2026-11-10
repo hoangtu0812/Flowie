@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...core.clock import _utcnow
 from ...core.errors import ApiError
 from ...domains.agent import configured_provider
-from ...domains.ai_calls import call_provider
+from ..ai.calls import call_provider
 from .feeds import plain_text
 
 logger = logging.getLogger(__name__)

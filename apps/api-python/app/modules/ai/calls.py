@@ -16,9 +16,9 @@ import httpx
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.clock import _utcnow
-from ..core.errors import ApiError
-from ..core.identifiers import _cuid
+from ...core.clock import utcnow
+from ...core.errors import ApiError
+from ...core.identifiers import cuid
 
 logger = logging.getLogger(__name__)
 
@@ -175,13 +175,13 @@ async def _save(provider: dict[str, Any], feature: str, record: dict[str, Any], 
                 ),
                 {
                     **record,
-                    'id': _cuid(),
+                    'id': cuid(),
                     'workspace_id': provider['workspaceId'],
                     'feature': feature,
                     'provider': provider['provider'],
                     'model': provider['model'],
                     'duration_ms': round((monotonic() - started) * 1000),
-                    'now': _utcnow(),
+                    'now': utcnow(),
                 },
             )
             await db.commit()

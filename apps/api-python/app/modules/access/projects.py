@@ -7,7 +7,7 @@ from ...core.errors import ApiError
 from .read_only import ADMIN_READ_ROLES
 
 
-async def _workspace_access(db: AsyncSession, workspace_id: str, user_id: str) -> None:
+async def workspace_access(db: AsyncSession, workspace_id: str, user_id: str) -> None:
     result = await db.execute(
         text(
             "SELECT 1 FROM workspace_members WHERE workspace_id = :workspace_id AND user_id = :user_id AND status = 'ACTIVE'"
@@ -18,7 +18,7 @@ async def _workspace_access(db: AsyncSession, workspace_id: str, user_id: str) -
         raise ApiError(403, "You do not have access to this workspace.", "Forbidden")
 
 
-async def _workspace_manager(db: AsyncSession, workspace_id: str, user_id: str) -> None:
+async def workspace_manager(db: AsyncSession, workspace_id: str, user_id: str) -> None:
     result = await db.execute(
         text(
             "SELECT role FROM workspace_members WHERE workspace_id = :workspace_id AND user_id = :user_id AND status = 'ACTIVE'"
@@ -33,7 +33,7 @@ async def _workspace_manager(db: AsyncSession, workspace_id: str, user_id: str) 
 async def _team_access(
     db: AsyncSession, workspace_id: str, team_id: str, user_id: str
 ) -> None:
-    await _workspace_access(db, workspace_id, user_id)
+    await workspace_access(db, workspace_id, user_id)
     result = await db.execute(
         text(
             """SELECT 1 FROM teams t JOIN team_members tm ON tm.team_id = t.id WHERE t.id = :team_id AND t.workspace_id = :workspace_id AND t.archived_at IS NULL AND tm.user_id = :user_id"""
@@ -42,3 +42,11 @@ async def _team_access(
     )
     if result.scalar_one_or_none() is None:
         raise ApiError(403, "You do not have access to this team.", "Forbidden")
+
+
+# shortcut: private aliases kept for callers not yet moved out of app/domains; delete them once
+# DTD-523 has switched every caller to the public names.
+# VI: shortcut: alias nội bộ giữ cho các nơi gọi chưa chuyển khỏi app/domains; xoá khi DTD-523 đã
+# VI: chuyển mọi nơi gọi sang tên công khai.
+_workspace_access = workspace_access
+_workspace_manager = workspace_manager

@@ -16,8 +16,6 @@ from .db.session import create_session_factory
 from .domains.agent import router as agent_router
 from .domains.approvals import router as approvals_router
 from .domains.auth import router as auth_router
-from .domains.labels import router as labels_router
-from .domains.link_metadata import router as link_metadata_router
 from .domains.native_activities import public_router as activities_router
 from .domains.native_activities import router as native_activities_router
 from .domains.native_admin import router as admin_router
@@ -30,7 +28,6 @@ from .domains.native_customer_requests import router as customer_requests_router
 from .domains.native_cycles import public_router as cycles_router
 from .domains.native_cycles import router as native_cycles_router
 from .domains.native_documents import router as native_documents_router
-from .domains.native_emojis import router as emojis_router
 from .domains.native_initiatives import public_router as initiatives_router
 from .domains.native_initiatives import router as native_initiatives_router
 from .domains.native_integrations import router as integrations_router
@@ -58,7 +55,10 @@ from .jobs.reminders import reminder_loop
 from .jobs.scm_deliveries import scm_delivery_loop
 from .jobs.scm_sync import scm_sync_loop
 from .modules.agent_runs.api import router as agent_runs_router
+from .modules.emojis.api import router as emojis_router
 from .modules.identity.api import router as password_reset_router
+from .modules.labels.api import router as labels_router
+from .modules.link_metadata.api import router as link_metadata_router
 from .modules.mcp.api import router as mcp_management_router
 from .modules.mcp.maintenance import maintenance_loop
 from .modules.mcp.uploads import router as mcp_upload_router

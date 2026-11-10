@@ -42,8 +42,14 @@ class UnreadableSpreadsheet(Exception):
 
 def _column(reference: str) -> int:
     """Zero-based column of a cell reference such as `AB12`. VI: Cột (từ 0) của ô như `AB12`."""
+    # A reference without column letters is a malformed workbook; ValueError makes the caller
+    # report it as unreadable.
+    # VI: Tham chiếu không có chữ cột là workbook hỏng; ValueError khiến nơi gọi báo là không đọc được.
+    found = CELL_REFERENCE.match(reference)
+    if found is None:
+        raise ValueError(f"Not a cell reference: {reference!r}")
     index = 0
-    for letter in CELL_REFERENCE.match(reference).group(1):
+    for letter in found.group(1):
         index = index * 26 + ord(letter) - 64
     return index - 1
 
@@ -99,7 +105,7 @@ def xlsx_sheets(body: bytes) -> list[Sheet]:
                         rows += [[]] * (number - 1 - len(rows))
                         values: list[str] = []
                         for cell in row.iter(f"{MAIN}c"):
-                            column = _column(cell.get("r")) if cell.get("r") else len(values)
+                            column = _column(reference) if (reference := cell.get("r")) else len(values)
                             if column >= MAX_COLUMNS:
                                 truncated = True
                                 continue

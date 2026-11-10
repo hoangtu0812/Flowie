@@ -15,9 +15,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.errors import ApiError
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
+from ..modules.attachments.tables import (
+    UnreadableSpreadsheet,
+    csv_sheet,
+    table_page,
+    xlsx_sheets,
+)
 from ..modules.sharepoint.graph import viewer_url
 from ..storage.minio import MinioStorage
-from .attachment_tables import UnreadableSpreadsheet, csv_sheet, table_page, xlsx_sheets
 from .auth import _cuid, _utcnow, current_user
 from .native_projects import _team_access, _workspace_access
 

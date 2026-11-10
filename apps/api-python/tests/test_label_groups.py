@@ -13,7 +13,7 @@ import pytest
 from sqlalchemy import text
 
 from app.core.errors import ApiError
-from app.domains.labels import (
+from app.modules.labels.api import (
     CreateLabelGroupInput,
     CreateLabelInput,
     UpdateLabelGroupInput,

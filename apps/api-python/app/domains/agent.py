@@ -26,8 +26,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.errors import ApiError
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
+from ..modules.ai.calls import PROVIDER_LABELS, call_provider
 from ..modules.identity.password_reset import limit_request
-from .ai_calls import PROVIDER_LABELS, call_provider
 from .auth import _cuid, _utcnow, current_user
 from .native_issues import CreateIssueInput, create_issue
 from .native_projects import (

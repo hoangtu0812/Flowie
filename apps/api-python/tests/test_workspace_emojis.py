@@ -18,8 +18,8 @@ from fastapi import UploadFile
 from sqlalchemy import text
 
 from app.core.errors import ApiError
-from app.domains import native_emojis
-from app.domains.native_emojis import _image_mime, upload_emoji
+from app.modules.emojis import api as native_emojis
+from app.modules.emojis.api import _image_mime, upload_emoji
 from tests.seeded_workspace import seeded_workspace
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
