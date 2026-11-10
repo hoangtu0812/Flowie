@@ -64,6 +64,8 @@ pull request and commit references, which are for us.
 
 ### Changed
 
+- The API registers its routers from one explicit, ordered list in `app/routers.py` instead of about 50 hand-written imports in `main.py`; the route table is identical before and after (492 routes, or 493 with MCP enabled). Rebuild `api`; no migration. (DTD-527, #268)
+  VI: API đăng ký router từ một danh sách tường minh, có thứ tự trong `app/routers.py` thay cho khoảng 50 dòng import viết tay trong `main.py`; bảng route giữ nguyên trước và sau (492 route, hoặc 493 khi bật MCP). Build lại `api`; không có migration. (DTD-527)
 - API modules no longer import each other's private helpers by name: the document team check, issue reference and date validation, the Teams test message, the integrations admin check and the project document-team lookup now have public names. Every route, response and permission check stays the same. Rebuild `api`; no migration. (DTD-523, DTD-761, #267)
   VI: Các module API không còn import helper nội bộ của nhau theo tên: kiểm tra team của tài liệu, kiểm tra tham chiếu và ngày của issue, tin nhắn thử Teams, kiểm tra quyền quản trị integrations và tra team tài liệu của dự án nay có tên public. Mọi route, phản hồi và kiểm tra quyền giữ nguyên. Build lại `api`; không có migration. (DTD-523, DTD-761)
 - The Agent API (chat, planning, Write with Agent, provider settings and personal skills) now lives in `app/modules/agent`, and the old `app/domains` package is gone. All API code is now type checked at the same level, with no exception for `app/domains` in `mypy.ini` or `ruff.toml`. Every route, response, permission check and provider rule stays the same. Rebuild `api`; no migration. (DTD-523, DTD-760, #266)
