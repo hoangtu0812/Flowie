@@ -2,16 +2,16 @@ from datetime import datetime
 
 from sqlalchemy import text
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.errors import ApiError
 from ...core.pagination import CursorCodec
-from ..access.projects import _workspace_access
+from ..access.projects import workspace_access
 from .history_sql import history_ctes, scoped_sql
 
 
 async def workflow_report(db, workspace, user, query, *, now=None):
-    await _workspace_access(db, workspace, user["id"])
-    now = now or _utcnow()
+    await workspace_access(db, workspace, user["id"])
+    now = now or utcnow()
     scope, params = scoped_sql(workspace, user["id"], query.selection.options())
     params.update(query.parameters(now))
     sql = (
@@ -60,9 +60,9 @@ async def workflow_report(db, workspace, user, query, *, now=None):
 
 
 async def workload_page(db, workspace, user, query, secret, *, cursor=None, limit=50):
-    await _workspace_access(db, workspace, user["id"])
+    await workspace_access(db, workspace, user["id"])
     scope, params = scoped_sql(workspace, user["id"], query.selection.options())
-    params.update(query.parameters(_utcnow()))
+    params.update(query.parameters(utcnow()))
     ctes = (
         """WITH scoped AS ("""
         + scope

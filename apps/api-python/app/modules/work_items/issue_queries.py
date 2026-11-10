@@ -7,9 +7,9 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.errors import ApiError
-from ..access.projects import _workspace_access
+from ..access.projects import workspace_access
 from .bug_contracts import BUG_COLUMNS
 
 
@@ -116,7 +116,7 @@ async def _issue_rows(
 async def issue_row(
     db: AsyncSession, issue_id: str, workspace_id: str, user_id: str
 ) -> dict[str, Any]:
-    await _workspace_access(db, workspace_id, user_id)
+    await workspace_access(db, workspace_id, user_id)
     rows = await _issue_rows(db, [issue_id], workspace_id, user_id)
     if not rows:
         raise ApiError(404, "Issue not found or inaccessible.", "Not Found")
@@ -200,7 +200,7 @@ def _present_issue(row, labels, cycles, releases, user_id):
             "lastSeenAt": row.get("assignee_last_seen_at"),
             "isOnline": bool(
                 row.get("assignee_last_seen_at")
-                and row["assignee_last_seen_at"] >= _utcnow() - timedelta(minutes=2)
+                and row["assignee_last_seen_at"] >= utcnow() - timedelta(minutes=2)
             ),
         }
         if row["assignee_id_value"]
@@ -284,10 +284,3 @@ async def _project_name(db: AsyncSession, project_id: str | None) -> str | None:
         text("SELECT name FROM projects WHERE id = :id"), {"id": project_id}
     )
     return result.scalar_one_or_none()
-
-
-# shortcut: private alias kept for callers not yet moved out of app/domains; delete it once DTD-523
-# has switched every caller to `issue_row`.
-# VI: shortcut: alias nội bộ giữ cho các nơi gọi chưa chuyển khỏi app/domains; xoá khi DTD-523 đã
-# VI: chuyển mọi nơi gọi sang `issue_row`.
-_issue_row = issue_row

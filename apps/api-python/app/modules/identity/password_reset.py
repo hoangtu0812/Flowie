@@ -9,15 +9,15 @@ from argon2 import PasswordHasher
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.errors import ApiError
-from ...core.identifiers import _cuid, _hash_token
+from ...core.identifiers import cuid, hash_token
 
 
 async def limit_request(
     db: AsyncSession, secret: str, kind: str, identity: str, limit: int
 ) -> None:
-    now = _utcnow()
+    now = utcnow()
     key = sha256(f"{secret}:{kind}:{identity}".encode()).hexdigest()
     count = (
         await db.execute(
@@ -53,7 +53,7 @@ async def issue_reset(db: AsyncSession, email: str) -> str | None:
     )
     if not user:
         return None
-    now, token = _utcnow(), token_urlsafe(48)
+    now, token = utcnow(), token_urlsafe(48)
     await db.execute(
         text(
             "UPDATE password_reset_tokens SET used_at=:now WHERE user_id=:user AND used_at IS NULL"
@@ -64,9 +64,9 @@ async def issue_reset(db: AsyncSession, email: str) -> str | None:
         text("""INSERT INTO password_reset_tokens (id,user_id,token_hash,expires_at,created_at)
         VALUES (:id,:user,:hash,:expires,:now)"""),
         {
-            "id": _cuid(),
+            "id": cuid(),
             "user": user["id"],
-            "hash": _hash_token(token),
+            "hash": hash_token(token),
             "expires": now + timedelta(minutes=15),
             "now": now,
         },
@@ -78,12 +78,12 @@ async def issue_reset(db: AsyncSession, email: str) -> str | None:
 async def consume_reset(db: AsyncSession, token: str, password: str) -> str:
     # Hash before selecting a valid token so invalid tokens perform comparable password work.
     password_hash = await asyncio.to_thread(PasswordHasher().hash, password)
-    now = _utcnow()
+    now = utcnow()
     # Issuing and consuming resets lock the user before any token to avoid lock inversion.
     candidate = (
         await db.execute(
             text("SELECT user_id FROM password_reset_tokens WHERE token_hash=:hash"),
-            {"hash": _hash_token(token)},
+            {"hash": hash_token(token)},
         )
     ).scalar_one_or_none()
     if candidate:
@@ -96,7 +96,7 @@ async def consume_reset(db: AsyncSession, token: str, password: str) -> str:
                 text("""SELECT r.id,r.user_id FROM password_reset_tokens r
         JOIN users u ON u.id=r.user_id WHERE r.token_hash=:hash AND r.used_at IS NULL
         AND r.expires_at>:now AND u.status='ACTIVE' AND u.password_hash IS NOT NULL FOR UPDATE OF r,u"""),
-                {"hash": _hash_token(token), "now": now},
+                {"hash": hash_token(token), "now": now},
             )
         )
         .mappings()

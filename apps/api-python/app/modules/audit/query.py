@@ -6,7 +6,7 @@ from sqlalchemy import text
 from ...core.errors import ApiError
 from ...core.pagination import CursorCodec
 from ..access.project_scope import project_read_scope
-from ..access.projects import _workspace_manager
+from ..access.projects import workspace_manager
 
 EVENTS = """WITH events AS (
     SELECT 'audit:'||id AS id,workspace_id,actor_id,action,entity_type,entity_id,metadata,created_at FROM audit_logs
@@ -108,7 +108,7 @@ def present(row):
 async def audit_page(
     db, workspace, user, secret, filters, *, limit=50, cursor=None, export=False
 ):
-    await _workspace_manager(db, workspace, user)
+    await workspace_manager(db, workspace, user)
     predicate, params = query_scope(workspace, user, filters)
     codec = CursorCodec(
         secret,

@@ -22,8 +22,8 @@ from typing import Any, cast
 from sqlalchemy import CursorResult, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from ..core.clock import _utcnow
-from ..core.identifiers import _cuid
+from ..core.clock import utcnow
+from ..core.identifiers import cuid
 from ..core.utc_responses import utc_response_value
 
 logger = logging.getLogger(__name__)
@@ -78,8 +78,8 @@ async def _create_generated_cycle(db: AsyncSession, team: dict[str, Any], names:
     if not writes_enabled:
         _next_cycle_name(names)
         return True
-    now = _utcnow()
-    cycle_id = _cuid()
+    now = utcnow()
+    cycle_id = cuid()
     await db.execute(
         text('''INSERT INTO cycles (id, workspace_id, team_id, name, status, start_date, end_date,
                                     created_at, updated_at)
@@ -94,7 +94,7 @@ async def _create_generated_cycle(db: AsyncSession, team: dict[str, Any], names:
                                         metadata, created_at)
                 VALUES (:id, :workspace_id, NULL, 'cycle.auto_generated', 'cycle', :entity_id,
                         CAST(:metadata AS jsonb), :now)'''),
-        {'id': _cuid(), 'workspace_id': team['workspace_id'], 'entity_id': cycle_id,
+        {'id': cuid(), 'workspace_id': team['workspace_id'], 'entity_id': cycle_id,
          # The span lands in a jsonb column that no response serialiser touches
          # again, so the offset has to be attached here. The worker this
          # replaces wrote a UTC designator and a reader of the audit trail
@@ -142,7 +142,7 @@ async def _apply_team_cadence(db: AsyncSession, team: dict[str, Any], today: dat
             text('''UPDATE cycles SET status = 'COMPLETED', updated_at = :now
                     WHERE team_id = :team_id AND status IN ('ACTIVE', 'UPCOMING')
                       AND end_date < :today'''),
-            {'team_id': team['id'], 'today': today, 'now': _utcnow()},
+            {'team_id': team['id'], 'today': today, 'now': utcnow()},
         )
         completed = cast(CursorResult[Any], result).rowcount or 0
     else:
@@ -168,7 +168,7 @@ async def _apply_team_cadence(db: AsyncSession, team: dict[str, Any], today: dat
             result = await db.execute(
                 text("UPDATE cycles SET status = 'ACTIVE', updated_at = :now"
                      " WHERE id = :id AND status = 'UPCOMING'"),
-                {'id': covering_cycle['id'], 'now': _utcnow()},
+                {'id': covering_cycle['id'], 'now': utcnow()},
             )
             activated = cast(CursorResult[Any], result).rowcount or 0
         else:
@@ -217,7 +217,7 @@ async def run_cycle_cadence(factory: async_sessionmaker[AsyncSession], now: date
     VI: Cuộn lịch cho mọi team có cấu hình nhịp cycle. Khi ``writes_enabled`` là
     false thì không ghi gì và các con số mô tả việc lượt chạy đó lẽ ra đã làm.
     """
-    today = start_of_utc_day(now or _utcnow())
+    today = start_of_utc_day(now or utcnow())
     result = {'teams': 0, 'created': 0, 'activated': 0, 'completed': 0}
     async with factory() as db:
         teams = (await db.execute(

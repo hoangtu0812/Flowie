@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ..operations.heartbeats import progress
 from .feeds import news_cutoff_utc
 from .service import (
@@ -27,7 +27,7 @@ async def fetch_due_news(factory, settings=None) -> int:
     VI: Workspace có card chờ nhãn AI được thử lại mỗi lượt. Danh sách được đọc trước để workspace
     VI: vừa làm mới trong lượt này không bị phân tích hai lần.
     """
-    cutoff = news_cutoff_utc(_utcnow())
+    cutoff = news_cutoff_utc(utcnow())
     async with factory() as db:
         workspaces = await due_workspaces(db, cutoff)
         held = await held_workspaces(db) if settings is not None else []

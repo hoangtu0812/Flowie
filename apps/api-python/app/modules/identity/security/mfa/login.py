@@ -3,9 +3,9 @@ from secrets import token_urlsafe
 
 from sqlalchemy import text
 
-from .....core.clock import _utcnow
+from .....core.clock import utcnow
 from .....core.errors import ApiError
-from .....core.identifiers import _cuid, _hash_token
+from .....core.identifiers import cuid, hash_token
 from ..events import record_event
 from ..sessions import create_session, expired, lock_account
 from .proofs import consume_factor, reject
@@ -47,16 +47,16 @@ async def begin_login(
     configured = await factor(db, user["id"], lock=True)
     if not configured or not configured["enabled_at"]:
         return None
-    now, raw = _utcnow(), token_urlsafe(48)
+    now, raw = utcnow(), token_urlsafe(48)
     await db.execute(
         text(
             """INSERT INTO mfa_challenges(id,user_id,token_hash,auth_version,auth_method,authenticated_at,next_path,expires_at,created_at)
     VALUES (:id,:user,:hash,:version,:method,:proof,:next,:expires,:now)"""
         ),
         {
-            "id": _cuid(),
+            "id": cuid(),
             "user": user["id"],
-            "hash": _hash_token(raw),
+            "hash": hash_token(raw),
             "version": actual["auth_version"],
             "method": method,
             "proof": authenticated_at or (now if method == "PASSWORD" else None),
@@ -74,7 +74,7 @@ async def finish_login(db, raw, code, kind, request, settings):
     owner = (
         await db.execute(
             text("SELECT user_id FROM mfa_challenges WHERE token_hash=:hash"),
-            {"hash": _hash_token(raw)},
+            {"hash": hash_token(raw)},
         )
     ).scalar_one_or_none()
     if owner is None:
@@ -88,13 +88,13 @@ async def finish_login(db, raw, code, kind, request, settings):
         (
             await db.execute(
                 text("SELECT * FROM mfa_challenges WHERE token_hash=:hash FOR UPDATE"),
-                {"hash": _hash_token(raw)},
+                {"hash": hash_token(raw)},
             )
         )
         .mappings()
         .first()
     )
-    now = _utcnow()
+    now = utcnow()
     if challenge and challenge['auth_method'] == 'PASSWORD':
         require_password_sign_in(settings)
     if (

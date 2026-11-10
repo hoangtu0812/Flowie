@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.errors import ApiError
 from .contracts import CommentInput
-from .issue_queries import _issue_row
+from .issue_queries import issue_row
 
 
 def _text_from_body(value: Any) -> str:
@@ -60,7 +60,7 @@ async def _comment(
     row = result.mappings().first()
     if not row:
         raise ApiError(404, "Comment not found.", "Not Found")
-    await _issue_row(db, row["issue_id"], workspace_id, user_id)
+    await issue_row(db, row["issue_id"], workspace_id, user_id)
     reactions = await _reaction_summary(db, comment_id, user_id)
     attachments = await db.execute(
         text(

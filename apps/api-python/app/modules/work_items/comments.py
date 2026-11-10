@@ -6,20 +6,20 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.errors import ApiError
-from ...core.identifiers import _cuid
+from ...core.identifiers import cuid
 from ...modules.notifications.outbox import stage_notifications
 from ...services.notification_events import (
     create_notification_batch,
     issue_recipient_ids,
 )
-from ..access.projects import _workspace_access
+from ..access.projects import workspace_access
 from .comment_mentions import validate_mentions
 from .comment_repository import _comment, _comment_input
 from .contracts import CommentInput, CreateCommentInput
 from .issue_activity import _write_activity
-from .issue_queries import _issue_row
+from .issue_queries import issue_row
 
 
 async def create_comment(
@@ -27,8 +27,8 @@ async def create_comment(
     user: Any,
     db: AsyncSession,
 ) -> dict[str, dict[str, Any]]:
-    await _workspace_access(db, payload.workspaceId, user["id"])
-    issue = await _issue_row(db, payload.issueId, payload.workspaceId, user["id"])
+    await workspace_access(db, payload.workspaceId, user["id"])
+    issue = await issue_row(db, payload.issueId, payload.workspaceId, user["id"])
     content, body = _comment_input(payload)
     mention_ids = await validate_mentions(db, issue, payload.mentionIds or [])
     if payload.parentCommentId:
@@ -44,7 +44,7 @@ async def create_comment(
             if previous['issue_id'] != payload.issueId or previous['content'] != content or previous['body'] != body or previous['parent_comment_id'] != payload.parentCommentId or previous['mention_ids'] != mention_ids or previous['deleted_at']:
                 raise ApiError(409, 'The comment request key was already used for different content.', 'Conflict')
             return {'data': await _comment(db, previous['id'], payload.workspaceId, user['id'])}
-    comment_id, now = _cuid(), _utcnow()
+    comment_id, now = cuid(), utcnow()
     await db.execute(
         text(
             """INSERT INTO comments (id, issue_id, author_id, client_request_key, parent_comment_id, mention_ids, content, body, created_at, updated_at)
@@ -110,7 +110,7 @@ async def update_comment(
     if current["authorId"] != user["id"]:
         raise ApiError(403, "Only the comment author can edit it.", "Forbidden")
     content, body = _comment_input(payload)
-    issue = await _issue_row(db, current['issueId'], workspaceId, user['id'])
+    issue = await issue_row(db, current['issueId'], workspaceId, user['id'])
     mention_ids = await validate_mentions(db, issue, payload.mentionIds if payload.mentionIds is not None else current['mentionIds'])
     await db.execute(
         text(
@@ -121,7 +121,7 @@ async def update_comment(
             "mentions": json.dumps(mention_ids),
             "content": content,
             "body": json.dumps(body),
-            "now": _utcnow(),
+            "now": utcnow(),
         },
     )
     # Only people added by this edit are told; an edit that keeps or removes mentions sends nothing,

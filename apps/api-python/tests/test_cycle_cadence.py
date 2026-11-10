@@ -7,9 +7,9 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.core.clock import _utcnow
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
-from app.core.identifiers import _cuid
+from app.core.identifiers import cuid
 from app.jobs import cycle_cadence
 from app.jobs.cycle_cadence import (
     _create_generated_cycle,
@@ -80,22 +80,22 @@ async def verify_span_identity():
     """
     engine = create_async_engine(_async_database_url(os.environ["MCP_TEST_DATABASE_URL"]))
     factory = async_sessionmaker(engine)
-    user = _cuid()
+    user = cuid()
     seed = None
     try:
         async with factory() as db:
-            now = _utcnow()
+            now = utcnow()
             await db.execute(
                 text("INSERT INTO users(id,name,email,status,email_verified_at,created_at,updated_at)"
                      " VALUES (:id,'Span fixture',:email,'ACTIVE',:now,:now,:now)"),
                 {"id": user, "email": user + "@example.test", "now": now},
             )
             seed = await create_workspace_bootstrap(
-                db, user_id=user, organization_name="Spans", workspace_name=_cuid(), now=now
+                db, user_id=user, organization_name="Spans", workspace_name=cuid(), now=now
             )
             await db.commit()
 
-        today = start_of_utc_day(_utcnow())
+        today = start_of_utc_day(utcnow())
         team = {"id": seed["team_id"], "workspace_id": seed["workspace_id"],
                 "cycle_cadence_weeks": 2}
         names: set[str] = set()
@@ -149,18 +149,18 @@ async def verify_concurrent_cadence():
     """
     engine = create_async_engine(_async_database_url(os.environ["MCP_TEST_DATABASE_URL"]))
     factory = async_sessionmaker(engine)
-    user = _cuid()
+    user = cuid()
     seed = None
     try:
         async with factory() as db:
-            now = _utcnow()
+            now = utcnow()
             await db.execute(
                 text("INSERT INTO users(id,name,email,status,email_verified_at,created_at,updated_at)"
                      " VALUES (:id,'Cadence race fixture',:email,'ACTIVE',:now,:now,:now)"),
                 {"id": user, "email": user + "@example.test", "now": now},
             )
             seed = await create_workspace_bootstrap(
-                db, user_id=user, organization_name="Cadence race", workspace_name=_cuid(), now=now
+                db, user_id=user, organization_name="Cadence race", workspace_name=cuid(), now=now
             )
             await db.execute(
                 text("UPDATE teams SET cycle_cadence_weeks=1 WHERE id=:id"),
@@ -206,18 +206,18 @@ async def verify_cadence():
     """
     engine = create_async_engine(_async_database_url(os.environ["MCP_TEST_DATABASE_URL"]))
     factory = async_sessionmaker(engine)
-    user = _cuid()
+    user = cuid()
     seed = None
     try:
         async with factory() as db:
-            now = _utcnow()
+            now = utcnow()
             await db.execute(
                 text("INSERT INTO users(id,name,email,status,email_verified_at,created_at,updated_at)"
                      " VALUES (:id,'Cadence fixture',:email,'ACTIVE',:now,:now,:now)"),
                 {"id": user, "email": user + "@example.test", "now": now},
             )
             seed = await create_workspace_bootstrap(
-                db, user_id=user, organization_name="Cadence", workspace_name=_cuid(), now=now
+                db, user_id=user, organization_name="Cadence", workspace_name=cuid(), now=now
             )
             await db.execute(
                 text("UPDATE teams SET cycle_cadence_weeks=2 WHERE id=:id"),
@@ -232,7 +232,7 @@ async def verify_cadence():
                 text("INSERT INTO cycles(id,workspace_id,team_id,name,status,start_date,end_date,"
                      "created_at,updated_at)"
                      " VALUES (:id,:workspace,:team,'Cycle 1','ACTIVE',:start,:end,:now,:now)"),
-                {"id": _cuid(), "workspace": seed["workspace_id"], "team": seed["team_id"],
+                {"id": cuid(), "workspace": seed["workspace_id"], "team": seed["team_id"],
                  "start": today - timedelta(days=30), "end": today - timedelta(days=17),
                  "now": now},
             )
@@ -240,7 +240,7 @@ async def verify_cadence():
             # activate exactly this one.
             # VI: Một cycle đang phủ hôm nay nhưng vẫn là UPCOMING: lượt quét
             # VI: phải kích hoạt đúng cycle này.
-            covering = _cuid()
+            covering = cuid()
             await db.execute(
                 text("INSERT INTO cycles(id,workspace_id,team_id,name,status,start_date,end_date,"
                      "created_at,updated_at)"

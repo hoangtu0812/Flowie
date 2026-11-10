@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.core.config import Settings, _async_database_url
 from app.core.errors import ApiError
-from app.core.identifiers import _cuid
+from app.core.identifiers import cuid
 from app.db.session import get_session
 from app.main import create_app
 from app.modules.identity import password_reset
@@ -147,7 +147,7 @@ async def database():
 def test_local_account_conversion_preserves_ownership_and_rejects_identity_collisions():
     async def run():
         async with database() as db:
-            key = _cuid()
+            key = cuid()
             profile = MicrosoftProfile(
                 key, "tenant", key + "@example.test", "Azure user"
             )
@@ -180,7 +180,7 @@ def test_local_account_conversion_preserves_ownership_and_rejects_identity_colli
                 text(
                     "INSERT INTO user_identities(id,user_id,provider,provider_account_id,email,created_at,updated_at) VALUES (:identity,:id,'LOCAL',:email,:email,now(),now())"
                 ),
-                {"identity": _cuid(), "id": user_id, "email": profile.email},
+                {"identity": cuid(), "id": user_id, "email": profile.email},
             )
             await db.execute(
                 text(
@@ -193,12 +193,12 @@ def test_local_account_conversion_preserves_ownership_and_rejects_identity_colli
                     + '"}',
                 },
             )
-            session_id = _cuid()
+            session_id = cuid()
             await db.execute(
                 text(
                     "INSERT INTO sessions(id,user_id,refresh_token_hash,expires_at,created_at) VALUES (:session,:id,:hash,now()+interval '1 day',now())"
                 ),
-                {"session": session_id, "id": user_id, "hash": _cuid()},
+                {"session": session_id, "id": user_id, "hash": cuid()},
             )
             await db.commit()
             assert (
@@ -273,7 +273,7 @@ def test_local_account_conversion_preserves_ownership_and_rejects_identity_colli
             assert user["email"] == renamed.email and user["auth_version"] == 1
             assert not user["is_platform_admin"]
             await db.commit()
-            other = replace(profile, object_id=_cuid(), email="other-" + profile.email)
+            other = replace(profile, object_id=cuid(), email="other-" + profile.email)
             await _upsert_microsoft_user(
                 db, other, timezone_name=None, settings=settings
             )
@@ -305,7 +305,7 @@ def test_local_account_conversion_preserves_ownership_and_rejects_identity_colli
 def test_invitation_candidates_require_management_and_filter_existing_members():
     async def run():
         async with database() as db:
-            key = _cuid()
+            key = cuid()
             profile = MicrosoftProfile(
                 key, "tenant", key + "@example.test", "Directory owner"
             )
@@ -323,7 +323,7 @@ def test_invitation_candidates_require_management_and_filter_existing_members():
                     {"id": owner},
                 )
             ).scalar_one()
-            ids = [_cuid() for _ in range(29)]
+            ids = [cuid() for _ in range(29)]
             for index, identifier in enumerate(ids):
                 await db.execute(
                     text(
@@ -345,7 +345,7 @@ def test_invitation_candidates_require_management_and_filter_existing_members():
                         "INSERT INTO workspace_members(id,workspace_id,user_id,role,status,created_at,updated_at) VALUES (:id,:workspace,:user,'MEMBER',:status,now(),now())"
                     ),
                     {
-                        "id": _cuid(),
+                        "id": cuid(),
                         "workspace": workspace,
                         "user": identifier,
                         "status": status,
@@ -390,7 +390,7 @@ def test_invitation_candidates_require_management_and_filter_existing_members():
                 text(
                     "INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,'Duplicate email',:email,'ACTIVE',now(),now())"
                 ),
-                {"id": _cuid(), "email": (ids[3] + "@example.test").upper()},
+                {"id": cuid(), "email": (ids[3] + "@example.test").upper()},
             )
             with pytest.raises(ApiError) as ambiguous:
                 await invite(

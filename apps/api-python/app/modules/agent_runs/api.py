@@ -7,10 +7,10 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 from ...core.errors import ApiError
-from ...core.identifiers import _cuid
+from ...core.identifiers import cuid
 from ...core.utc_responses import UtcAPIRouter as APIRouter
 from ...db.session import get_session
-from ..access.membership import _manager, _workspace_role
+from ..access.membership import manager, workspace_role
 from ..identity.auth import current_user
 from ..mcp.domain import Principal
 from ..mcp.policy import AccessPolicy
@@ -28,7 +28,7 @@ router = APIRouter(prefix="/api/v1/agent-runs", tags=["agent-run-management"])
 
 
 async def manager_policy(db, workspace, user):
-    await _manager(db, workspace, user["id"])
+    await manager(db, workspace, user["id"])
     return AccessPolicy(db, Principal("", workspace, user, frozenset(), (), ()))
 
 
@@ -48,7 +48,7 @@ async def configure_repository(
         ON CONFLICT (project_id,repository_url) DO UPDATE SET name=EXCLUDED.name,base_branch=EXCLUDED.base_branch,
             test_commands=EXCLUDED.test_commands,instructions=EXCLUDED.instructions RETURNING id"""),
             {
-                "id": _cuid(),
+                "id": cuid(),
                 "workspace": workspaceId,
                 "project": payload.projectId,
                 "name": payload.name,
@@ -75,7 +75,7 @@ async def list_repositories(
     # can show each project's repositories in one request.
     # VI: Khi không có projectId, danh sách gồm mọi dự án người gọi đọc được, để Settings
     # VI: hiển thị repository của từng dự án trong một lần gọi.
-    await _workspace_role(db, workspaceId, user["id"])
+    await workspace_role(db, workspaceId, user["id"])
     policy = AccessPolicy(db, Principal("", workspaceId, user, frozenset(), (), ()))
     if projectId:
         await policy.project(projectId)

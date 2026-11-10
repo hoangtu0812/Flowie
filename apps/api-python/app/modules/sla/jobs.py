@@ -3,11 +3,11 @@ from datetime import timedelta
 
 from sqlalchemy import text
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 
 
 async def reschedule(db, identifier, *, now=None):
-    now = now or _utcnow()
+    now = now or utcnow()
     pending = (
         await db.execute(
             text(
@@ -61,7 +61,7 @@ async def reschedule(db, identifier, *, now=None):
 
 
 async def record_failure(factory, identifier, generation, error, *, now=None):
-    now = now or _utcnow()
+    now = now or utcnow()
     code = type(error).__name__
     if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,79}", code):
         code = "INTERNAL_ERROR"

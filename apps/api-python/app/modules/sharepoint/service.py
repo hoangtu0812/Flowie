@@ -25,7 +25,7 @@ from zoneinfo import ZoneInfo
 import httpx
 from sqlalchemy import text
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.config import Settings
 from ...core.errors import ApiError
 from ...domains.scm.security import decrypt_secret_bundle, encrypt_secret_bundle
@@ -74,7 +74,7 @@ async def save_connection(
         secret = current["secret_encrypted"]
     else:
         raise ApiError(400, "A client secret is required for the first connection.", "Bad Request")
-    now = _utcnow()
+    now = utcnow()
     await db.execute(
         text(
             """INSERT INTO sharepoint_connections
@@ -229,7 +229,7 @@ async def publish_due(factory, settings: Settings, http: httpx.AsyncClient | Non
         ).scalar_one()
         if not locked:
             return 0
-        now = _utcnow()
+        now = utcnow()
         due = (
             await db.execute(text(DUE_QUERY), {"now": now, "cap": MAX_BACKOFF_MINUTES, "limit": BATCH})
         ).mappings().all()

@@ -3,7 +3,7 @@ from datetime import timedelta
 
 from sqlalchemy import text
 
-from .....core.clock import _utcnow
+from .....core.clock import utcnow
 from .....core.errors import ApiError
 from ..events import record_event
 from ..sessions import active_identity, create_session, expired, lock_account
@@ -35,7 +35,7 @@ async def setup(db, actor, password, request, settings):
     if configured and configured["enabled_at"]:
         raise ApiError(409, "Authenticator is already enabled.", "Conflict")
     await first_factor(db, user, actor, password, request, settings)
-    secret, expires = new_secret(), _utcnow() + timedelta(minutes=10)
+    secret, expires = new_secret(), utcnow() + timedelta(minutes=10)
     cipher = encrypt_secret(settings, user["id"], secret)
     await db.execute(
         text(
@@ -59,7 +59,7 @@ async def enable(db, actor, payload, request, settings):
     if (
         not configured
         or not configured["pending_until"]
-        or configured["pending_until"] <= _utcnow()
+        or configured["pending_until"] <= utcnow()
     ):
         await reject(db, user["id"], request)
     if not await consume_factor(
@@ -67,7 +67,7 @@ async def enable(db, actor, payload, request, settings):
     ):
         await reject(db, user["id"], request)
     codes, hashes = new_recovery(user["id"])
-    now = _utcnow()
+    now = utcnow()
     now = now.replace(microsecond=now.microsecond // 1000 * 1000)
     await db.execute(
         text(
@@ -113,7 +113,7 @@ async def change(db, actor, payload, request, settings, *, disable=False):
             {"user": user["id"], "hashes": json.dumps(hashes)},
         )
     await invalidate_sessions(
-        db, user["id"], _utcnow(), except_session=actor["session_id"]
+        db, user["id"], utcnow(), except_session=actor["session_id"]
     )
     await record_event(
         db,

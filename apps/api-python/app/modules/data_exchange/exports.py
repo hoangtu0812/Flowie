@@ -11,7 +11,7 @@ from sqlalchemy import text
 from ...core.csv_export import csv_bytes
 from ...core.errors import ApiError
 from ...core.xlsx_export import xlsx_bytes
-from ..access.projects import _workspace_access
+from ..access.projects import workspace_access
 from ..work_items.document_repository import _team_access
 from ..work_items.issue_search import issue_scope
 
@@ -19,7 +19,7 @@ VIETNAM = ZoneInfo("Asia/Ho_Chi_Minh")
 
 
 async def export_issues(db, user, payload):
-    await _workspace_access(db, payload.workspaceId, user["id"])
+    await workspace_access(db, payload.workspaceId, user["id"])
     scope, params = issue_scope(
         payload.workspaceId, user["id"], payload.query.options()
     )
@@ -163,7 +163,7 @@ def _issues_workbook(rows):
 
 
 async def export_documents(db, user, payload, storage):
-    await _workspace_access(db, payload.workspaceId, user["id"])
+    await workspace_access(db, payload.workspaceId, user["id"])
     identifiers = list(dict.fromkeys(payload.documentIds))
     documents = (
         (

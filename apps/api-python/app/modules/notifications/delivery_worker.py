@@ -4,8 +4,8 @@ from email.message import EmailMessage
 
 from sqlalchemy import text
 
-from ...core.clock import _utcnow
-from ...core.identifiers import _cuid
+from ...core.clock import utcnow
+from ...core.identifiers import cuid
 from ...services.notification_events import notification_hub
 from ...services.private_email import send_private_email
 from ..identity.reset_delivery import delivery_enabled
@@ -21,7 +21,7 @@ async def wake_snoozed(factory):
                     text("""UPDATE notifications SET snoozed_until=NULL WHERE id IN (
             SELECT id FROM notifications WHERE snoozed_until<=:now ORDER BY snoozed_until,id FOR UPDATE SKIP LOCKED LIMIT 100)
             RETURNING id,workspace_id,user_id,read_at"""),
-                    {"now": _utcnow()},
+                    {"now": utcnow()},
                 )
             )
             .mappings()
@@ -44,7 +44,7 @@ async def wake_snoozed(factory):
 async def deliver_one(factory, settings, send=send_private_email, notification_id=None):
     if not delivery_enabled(settings):
         return False
-    token, now = _cuid(), _utcnow()
+    token, now = cuid(), utcnow()
     async with factory() as db:
         row = (
             (
@@ -118,7 +118,7 @@ async def deliver_one(factory, settings, send=send_private_email, notification_i
         except Exception:
             error = "SMTP_ERROR"
     async with factory() as db:
-        now = _utcnow()
+        now = utcnow()
         await db.execute(
             text("""UPDATE notification_email_deliveries SET delivered_at=:delivered,failed_at=:failed,last_error_code=:error,
             available_at=:retry,lease_until=NULL,lease_token=NULL WHERE notification_id=:id AND lease_token=:token"""),

@@ -1,7 +1,7 @@
 from sqlalchemy import text
 
-from ....core.clock import _utcnow
-from ....core.identifiers import _cuid
+from ....core.clock import utcnow
+from ....core.identifiers import cuid
 
 
 def request_metadata(request):
@@ -19,11 +19,11 @@ async def record_event(db, user_id, kind, method, request):
             "INSERT INTO account_security_events(id,user_id,kind,method,ip_address,user_agent,created_at) VALUES (:id,:user,:kind,:method,:ip,:agent,:now)"
         ),
         {
-            "id": _cuid(),
+            "id": cuid(),
             "user": user_id,
             "kind": kind,
             "method": method,
             **request_metadata(request),
-            "now": _utcnow(),
+            "now": utcnow(),
         },
     )

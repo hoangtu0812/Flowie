@@ -9,10 +9,10 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from starlette.requests import Request
 
-from app.core.clock import _utcnow
+from app.core.clock import utcnow
 from app.core.config import Settings, _async_database_url
 from app.core.errors import ApiError
-from app.core.identifiers import _cuid, _hash_token
+from app.core.identifiers import cuid, hash_token
 from app.db.session import get_session
 from app.main import create_app
 from app.modules.identity.auth import create_workspace_bootstrap
@@ -51,22 +51,22 @@ async def verify_inventory():
                 {"type": "http", "headers": [], "client": ("127.0.0.1", 1234)}
             )
             owner, other = (
-                {"id": _cuid(), "name": "Inventory owner"},
-                {"id": _cuid(), "name": "Private account"},
+                {"id": cuid(), "name": "Inventory owner"},
+                {"id": cuid(), "name": "Private account"},
             )
-            now = _utcnow()
+            now = utcnow()
             for user in [owner, other]:
                 await db.execute(
                     text(
                         "INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"
                     ),
-                    {**user, "email": _cuid() + "@example.test", "now": now},
+                    {**user, "email": cuid() + "@example.test", "now": now},
                 )
             seed = await create_workspace_bootstrap(
                 db,
                 user_id=owner["id"],
                 organization_name="Inventory",
-                workspace_name=_cuid(),
+                workspace_name=cuid(),
                 now=now,
             )
             workspace = seed["workspace_id"]
@@ -77,7 +77,7 @@ async def verify_inventory():
                     text("""INSERT INTO account_security_events(id,user_id,kind,method,ip_address,user_agent,created_at)
                     SELECT :prefix||n::text,:user,'LOGIN_FAILED','PASSWORD','127.0.0.1',:agent,:now FROM generate_series(1,107) n"""),
                     {
-                        "prefix": _cuid(),
+                        "prefix": cuid(),
                         "user": user["id"],
                         "now": now,
                         "agent": user["name"],
@@ -87,11 +87,11 @@ async def verify_inventory():
                     text("""INSERT INTO mcp_connections(id,workspace_id,user_id,name,prefix,token_hash,scopes,expires_at,created_at)
                     SELECT :prefix||n::text,:workspace,:user,:label||' connection '||n::text,'flowie_mcp_fixture',:hash||n::text,ARRAY['issues:read']::text[],:expires,:now FROM generate_series(1,107) n"""),
                     {
-                        "prefix": _cuid(),
+                        "prefix": cuid(),
                         "workspace": workspace,
                         "user": user["id"],
                         "label": user["name"],
-                        "hash": _hash_token(_cuid()),
+                        "hash": hash_token(cuid()),
                         "expires": now + timedelta(days=1),
                         "now": now,
                     },
@@ -101,9 +101,9 @@ async def verify_inventory():
                         "INSERT INTO personal_api_keys(id,user_id,name,prefix,token_hash,created_at) VALUES (:id,:user,'Legacy fixture key','flowie_pat_fixture',:hash,:now)"
                     ),
                     {
-                        "id": _cuid(),
+                        "id": cuid(),
                         "user": user["id"],
-                        "hash": _hash_token(_cuid()),
+                        "hash": hash_token(cuid()),
                         "now": now,
                     },
                 )

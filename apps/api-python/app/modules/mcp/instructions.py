@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy import text
 
-from ..access.membership import _manager, _workspace_role
+from ..access.membership import manager, workspace_role
 from ..audit.write import record_change
 
 # Always sent first and never editable, so a workspace's custom workflow cannot drop the
@@ -48,7 +48,7 @@ def _present(stored: str | None) -> dict:
 
 
 async def read(db, workspace_id: str, user: dict) -> dict:
-    await _workspace_role(db, workspace_id, user["id"])
+    await workspace_role(db, workspace_id, user["id"])
     stored = (
         await db.execute(
             text("SELECT mcp_instructions FROM workspaces WHERE id=:id"),
@@ -63,7 +63,7 @@ async def save(db, workspace_id: str, user: dict, workflow: str | None) -> dict:
     NULL, so the workspace follows future changes to the built-in workflow.
     VI: Lưu quy trình của workspace, chỉ Owner/Admin. Văn bản rỗng hoặc trùng bản mặc định
     VI: lưu NULL, để workspace theo các thay đổi sau này của quy trình có sẵn."""
-    await _manager(db, workspace_id, user["id"])
+    await manager(db, workspace_id, user["id"])
     stored = (workflow or "").strip()
     if stored == DEFAULT_WORKFLOW:
         stored = ""

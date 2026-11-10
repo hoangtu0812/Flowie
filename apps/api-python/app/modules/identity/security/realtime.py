@@ -4,7 +4,7 @@ from fastapi import WebSocketDisconnect
 
 from ....core.errors import ApiError
 from ....services.notification_events import notification_hub
-from ...access.projects import _workspace_access
+from ...access.projects import workspace_access
 from .sessions import active_identity, decode_access, expired
 
 
@@ -21,7 +21,7 @@ async def serve_notifications(socket, workspace, *, revalidate_interval=15):
             user = await active_identity(db, claims)
             if user is None:
                 raise expired()
-            await _workspace_access(db, workspace, user["id"])
+            await workspace_access(db, workspace, user["id"])
             return user["id"]
 
     try:

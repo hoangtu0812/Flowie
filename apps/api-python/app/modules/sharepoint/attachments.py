@@ -27,7 +27,7 @@ from typing import Any
 import httpx
 from sqlalchemy import text
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.config import Settings
 from ...core.errors import ApiError
 from ...storage.minio import MinioStorage
@@ -154,7 +154,7 @@ async def publish_attachments_due(
         ).scalar_one()
         if not locked:
             return 0
-        now = _utcnow()
+        now = utcnow()
         due = (
             await db.execute(text(DUE_QUERY), {"now": now, "cap": MAX_BACKOFF_MINUTES, "limit": BATCH})
         ).mappings().all()

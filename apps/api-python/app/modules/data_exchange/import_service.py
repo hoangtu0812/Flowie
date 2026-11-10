@@ -5,11 +5,11 @@ from hashlib import sha256
 from pydantic import ValidationError
 from sqlalchemy import text
 
-from ...core.clock import _utcnow
-from ...core.dates import _date
+from ...core.clock import utcnow
+from ...core.dates import parse_date
 from ...core.errors import ApiError
-from ...core.identifiers import _cuid
-from ..access.projects import _team_access
+from ...core.identifiers import cuid
+from ..access.projects import team_access
 from ..work_items.contracts import CreateIssueInput
 from ..work_items.issue_rules import _validate_references, _validate_schedule_dates
 from .csv_input import parse_csv, validate_mapping
@@ -27,7 +27,7 @@ async def duplicate_key(db, workspace, source, external):
 
 
 async def import_preview(db, user, payload):
-    await _team_access(db, payload.workspaceId, payload.teamId, user["id"])
+    await team_access(db, payload.workspaceId, payload.teamId, user["id"])
     headers, rows = parse_csv(payload.csv)
     validate_mapping(headers, payload.mapping)
     fingerprint = sha256(
@@ -57,7 +57,7 @@ async def import_preview(db, user, payload):
                 "Conflict",
             )
         return await import_result(db, user, payload.workspaceId, previous["id"])
-    batch, now = _cuid(), _utcnow()
+    batch, now = cuid(), utcnow()
     await db.execute(
         text("""INSERT INTO issue_import_batches(id,workspace_id,actor_id,team_id,source_key,request_key,fingerprint,duplicate_mode,created_at,expires_at)
         VALUES (:id,:workspace,:actor,:team,:source,:key,:fingerprint,:mode,:now,:expires)"""),
@@ -107,9 +107,9 @@ async def import_preview(db, user, payload):
                     db, payload.workspaceId, payload.teamId, values, creating=True
                 )
                 _validate_schedule_dates(
-                    _date(values.get("startDate")), _date(values.get("targetDate"))
+                    parse_date(values.get("startDate")), parse_date(values.get("targetDate"))
                 )
-                _date(values.get("dueDate"))
+                parse_date(values.get("dueDate"))
         except ValidationError as error:
             state = "INVALID"
             code = (
@@ -151,7 +151,7 @@ async def owned_batch(db, user, workspace, identifier, *, lock=False):
     )
     if not batch:
         raise ApiError(404, "Import not found.", "Not Found")
-    await _team_access(db, workspace, batch["team_id"], user["id"])
+    await team_access(db, workspace, batch["team_id"], user["id"])
     return batch
 
 
@@ -206,7 +206,7 @@ async def import_result(db, user, workspace, identifier, *, after=0):
 async def import_command(db, user, workspace, identifier, command):
     batch = await owned_batch(db, user, workspace, identifier, lock=True)
     if command == "apply" and batch["state"] == "PREVIEW":
-        if batch["expires_at"] <= _utcnow():
+        if batch["expires_at"] <= utcnow():
             raise ApiError(409, "Preview expired. Create a new preview.", "Conflict")
         await db.execute(
             text("UPDATE issue_import_batches SET state='QUEUED' WHERE id=:id"),

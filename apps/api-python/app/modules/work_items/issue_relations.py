@@ -5,10 +5,10 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.errors import ApiError
 from .issue_activity import _write_activity
-from .issue_queries import _issue_row
+from .issue_queries import issue_row
 
 
 async def _add_issue_relation(
@@ -19,8 +19,8 @@ async def _add_issue_relation(
     relation_type: str,
     user_id: str,
 ) -> dict[str, Any]:
-    issue = await _issue_row(db, issue_id, workspace_id, user_id)
-    related = await _issue_row(db, related_issue_id, workspace_id, user_id)
+    issue = await issue_row(db, issue_id, workspace_id, user_id)
+    related = await issue_row(db, related_issue_id, workspace_id, user_id)
     if issue["id"] == related["id"]:
         raise ApiError(400, "An issue cannot be related to itself.", "Bad Request")
 
@@ -69,7 +69,7 @@ async def _add_issue_relation(
                 "target_issue_id": target_issue_id,
                 "relation_type": relation_type,
                 "user_id": user_id,
-                "now": _utcnow(),
+                "now": utcnow(),
                 "previous_issue_id": previous["issue_id"],
                 "previous_related_issue_id": previous["related_issue_id"],
             },
@@ -86,7 +86,7 @@ async def _add_issue_relation(
                 "issue_id": source_issue_id,
                 "related_issue_id": target_issue_id,
                 "relation_type": relation_type,
-                "now": _utcnow(),
+                "now": utcnow(),
                 "user_id": user_id,
             },
         )

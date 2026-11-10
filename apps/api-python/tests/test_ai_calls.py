@@ -8,10 +8,10 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.core.clock import _utcnow
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.core.identifiers import _cuid
+from app.core.identifiers import cuid
 from app.domains import agent
 from app.modules.ai import calls as ai_calls
 from app.modules.identity.auth import create_workspace_bootstrap
@@ -167,14 +167,14 @@ async def verify_usage(provider_calls):
     engine = create_async_engine(_async_database_url(os.environ['MCP_TEST_DATABASE_URL']))
     try:
         async with async_sessionmaker(engine)() as db:
-            now = _utcnow()
-            user = _cuid()
+            now = utcnow()
+            user = cuid()
             await db.execute(
                 text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,'AI',:email,'ACTIVE',:now,:now)"),
                 {'id': user, 'email': user + '@example.test', 'now': now},
             )
             workspace = (
-                await create_workspace_bootstrap(db, user_id=user, organization_name='AI', workspace_name=_cuid(), now=now)
+                await create_workspace_bootstrap(db, user_id=user, organization_name='AI', workspace_name=cuid(), now=now)
             )['workspace_id']
             await db.commit()
             provider = {**OPENAI, 'workspaceId': workspace, 'engine': db.bind}

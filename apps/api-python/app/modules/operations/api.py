@@ -6,11 +6,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...core.clock import _utcnow
-from ...core.identifiers import _cuid
+from ...core.clock import utcnow
+from ...core.identifiers import cuid
 from ...core.utc_responses import UtcAPIRouter
 from ...db.session import get_session
-from ..access.projects import _workspace_access, _workspace_manager
+from ..access.projects import workspace_access, workspace_manager
 from ..identity.auth import current_user
 from ..identity.password_reset import limit_request
 from .diagnostics import build_identity
@@ -29,20 +29,20 @@ class ClientError(BaseModel):
 
 @router.post('/client-errors')
 async def client_error(payload:ClientError,request:Request,user=Depends(current_user),db:AsyncSession=Depends(get_session)):
-    await _workspace_access(db,payload.workspaceId,user['id'])
+    await workspace_access(db,payload.workspaceId,user['id'])
     await limit_request(db,request.app.state.settings.auth_jwt_secret,'client-error',user['id'],60)
-    identifier=_cuid()
+    identifier=cuid()
     await db.execute(text('''INSERT INTO client_error_events(id,workspace_id,actor_id,category,route_kind,digest,created_at)
         VALUES (:id,:workspace,:user,:category,:route,:digest,:now)'''),{'id':identifier,'workspace':payload.workspaceId,'user':user['id'],
-        'category':payload.category,'route':payload.routeKind,'digest':payload.digest,'now':_utcnow()})
+        'category':payload.category,'route':payload.routeKind,'digest':payload.digest,'now':utcnow()})
     await db.commit()
     return {'data':{'reference':identifier}}
 
 
 @router.get('')
 async def overview(workspaceId:str,user=Depends(current_user),db:AsyncSession=Depends(get_session)):
-    await _workspace_manager(db,workspaceId,user['id'])
-    now=_utcnow()
+    await workspace_manager(db,workspaceId,user['id'])
+    now=utcnow()
     jobs,truncated=await visible_jobs(db,now)
     errors=(await db.execute(text('''SELECT category,route_kind,COUNT(*) AS count FROM client_error_events
         WHERE workspace_id=:workspace AND created_at>=:cutoff GROUP BY category,route_kind'''),{'workspace':workspaceId,'cutoff':now-timedelta(days=1)})).mappings().all()

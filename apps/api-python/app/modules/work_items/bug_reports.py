@@ -1,15 +1,15 @@
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..access.projects import _team_access, _workspace_access
+from ..access.projects import team_access, workspace_access
 
 
 async def report(
     db: AsyncSession, workspace: str, user: str, team: str | None, project: str | None
 ) -> dict:
-    await _workspace_access(db, workspace, user)
+    await workspace_access(db, workspace, user)
     if team:
-        await _team_access(db, workspace, team, user)
+        await team_access(db, workspace, team, user)
     rows = (
         (
             await db.execute(

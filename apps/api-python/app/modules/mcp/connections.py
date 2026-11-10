@@ -7,10 +7,10 @@ from secrets import token_urlsafe
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.errors import ApiError
-from ...core.identifiers import _cuid, _hash_token
-from ..access.membership import _workspace_role
+from ...core.identifiers import cuid, hash_token
+from ..access.membership import workspace_role
 from .contracts import ConnectionInput, ConnectionUpdateInput
 from .domain import Principal
 
@@ -39,7 +39,7 @@ async def load_principal(db, connection_id: str) -> Principal:
         FROM mcp_connections c JOIN users u ON u.id=c.user_id
         JOIN workspace_members wm ON wm.user_id=c.user_id AND wm.workspace_id=c.workspace_id
         WHERE c.id=:id AND c.revoked_at IS NULL AND c.expires_at>:now AND u.status='ACTIVE' AND wm.status='ACTIVE' """),
-                {"id": connection_id, "now": _utcnow()},
+                {"id": connection_id, "now": utcnow()},
             )
         )
         .mappings()
@@ -75,7 +75,7 @@ async def authenticate(db: AsyncSession, token: str) -> Principal:
         WHERE c.token_hash=:hash AND c.revoked_at IS NULL AND c.expires_at>:now
         AND u.status='ACTIVE' AND wm.status='ACTIVE'
     """),
-        {"hash": _hash_token(token), "now": _utcnow()},
+        {"hash": hash_token(token), "now": utcnow()},
     )
     row = result.mappings().first()
     if not row:
@@ -84,7 +84,7 @@ async def authenticate(db: AsyncSession, token: str) -> Principal:
         )
     await db.execute(
         text("UPDATE mcp_connections SET last_used_at=:now WHERE id=:id"),
-        {"id": row["id"], "now": _utcnow()},
+        {"id": row["id"], "now": utcnow()},
     )
     return Principal(
         connection_id=row["id"],
@@ -113,7 +113,7 @@ async def validate_current(db: AsyncSession, principal: Principal) -> None:
         WHERE c.id=:id AND c.revoked_at IS NULL AND c.expires_at>:now
         AND u.status='ACTIVE' AND wm.status='ACTIVE' FOR SHARE OF c,u,wm
     """),
-            {"id": principal.connection_id, "now": _utcnow()},
+            {"id": principal.connection_id, "now": utcnow()},
         )
     ).first()
     if not row:
@@ -140,21 +140,21 @@ async def _validate_grant(db, workspace_id: str, user: dict, payload) -> None:
 async def create(
     db: AsyncSession, workspace_id: str, user: dict, payload: ConnectionInput
 ) -> dict:
-    await _workspace_role(db, workspace_id, user["id"])
+    await workspace_role(db, workspace_id, user["id"])
     await _validate_grant(db, workspace_id, user, payload)
-    token, now = f"flowie_mcp_{token_urlsafe(32)}", _utcnow()
+    token, now = f"flowie_mcp_{token_urlsafe(32)}", utcnow()
     result = await db.execute(
         text("""
         INSERT INTO mcp_connections (id,workspace_id,user_id,name,prefix,token_hash,scopes,team_ids,project_ids,expires_at,created_at)
         VALUES (:id,:workspace,:user,:name,:prefix,:hash,:scopes,:teams,:projects,:expires,:now) RETURNING *
     """),
         {
-            "id": _cuid(),
+            "id": cuid(),
             "workspace": workspace_id,
             "user": user["id"],
             "name": payload.name.strip(),
             "prefix": token[:18],
-            "hash": _hash_token(token),
+            "hash": hash_token(token),
             "scopes": payload.scopes,
             "teams": payload.teamIds,
             "projects": payload.projectIds,
@@ -167,7 +167,7 @@ async def create(
         text("""INSERT INTO audit_logs (id,workspace_id,actor_id,action,entity_type,entity_id,metadata,created_at)
         VALUES (:id,:workspace,:user,'mcp.connection.created','mcp-connection',:connection,'{}'::jsonb,:now)"""),
         {
-            "id": _cuid(),
+            "id": cuid(),
             "workspace": workspace_id,
             "user": user["id"],
             "connection": row["id"],
@@ -191,7 +191,7 @@ async def update(
     # VI: Chỉ chủ kết nối được sửa: token hoạt động bằng quyền của chủ, nên quản trị
     # VI: viên cấp team/dự án của mình sẽ mở rộng phạm vi client của chủ. Token và
     # VI: hạn dùng giữ nguyên; lần gọi MCP kế tiếp đọc quyền mới.
-    await _workspace_role(db, workspace_id, user["id"])
+    await workspace_role(db, workspace_id, user["id"])
     current = (
         (
             await db.execute(
@@ -201,7 +201,7 @@ async def update(
                     "id": connection_id,
                     "workspace": workspace_id,
                     "user": user["id"],
-                    "now": _utcnow(),
+                    "now": utcnow(),
                 },
             )
         )
@@ -241,12 +241,12 @@ async def update(
         text("""INSERT INTO audit_logs (id,workspace_id,actor_id,action,entity_type,entity_id,metadata,created_at)
         VALUES (:id,:workspace,:user,'mcp.connection.updated','mcp-connection',:connection,CAST(:metadata AS jsonb),:now)"""),
         {
-            "id": _cuid(),
+            "id": cuid(),
             "workspace": workspace_id,
             "user": user["id"],
             "connection": connection_id,
             "metadata": json.dumps({"connectionId": connection_id, **changes}),
-            "now": _utcnow(),
+            "now": utcnow(),
         },
     )
     await db.commit()
@@ -256,7 +256,7 @@ async def update(
 async def list_connections(
     db: AsyncSession, workspace_id: str, user: dict
 ) -> list[dict]:
-    role = await _workspace_role(db, workspace_id, user["id"])
+    role = await workspace_role(db, workspace_id, user["id"])
     rows = await db.execute(
         text("""SELECT * FROM mcp_connections WHERE workspace_id=:workspace
         AND (:manager OR user_id=:user) ORDER BY created_at DESC LIMIT 200"""),
@@ -275,7 +275,7 @@ async def list_connections(
 async def revoke(
     db: AsyncSession, workspace_id: str, user: dict, connection_id: str
 ) -> None:
-    role = await _workspace_role(db, workspace_id, user["id"])
+    role = await workspace_role(db, workspace_id, user["id"])
     result = await db.execute(
         text("""UPDATE mcp_connections SET revoked_at=:now
         WHERE id=:id AND workspace_id=:workspace AND (:manager OR user_id=:user) RETURNING id"""),
@@ -284,7 +284,7 @@ async def revoke(
             "workspace": workspace_id,
             "user": user["id"],
             "manager": role in {"OWNER", "ADMIN"},
-            "now": _utcnow(),
+            "now": utcnow(),
         },
     )
     if not result.first():
@@ -293,11 +293,11 @@ async def revoke(
         text("""INSERT INTO audit_logs (id,workspace_id,actor_id,action,entity_type,entity_id,metadata,created_at)
         VALUES (:id,:workspace,:user,'mcp.connection.revoked','mcp-connection',:connection,'{}'::jsonb,:now)"""),
         {
-            "id": _cuid(),
+            "id": cuid(),
             "workspace": workspace_id,
             "user": user["id"],
             "connection": connection_id,
-            "now": _utcnow(),
+            "now": utcnow(),
         },
     )
     await db.commit()

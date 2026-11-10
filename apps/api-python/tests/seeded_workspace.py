@@ -14,15 +14,15 @@ from contextlib import asynccontextmanager
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.core.clock import _utcnow
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
-from app.core.identifiers import _cuid
+from app.core.identifiers import cuid
 from app.modules.identity.auth import create_workspace_bootstrap
 
 
 async def _user(db, users, name):
-    user = {"id": _cuid(), "name": name}
-    now = _utcnow()
+    user = {"id": cuid(), "name": name}
+    now = utcnow()
     await db.execute(
         text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"),
         {**user, "email": user["id"] + "@example.test", "now": now},
@@ -42,7 +42,7 @@ async def seeded_workspace():
         await db.execute(
             text("""INSERT INTO workspace_members(id,workspace_id,user_id,status,role,created_at,updated_at)
             VALUES (:id,:workspace,:user,'ACTIVE',:role,:now,:now)"""),
-            {"id": _cuid(), "workspace": workspace, "user": user["id"], "role": role, "now": _utcnow()},
+            {"id": cuid(), "workspace": workspace, "user": user["id"], "role": role, "now": utcnow()},
         )
         if team:
             await db.execute(
@@ -54,7 +54,7 @@ async def seeded_workspace():
     async def workspace(db, name="Owner"):
         owner = await _user(db, users, name)
         seed = await create_workspace_bootstrap(
-            db, user_id=owner["id"], organization_name="Fixture", workspace_name=_cuid(), now=_utcnow()
+            db, user_id=owner["id"], organization_name="Fixture", workspace_name=cuid(), now=utcnow()
         )
         seeds.append(seed)
         return seed, owner

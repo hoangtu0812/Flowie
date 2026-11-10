@@ -5,7 +5,7 @@ from hmac import compare_digest
 
 from sqlalchemy import text
 
-from .....core.clock import _utcnow
+from .....core.clock import utcnow
 from .....core.errors import ApiError
 from .....services.auth_policy import microsoft_sign_in_enabled
 from ..events import record_event
@@ -31,14 +31,14 @@ async def first_factor(db, user, actor, password, request, settings):
             verify_password, user["password_hash"], password or ""
         ):
             await reject(db, user["id"], request, "PASSWORD")
-        return "PASSWORD", _utcnow()
+        return "PASSWORD", utcnow()
     proof = actor.get("session_authenticated_at")
     if (
         actor.get("session_auth_method") != "MICROSOFT"
         or proof is None
-        or not _utcnow() - timedelta(minutes=5)
+        or not utcnow() - timedelta(minutes=5)
         <= proof
-        <= _utcnow() + timedelta(seconds=60)
+        <= utcnow() + timedelta(seconds=60)
     ):
         raise ApiError(
             403, "Sign in with Microsoft again to verify your identity.", "Forbidden"
@@ -66,7 +66,7 @@ async def consume_factor(db, configured, user, code, kind, settings):
         )
         return True
     secret = decrypt_secret(settings, user, configured["secret_cipher"])
-    counter = matching_counter(secret, code, _utcnow(), configured["last_counter"])
+    counter = matching_counter(secret, code, utcnow(), configured["last_counter"])
     if counter is None:
         return False
     await db.execute(

@@ -10,9 +10,9 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.core.clock import _utcnow
+from app.core.clock import utcnow
 from app.core.config import Settings, _async_database_url
-from app.core.identifiers import _cuid, _hash_token
+from app.core.identifiers import cuid, hash_token
 from app.db.session import get_session
 from app.main import create_app
 from app.modules.identity.auth import create_workspace_bootstrap
@@ -32,8 +32,8 @@ async def verify_delivery():
         _async_database_url(os.environ["MCP_TEST_DATABASE_URL"])
     )
     factory = async_sessionmaker(engine)
-    user, other, notification = _cuid(), _cuid(), _cuid()
-    sessions = {user: _cuid(), other: _cuid()}
+    user, other, notification = cuid(), cuid(), cuid()
+    sessions = {user: cuid(), other: cuid()}
     seed = None
     settings = replace(
         Settings.from_environment(),
@@ -44,7 +44,7 @@ async def verify_delivery():
     )
     try:
         async with factory() as db:
-            now = _utcnow()
+            now = utcnow()
             for identifier in [user, other]:
                 await db.execute(
                     text(
@@ -60,7 +60,7 @@ async def verify_delivery():
                 db,
                 user_id=user,
                 organization_name="Delivery",
-                workspace_name=_cuid(),
+                workspace_name=cuid(),
                 now=now,
             )
             for identifier in [user, other]:
@@ -71,7 +71,7 @@ async def verify_delivery():
                     {
                         "id": sessions[identifier],
                         "user": identifier,
-                        "hash": _hash_token(_cuid()),
+                        "hash": hash_token(cuid()),
                         "expires": now + timedelta(days=1),
                         "now": now,
                     },
@@ -81,7 +81,7 @@ async def verify_delivery():
                     "INSERT INTO workspace_members(id,workspace_id,user_id,role,status,created_at,updated_at) VALUES (:id,:workspace,:user,'MEMBER','ACTIVE',:now,:now)"
                 ),
                 {
-                    "id": _cuid(),
+                    "id": cuid(),
                     "workspace": seed["workspace_id"],
                     "user": other,
                     "now": now,
@@ -93,7 +93,7 @@ async def verify_delivery():
                 ),
                 {"workspace": seed["workspace_id"], "user": user, "now": now},
             )
-            project = _cuid()
+            project = cuid()
             await db.execute(
                 text(
                     "INSERT INTO projects(id,workspace_id,name,identifier,created_at,updated_at) VALUES (:id,:workspace,'Notification target',:id,:now,:now)"
@@ -163,7 +163,7 @@ async def verify_delivery():
         async with factory() as db:
             await db.execute(
                 text("UPDATE notifications SET snoozed_until=:past WHERE id=:id"),
-                {"past": _utcnow() - timedelta(seconds=1), "id": notification},
+                {"past": utcnow() - timedelta(seconds=1), "id": notification},
             )
             await db.commit()
         with patch(
@@ -199,7 +199,7 @@ async def verify_delivery():
                 text(
                     "UPDATE notification_email_deliveries SET available_at=:now WHERE notification_id=:id"
                 ),
-                {"id": notification, "now": _utcnow() - timedelta(seconds=1)},
+                {"id": notification, "now": utcnow() - timedelta(seconds=1)},
             )
             await db.commit()
         results = await asyncio.gather(

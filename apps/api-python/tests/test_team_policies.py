@@ -6,9 +6,9 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.core.clock import _utcnow
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
-from app.core.identifiers import _cuid
+from app.core.identifiers import cuid
 from app.jobs.team_policies import policy_cutoff, run_team_policies
 from app.modules.identity.auth import create_workspace_bootstrap
 
@@ -47,7 +47,7 @@ async def _seed_workspace(db, user, now, *, auto_close=None, auto_archive=None):
         {"id": user, "email": user + "@example.test", "now": now},
     )
     seed = await create_workspace_bootstrap(
-        db, user_id=user, organization_name="Policies", workspace_name=_cuid(), now=now
+        db, user_id=user, organization_name="Policies", workspace_name=cuid(), now=now
     )
     await db.execute(
         text(
@@ -71,7 +71,7 @@ async def _status(db, workspace, category):
 
 
 async def _issue(db, seed, user, *, number, identifier, status, updated, **columns):
-    issue = _cuid()
+    issue = cuid()
     await db.execute(
         text(
             "INSERT INTO issues(id,workspace_id,team_id,status_id,identifier,number,title,creator_id,"
@@ -99,7 +99,7 @@ async def _issue(db, seed, user, *, number, identifier, status, updated, **colum
 
 
 async def _cycle(db, seed, status, now):
-    cycle = _cuid()
+    cycle = cuid()
     await db.execute(
         text(
             "INSERT INTO cycles(id,workspace_id,team_id,name,status,start_date,end_date,created_at,updated_at)"
@@ -137,11 +137,11 @@ async def verify_auto_close():
     """
     engine = _engine()
     factory = async_sessionmaker(engine)
-    user = _cuid()
+    user = cuid()
     seed = None
     try:
         async with factory() as db:
-            now = _utcnow()
+            now = utcnow()
             old = now - timedelta(days=120)
             seed = await _seed_workspace(db, user, now, auto_close=30)
             open_status = await _status(db, seed["workspace_id"], "UNSTARTED")
@@ -179,12 +179,12 @@ async def verify_auto_close():
             await db.execute(
                 text("INSERT INTO comments(id,issue_id,author_id,content,created_at,updated_at)"
                      " VALUES (:id,:issue,:user,'still relevant',:now,:now)"),
-                {"id": _cuid(), "issue": commented, "user": user, "now": now},
+                {"id": cuid(), "issue": commented, "user": user, "now": now},
             )
             await db.execute(
                 text("INSERT INTO activities(id,workspace_id,issue_id,actor_id,type,created_at)"
                      " VALUES (:id,:workspace,:issue,:user,'issue.updated',:now)"),
-                {"id": _cuid(), "workspace": seed["workspace_id"], "issue": with_activity,
+                {"id": cuid(), "workspace": seed["workspace_id"], "issue": with_activity,
                  "user": user, "now": now},
             )
             cycle = await _cycle(db, seed, "ACTIVE", now)
@@ -251,8 +251,8 @@ async def verify_auto_close():
                 text("INSERT INTO sla_policies(id,workspace_id,name,team_id,deadline_minutes,"
                      "enabled,created_by,created_at,updated_at)"
                      " VALUES (:id,:workspace,'Support',:team,240,true,:user,:now,:now)"),
-                {"id": _cuid(), "workspace": seed["workspace_id"], "team": seed["team_id"],
-                 "user": user, "now": _utcnow()},
+                {"id": cuid(), "workspace": seed["workspace_id"], "team": seed["team_id"],
+                 "user": user, "now": utcnow()},
             )
             await db.commit()
         assert (await run_team_policies(factory, writes_enabled=True))["closed"] == 0
@@ -276,11 +276,11 @@ async def verify_auto_archive():
     """
     engine = _engine()
     factory = async_sessionmaker(engine)
-    user = _cuid()
+    user = cuid()
     seed = None
     try:
         async with factory() as db:
-            now = _utcnow()
+            now = utcnow()
             old = now - timedelta(days=200)
             seed = await _seed_workspace(db, user, now, auto_archive=90)
             open_status = await _status(db, seed["workspace_id"], "UNSTARTED")

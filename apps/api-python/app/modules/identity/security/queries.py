@@ -2,7 +2,7 @@ from datetime import timedelta
 
 from sqlalchemy import text
 
-from ....core.clock import _utcnow
+from ....core.clock import utcnow
 from ....core.pagination import CursorCodec
 
 
@@ -49,7 +49,7 @@ async def session_page(db, user, secret, **page):
         secret,
         "account-sessions",
         "SELECT id,ip_address,user_agent,auth_method,authenticated_at,created_at,last_used_at,expires_at FROM sessions WHERE user_id=:user AND revoked_at IS NULL AND expires_at>:now",
-        {"user": user["id"], "now": _utcnow()},
+        {"user": user["id"], "now": utcnow()},
         **page,
     )
     return {
@@ -73,7 +73,7 @@ async def session_page(db, user, secret, **page):
 
 async def event_page(db, user, secret, *, kind=None, **page):
     select = "SELECT id,kind,method,ip_address,user_agent,created_at FROM account_security_events WHERE user_id=:user AND created_at>=:cutoff"
-    params = {"user": user["id"], "cutoff": _utcnow() - timedelta(days=30)}
+    params = {"user": user["id"], "cutoff": utcnow() - timedelta(days=30)}
     if kind:
         select += " AND kind=:kind"
         params["kind"] = kind

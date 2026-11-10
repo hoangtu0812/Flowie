@@ -4,8 +4,8 @@ import uuid
 
 from sqlalchemy import text
 
-from ...core.clock import _utcnow
-from ...core.identifiers import _cuid
+from ...core.clock import utcnow
+from ...core.identifiers import cuid
 
 INSTANCE=uuid.uuid4().hex
 LAST_PROGRESS: dict[str, float] = {}
@@ -18,8 +18,8 @@ async def heartbeat(factory,job,status=None,*,error=None,progress=False):
             ON CONFLICT(instance_id,job) DO UPDATE SET status=COALESCE(:status,operation_heartbeats.status),last_seen_at=:now,
             last_progress_at=COALESCE(:progress,operation_heartbeats.last_progress_at),
             failures=operation_heartbeats.failures+:failed,last_error_code=CASE WHEN :progress IS NOT NULL THEN NULL ELSE COALESCE(:error,operation_heartbeats.last_error_code) END'''),
-            {'id':_cuid(),'instance':INSTANCE,'job':job,'status':status,'now':_utcnow(),
-             'progress':_utcnow() if progress else None,'failed':int(error is not None),'error':error})
+            {'id':cuid(),'instance':INSTANCE,'job':job,'status':status,'now':utcnow(),
+             'progress':utcnow() if progress else None,'failed':int(error is not None),'error':error})
         await db.commit()
 
 

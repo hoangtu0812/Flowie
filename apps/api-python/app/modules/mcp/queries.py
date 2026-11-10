@@ -6,7 +6,7 @@ from typing import Any
 
 from sqlalchemy import text
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.errors import ApiError
 from .pagination import CursorCodec, literal_search
 from .policy import AccessPolicy
@@ -260,7 +260,7 @@ class QueryService:
             filters.append(
                 "i.due_date<:now AND s.category NOT IN ('COMPLETED','CANCELED')"
             )
-            params["now"] = _utcnow()
+            params["now"] = utcnow()
         suffix = " AND " + " AND ".join(filters) if filters else ""
         return await self.page(
             "search_issues",
@@ -363,9 +363,9 @@ class QueryService:
 
     async def issue(self, payload) -> dict:
         row = await self.policy.issue(payload.issueId)
-        from ..work_items.issue_queries import _issue_row
+        from ..work_items.issue_queries import issue_row
 
-        result = await _issue_row(
+        result = await issue_row(
             self.db, row["id"], self.principal.workspace_id, self.principal.user["id"]
         )
         # Related identifiers are resolved independently by get_issue_context.

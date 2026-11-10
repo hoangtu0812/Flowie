@@ -10,9 +10,9 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from starlette.websockets import WebSocket
 
-from app.core.clock import _utcnow
+from app.core.clock import utcnow
 from app.core.config import Settings, _async_database_url
-from app.core.identifiers import _cuid
+from app.core.identifiers import cuid
 from app.db.session import get_session
 from app.main import create_app
 from app.modules.access.read_only import enforce_read_only_role
@@ -34,18 +34,18 @@ async def verify_admin_viewer():
         auth_cookie_secure=False,
     )
     password = "Viewer-test-password-2026"
-    owner, viewer = _cuid(), _cuid()
+    owner, viewer = cuid(), cuid()
     try:
         async with factory() as db:
-            now = _utcnow()
+            now = utcnow()
             for user_id in (owner, viewer):
                 await db.execute(
                     text("INSERT INTO users(id,email,name,password_hash,status,created_at,updated_at) VALUES (:id,:email,'Viewer test',:hash,'ACTIVE',:now,:now)"),
                     {"id": user_id, "email": user_id + "@example.test", "hash": PasswordHasher().hash(password), "now": now},
                 )
-            seed = await create_workspace_bootstrap(db, user_id=owner, organization_name="Viewer", workspace_name=_cuid(), now=now)
+            seed = await create_workspace_bootstrap(db, user_id=owner, organization_name="Viewer", workspace_name=cuid(), now=now)
             workspace, team = seed["workspace_id"], seed["team_id"]
-            member = _cuid()
+            member = cuid()
             await db.execute(
                 text("INSERT INTO workspace_members(id,workspace_id,user_id,role,status,created_at,updated_at) VALUES (:id,:workspace,:user,'MEMBER','ACTIVE',:now,:now)"),
                 {"id": member, "workspace": workspace, "user": viewer, "now": now},

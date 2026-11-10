@@ -3,10 +3,10 @@ from datetime import UTC
 
 from sqlalchemy import text
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.errors import ApiError
-from ...core.identifiers import _cuid
-from ..access.projects import _team_access, _workspace_access
+from ...core.identifiers import cuid
+from ..access.projects import team_access, workspace_access
 from ..work_items.lifecycle import actor_context
 from .repository import TABLES, record
 from .repository import scope as archive_scope
@@ -103,7 +103,7 @@ async def restore(db, workspace, user, kind, identifier, expected):
     if preview["blockers"]:
         raise ApiError(409, " ".join(preview["blockers"]), "Conflict")
     table, _ = TABLES[kind]
-    now = _utcnow()
+    now = utcnow()
     await actor_context(db, user["id"])
     actor_update = ",updated_by=:actor" if kind == "document" else ""
     await db.execute(
@@ -119,7 +119,7 @@ async def restore(db, workspace, user, kind, identifier, expected):
         text("""INSERT INTO audit_logs(id,workspace_id,actor_id,action,entity_type,entity_id,metadata,created_at)
         VALUES (:id,:workspace,:user,:action,:kind,:entity,CAST(:metadata AS jsonb),:now)"""),
         {
-            "id": _cuid(),
+            "id": cuid(),
             "workspace": workspace,
             "user": user["id"],
             "action": f"{kind}.restored",
@@ -138,7 +138,7 @@ async def restore(db, workspace, user, kind, identifier, expected):
 
 
 async def archive_project(db, workspace, user, identifier):
-    await _workspace_access(db, workspace, user["id"])
+    await workspace_access(db, workspace, user["id"])
     project = (
         (
             await db.execute(
@@ -154,7 +154,7 @@ async def archive_project(db, workspace, user, identifier):
     if not project:
         raise ApiError(404, "Project unavailable.", "Not Found")
     if project["team_id"]:
-        await _team_access(db, workspace, project["team_id"], user["id"])
+        await team_access(db, workspace, project["team_id"], user["id"])
     unavailable = (
         await db.execute(
             text("""SELECT 1 FROM issues i WHERE i.project_id=:id AND i.workspace_id=:workspace AND i.archived_at IS NULL
@@ -169,7 +169,7 @@ async def archive_project(db, workspace, user, identifier):
             "This account cannot archive the project and its related records.",
             "Forbidden",
         )
-    now = _utcnow()
+    now = utcnow()
     await actor_context(db, user["id"])
     await db.execute(
         text(
@@ -187,7 +187,7 @@ async def archive_project(db, workspace, user, identifier):
         text("""INSERT INTO audit_logs(id,workspace_id,actor_id,action,entity_type,entity_id,metadata,created_at)
         VALUES (:audit,:workspace,:user,'project.archived','project',:id,'{"source":"web"}'::jsonb,:now)"""),
         {
-            "audit": _cuid(),
+            "audit": cuid(),
             "workspace": workspace,
             "user": user["id"],
             "id": identifier,

@@ -2,7 +2,7 @@ import json
 
 from sqlalchemy import text
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.errors import ApiError
 
 
@@ -26,7 +26,7 @@ async def limits(db, workspace):
 
 
 async def consume_quota(factory, workspace, tool):
-    now = _utcnow().replace(second=0, microsecond=0)
+    now = utcnow().replace(second=0, microsecond=0)
     async with factory() as db:
         budget = await limits(db, workspace)
         for name, maximum in [
@@ -62,6 +62,6 @@ async def update_limits(db, workspace, total, per_tool):
             "workspace": workspace,
             "total": total,
             "tool": json.dumps(per_tool),
-            "now": _utcnow(),
+            "now": utcnow(),
         },
     )

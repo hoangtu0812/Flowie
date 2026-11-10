@@ -22,6 +22,12 @@ from app.modules.identity.auth import create_workspace_bootstrap
 
 
 def baseline_list(ref):
+    # shortcut: the snapshot's own imports resolve against the current app package, so a ref
+    # whose imports were renamed since (for example the private aliases DTD-523 removed) cannot
+    # be loaded; vendor that ref's whole app tree if older baselines are needed.
+    # VI: shortcut: import của bản chụp được giải theo package app hiện tại, nên ref nào có import
+    # VI: đã đổi tên (ví dụ alias nội bộ DTD-523 đã xoá) sẽ không nạp được; nếu cần baseline cũ
+    # VI: hơn thì lấy nguyên cây app của ref đó.
     def source(path, package):
         content = subprocess.check_output(
             ["git", "show", f"{ref}:{path}"], cwd=ROOT
@@ -48,7 +54,10 @@ def baseline_list(ref):
         )
     except subprocess.CalledProcessError:
         api = source("apps/api-python/app/domains/native_issues.py", "app.domains")
-    api["_issue_row"] = api["issue_row"] = rows["_issue_row"]
+    # The query module names the row loader `_issue_row` before DTD-523 and `issue_row` after.
+    # VI: Module truy vấn đặt tên hàm nạp dòng là `_issue_row` trước DTD-523 và `issue_row` sau đó.
+    row = rows["issue_row"] if "issue_row" in rows else rows["_issue_row"]
+    api["_issue_row"] = api["issue_row"] = row
     return api["list_issues"]
 
 
@@ -69,11 +78,11 @@ async def main(args):
         count[0] += 1
 
     if args.hydrate_all:
-        from app.modules.access.projects import _workspace_access
+        from app.modules.access.projects import workspace_access
         from app.modules.work_items.issue_queries import _issue_rows
 
         async def operation(workspace, team, categories, scope, user, db):
-            await _workspace_access(db, workspace, user["id"])
+            await workspace_access(db, workspace, user["id"])
             ids = (
                 (
                     await db.execute(

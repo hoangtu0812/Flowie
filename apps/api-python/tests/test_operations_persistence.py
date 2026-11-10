@@ -7,10 +7,10 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.core.clock import _utcnow
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.core.identifiers import _cuid
+from app.core.identifiers import cuid
 from app.core.readiness import database_ready
 from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.operations import heartbeats
@@ -25,7 +25,7 @@ def test_operations_persistence_distinguishes_failed_stale_and_denied():
 async def verify():
     engine=create_async_engine(_async_database_url(os.environ['MCP_TEST_DATABASE_URL']))
     factory=async_sessionmaker(engine)
-    instance='audit-'+_cuid()
+    instance='audit-'+cuid()
     try:
         assert await database_ready(factory)
         with patch.object(heartbeats,'INSTANCE',instance):
@@ -37,12 +37,12 @@ async def verify():
                 assert row['status']=='degraded' and row['failures']==1 and row['last_error_code']=='TestFailure'
             await heartbeats.heartbeat(factory,'test-job','running',progress=True)
             async with factory() as db:
-                user={'id':_cuid(),'name':'Operations owner'}
-                now=_utcnow()
+                user={'id':cuid(),'name':'Operations owner'}
+                now=utcnow()
                 await db.execute(text("""INSERT INTO operation_heartbeats(id,instance_id,job,status,last_seen_at,failures)
-                    SELECT :prefix||n::text,:prefix||n::text,'bulk-issues','stopped',:past,0 FROM generate_series(1,120) n"""),{'prefix':_cuid(),'past':now-timedelta(hours=1)})
-                await db.execute(text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"),{**user,'email':_cuid()+'@example.test','now':now})
-                seed=await create_workspace_bootstrap(db,user_id=user['id'],organization_name='Operations',workspace_name=_cuid(),now=now)
+                    SELECT :prefix||n::text,:prefix||n::text,'bulk-issues','stopped',:past,0 FROM generate_series(1,120) n"""),{'prefix':cuid(),'past':now-timedelta(hours=1)})
+                await db.execute(text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"),{**user,'email':cuid()+'@example.test','now':now})
+                seed=await create_workspace_bootstrap(db,user_id=user['id'],organization_name='Operations',workspace_name=cuid(),now=now)
                 await db.execute(text('UPDATE operation_heartbeats SET last_seen_at=:past WHERE instance_id=:instance'),{'past':now-timedelta(seconds=90),'instance':instance})
                 data=(await overview(seed['workspace_id'],user,db))['data']
                 job=next(j for j in data['jobs'] if j['instance']==instance)

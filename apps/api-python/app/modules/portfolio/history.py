@@ -3,13 +3,13 @@ from sqlalchemy import text
 from ...core.errors import ApiError
 from ...core.pagination import CursorCodec
 from ..access.project_scope import project_read_scope
-from ..access.projects import _workspace_access
+from ..access.projects import workspace_access
 
 
 async def history_page(
     db, workspace, user, secret, kind, identifier=None, *, limit=50, cursor=None
 ):
-    await _workspace_access(db, workspace, user)
+    await workspace_access(db, workspace, user)
     params = {
         "workspace": workspace,
         "user": user,

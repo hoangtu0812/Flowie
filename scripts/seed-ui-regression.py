@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'apps/api-python'))
-from app.core.clock import _utcnow
+from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.identifiers import cuid
 from app.modules.identity.auth import create_workspace_bootstrap, password_hasher
@@ -31,7 +31,7 @@ async def main():
     try:
         async with factory() as db:
             user = {'id': cuid(), 'name': 'Regression Owner', 'email': f'{cuid()}@example.test', 'avatarUrl': None}
-            now = _utcnow()
+            now = utcnow()
             await db.execute(text("INSERT INTO users(id,name,email,password_hash,status,email_verified_at,created_at,updated_at) VALUES (:id,:name,:email,:password,'ACTIVE',:now,:now,:now)"), {**user, 'password': password_hasher.hash(password), 'now': now})
             seed = await create_workspace_bootstrap(db, user_id=user['id'], organization_name='Regression', workspace_name='UI Regression ' + cuid(), now=now)
             folder, project = cuid(), cuid()

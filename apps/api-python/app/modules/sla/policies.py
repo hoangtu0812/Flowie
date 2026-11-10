@@ -2,11 +2,11 @@ import json
 
 from sqlalchemy import text
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.errors import ApiError
-from ...core.identifiers import _cuid
+from ...core.identifiers import cuid
 from ...core.pagination import CursorCodec
-from ..access.projects import _team_access, _workspace_access, _workspace_manager
+from ..access.projects import team_access, workspace_access, workspace_manager
 from ..access.team_scope import workspace_team_scope
 from ..audit.write import record_change
 from .calendar import add_working_seconds
@@ -46,7 +46,7 @@ def present(row):
 async def read_policy(
     db, workspace, user, identifier, *, lock=False, include_archived=False
 ):
-    await _workspace_access(db, workspace, user["id"])
+    await workspace_access(db, workspace, user["id"])
     scope = workspace_team_scope("p", include_archived=include_archived)
     row = (
         (
@@ -70,7 +70,7 @@ async def read_policy(
 async def list_policies(
     db, workspace, user, secret, *, include_archived=False, limit=50, cursor=None
 ):
-    await _workspace_access(db, workspace, user["id"])
+    await workspace_access(db, workspace, user["id"])
     scope = workspace_team_scope("p", include_archived=include_archived)
     params = {"workspace": workspace, "user": user["id"]}
     total = (
@@ -116,9 +116,9 @@ async def list_policies(
 
 
 async def validate_policy(db, workspace, user, payload):
-    await _workspace_manager(db, workspace, user["id"])
+    await workspace_manager(db, workspace, user["id"])
     if payload.teamId:
-        await _team_access(db, workspace, payload.teamId, user["id"])
+        await team_access(db, workspace, payload.teamId, user["id"])
     if payload.pauseStatusIds:
         count = (
             await db.execute(
@@ -168,7 +168,7 @@ async def validate_policy(db, workspace, user, payload):
                     "Bad Request",
                 )
     return add_working_seconds(
-        _utcnow(), payload.deadlineMinutes * 60, payload.calendar
+        utcnow(), payload.deadlineMinutes * 60, payload.calendar
     )
 
 
@@ -208,7 +208,7 @@ async def revision(db, row, actor, *, kind=None):
             "kind": kind or ("CREATED" if row["version"] == 1 else "CHANGED"),
             "snapshot": json.dumps(values),
             "actor": actor,
-            "now": _utcnow(),
+            "now": utcnow(),
         },
     )
 
@@ -234,7 +234,7 @@ async def create_policy(db, workspace, user, payload):
             "At most 200 active or disabled non-archived SLA policies are allowed.",
             "Bad Request",
         )
-    identifier, now = _cuid(), _utcnow()
+    identifier, now = cuid(), utcnow()
     values = payload.model_dump(mode="json", exclude={"workspaceId"})
     await db.execute(
         text("""INSERT INTO sla_policies(id,workspace_id,created_by,name,description,team_id,priority,deadline_minutes,enabled,calendar,pause_status_ids,warning_minutes,escalate_to_id,created_at,updated_at)
@@ -281,7 +281,7 @@ async def update_policy(db, workspace, user, identifier, payload):
             "calendar": json.dumps(values["calendar"])
             if values["calendar"] is not None
             else None,
-            "now": _utcnow(),
+            "now": utcnow(),
         },
     )
     updated = await read_policy(db, workspace, user, identifier, include_archived=True)
@@ -360,7 +360,7 @@ async def select_policy(db, workspace, team, priority):
 
 
 async def policy_command(db, workspace, user, identifier, command, expected):
-    await _workspace_manager(db, workspace, user["id"])
+    await workspace_manager(db, workspace, user["id"])
     await db.execute(
         text("SELECT pg_advisory_xact_lock(hashtextextended(:key,0))"),
         {"key": "sla-policy:" + workspace},
@@ -396,14 +396,14 @@ async def policy_command(db, workspace, user, identifier, command, expected):
             raise ApiError(400, "The SLA policy limit has been reached.", "Bad Request")
         archived = None
     elif command == "archive":
-        archived = _utcnow()
+        archived = utcnow()
     else:
         raise ApiError(400, "Unknown policy command.", "Bad Request")
     await db.execute(
         text(
             "UPDATE sla_policies SET archived_at=:archived,version=version+1,updated_at=:now WHERE id=:id"
         ),
-        {"id": identifier, "archived": archived, "now": _utcnow()},
+        {"id": identifier, "archived": archived, "now": utcnow()},
     )
     row = await read_policy(db, workspace, user, identifier, include_archived=True)
     await revision(

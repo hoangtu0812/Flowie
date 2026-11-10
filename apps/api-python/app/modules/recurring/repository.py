@@ -3,7 +3,7 @@ from sqlalchemy import text
 from ...core.errors import ApiError
 from ...core.pagination import CursorCodec
 from ..access.project_scope import project_read_scope
-from ..access.projects import _team_access, _workspace_access
+from ..access.projects import team_access, workspace_access
 
 
 def present(row):
@@ -82,12 +82,12 @@ async def schedule_row(db, workspace, user, identifier, *, lock=False):
     )
     if not row:
         raise ApiError(404, "Recurring schedule not found.", "Not Found")
-    await _team_access(db, workspace, row["team_id"], user["id"])
+    await team_access(db, workspace, row["team_id"], user["id"])
     return row
 
 
 async def schedules(db, workspace, user, secret, *, team=None, cursor=None, limit=50):
-    await _workspace_access(db, workspace, user["id"])
+    await workspace_access(db, workspace, user["id"])
     params = {"workspace": workspace, "user": user["id"]}
     scope = """FROM recurring_schedules r JOIN teams t ON t.id=r.team_id WHERE r.workspace_id=:workspace AND t.archived_at IS NULL
         AND EXISTS(SELECT 1 FROM team_members tm WHERE tm.team_id=r.team_id AND tm.user_id=:user)"""

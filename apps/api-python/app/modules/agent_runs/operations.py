@@ -2,10 +2,10 @@ from fastapi import Depends, Query
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 from sqlalchemy import text
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.utc_responses import UtcAPIRouter
 from ...db.session import get_session
-from ..access.membership import _manager
+from ..access.membership import manager
 from ..identity.auth import current_user
 from ..mcp.quotas import limits, update_limits
 from ..mcp.registry import TOOLS
@@ -38,7 +38,7 @@ async def put_limits(
     user=Depends(current_user),
     db=Depends(get_session),
 ):
-    await _manager(db, workspaceId, user["id"])
+    await manager(db, workspaceId, user["id"])
     await update_limits(db, workspaceId, payload.totalPerMinute, payload.perTool)
     await management_audit(db, workspaceId, user["id"], "budgets.updated", workspaceId)
     await db.commit()
@@ -51,8 +51,8 @@ async def overview(
     user=Depends(current_user),
     db=Depends(get_session),
 ):
-    await _manager(db, workspaceId, user["id"])
-    params = {"workspace": workspaceId, "now": _utcnow()}
+    await manager(db, workspaceId, user["id"])
+    params = {"workspace": workspaceId, "now": utcnow()}
     tools = (
         await db.execute(
             text("""SELECT metadata->>'tool' AS tool,count(*)::int AS calls,

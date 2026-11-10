@@ -4,15 +4,15 @@ from hashlib import sha256
 
 from sqlalchemy import text
 
-from ...core.clock import _utcnow
+from ...core.clock import utcnow
 from ...core.errors import ApiError
-from ...core.identifiers import _cuid
-from ..access.projects import _workspace_access
+from ...core.identifiers import cuid
+from ..access.projects import workspace_access
 from .issue_search import issue_scope
 
 
 async def bulk_preview(db, user, payload):
-    await _workspace_access(db, payload.workspaceId, user["id"])
+    await workspace_access(db, payload.workspaceId, user["id"])
     fingerprint = sha256(
         json.dumps(payload.model_dump(mode="json"), sort_keys=True).encode()
     ).hexdigest()
@@ -69,7 +69,7 @@ async def bulk_preview(db, user, payload):
             "Narrow the filters to at most 1000 issues per operation.",
             "Bad Request",
         )
-    identifier, now = _cuid(), _utcnow()
+    identifier, now = cuid(), utcnow()
     await db.execute(
         text("""INSERT INTO bulk_operations(id,workspace_id,actor_id,request_key,fingerprint,changes,created_at,expires_at)
         VALUES (:id,:workspace,:user,:key,:fingerprint,CAST(:changes AS jsonb),:now,:expires)"""),
@@ -105,7 +105,7 @@ async def bulk_preview(db, user, payload):
 
 
 async def bulk_result(db, user, workspace, identifier, *, lock=False):
-    await _workspace_access(db, workspace, user["id"])
+    await workspace_access(db, workspace, user["id"])
     row = (
         (
             await db.execute(
@@ -166,7 +166,7 @@ async def bulk_result(db, user, workspace, identifier, *, lock=False):
 async def bulk_command(db, user, workspace, identifier, command):
     result = await bulk_result(db, user, workspace, identifier, lock=True)
     if command == "execute" and result["state"] == "PREVIEW":
-        if result["expiresAt"] < _utcnow():
+        if result["expiresAt"] < utcnow():
             raise ApiError(410, "The preview expired. Create a new preview.", "Gone")
         state = "QUEUED"
     elif command == "cancel" and result["state"] in {"PREVIEW", "QUEUED", "RUNNING"}:

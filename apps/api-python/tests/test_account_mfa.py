@@ -13,10 +13,10 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from starlette.requests import Request
 
-from app.core.clock import _utcnow
+from app.core.clock import utcnow
 from app.core.config import Settings, _async_database_url
 from app.core.errors import ApiError
-from app.core.identifiers import _cuid
+from app.core.identifiers import cuid
 from app.db.session import get_session
 from app.main import create_app
 from app.modules.identity.security.mfa import commands
@@ -75,7 +75,7 @@ def test_rfc6238_sha1_vectors_window_replay_and_encryption_binding():
     assert authentication_instant(True) is None
     assert (
         authentication_instant(
-            int(_utcnow().replace(tzinfo=UTC).timestamp()) + 120
+            int(utcnow().replace(tzinfo=UTC).timestamp()) + 120
         )
         is None
     )
@@ -117,11 +117,11 @@ async def verify_mfa():
         auth_mfa_encryption_keys=Fernet.generate_key().decode(),
     )
     request = Request({"type": "http", "headers": [], "client": ("127.0.0.1", 1234)})
-    identifier, sso_id, password = _cuid(), _cuid(), "Example-MFA-password-2026"
+    identifier, sso_id, password = cuid(), cuid(), "Example-MFA-password-2026"
     email = identifier + "@example.test"
     try:
         async with factory() as db:
-            now = _utcnow()
+            now = utcnow()
             for uid, encoded in [
                 (identifier, PasswordHasher().hash(password)),
                 (sso_id, None),
@@ -164,7 +164,7 @@ async def verify_mfa():
                 setup["qr"].startswith("data:image/svg+xml")
                 and "otpauth" in setup["uri"]
             )
-            counter = int(_utcnow().replace(tzinfo=UTC).timestamp()) // 30
+            counter = int(utcnow().replace(tzinfo=UTC).timestamp()) // 30
             proof = SimpleNamespace(
                 password=password,
                 code=totp(setup["secret"], counter),
@@ -226,14 +226,14 @@ async def verify_mfa():
             assert "no-store" in replay.headers["cache-control"]
             raw = client.cookies.get(COOKIE)
             async with factory() as db:
-                from app.core.identifiers import _hash_token
+                from app.core.identifiers import hash_token
 
                 assert (
                     await db.execute(
                         text(
                             "SELECT attempts FROM mfa_challenges WHERE token_hash=:hash"
                         ),
-                        {"hash": _hash_token(raw)},
+                        {"hash": hash_token(raw)},
                     )
                 ).scalar_one() == 1
             result = await client.post(
@@ -325,7 +325,7 @@ async def verify_mfa():
                 request,
                 settings,
                 method="MICROSOFT",
-                authenticated_at=_utcnow(),
+                authenticated_at=utcnow(),
             )
             sso_actor = await active_identity(db, decode_access(sso_token, settings))
             assert (await commands.setup(db, sso_actor, None, request, settings))[
