@@ -107,4 +107,7 @@ export const messages: Readonly<Record<string, string>> = {
    'Delete...': 'Xóa...',
    'Previous issue': 'Công việc trước',
    'Next issue': 'Công việc tiếp theo',
+   'View all': 'Xem tất cả',
+   'Toggle Projects': 'Thu gọn/mở rộng Dự án',
+   'Toggle Cycles': 'Thu gọn/mở rộng Chu kỳ',
 } as const;
