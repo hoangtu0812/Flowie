@@ -50,14 +50,14 @@ app/                          # Next.js routes (thin wrappers around components)
       overview/  documents/  members/           # Team Home tabs
 components/
   common/                     # Feature components still waiting to move to features/ (DTD-524)
-    issues/    projects/    settings/    markdown/
-    projects/details/         # Project detail tabs (overview / activity / issues) + properties panel
+    issues/    settings/    markdown/
   layout/
     main-layout.tsx           # Sidebar + rounded content shell used by every page
     sidebar/                  # App sidebar (nav, org switcher, create-issue modal)
     headers/                  # Per-page headers (nav row + options row)
   ui/                         # shadcn/ui primitives (button, dialog, table, …)
 features/<domain>/            # Everything that belongs to one business domain (see AGENTS.md)
+  projects/details/           # Project detail tabs (overview / activity / issues) + properties panel
 types/                        # UI domain types mapped from the API (Issue, User, Project, …)
 store/                        # Zustand stores (state + mutations + filtering)
 lib/                          # cn(), LexoRank re-export, status/notification helpers
@@ -190,7 +190,7 @@ Each feature is self-contained under `features/<feature>` (or, until DTD-524 fin
   identity (email, client-computed local time from `User.timezone`, joined, teams,
   projects) and Labels/Priority/Projects/Teams breakdowns. Member rows in the Members
   tables link here. Needs the issues feature.
-- **Project detail pages** (`components/common/projects/details/` +
+- **Project detail pages** (`features/projects/details/` +
   `components/layout/headers/project/` + `app/[orgId]/project/[projectId]/`) —
   `project-overview.tsx` (rich `ContentBlock` description, inline properties,
   initiatives/labels/resources), `project-activity.tsx` (update composer with health
@@ -198,7 +198,7 @@ Each feature is self-contained under `features/<feature>` (or, until DTD-524 fin
   monthly timeline of updates), `project-issues.tsx` (project-scoped grouped issues),
   `project-properties-panel.tsx` (properties, milestones, progress breakdowns by
   assignee/label/cycle, activity feed). Types in `types/project-details.ts`.
-- **Projects page** (`components/common/projects/`) — `projects.tsx` orchestrates two
+- **Projects page** (`features/projects/`) — `projects.tsx` orchestrates two
   URL-synced views (`?view=`): the **All projects** table (`project-line.tsx` — health,
   priority, lead, target date, live issue count, status %) and the **Active projects
   timeline** (`projects-timeline.tsx` — month scale, team groups, date-positioned bars,

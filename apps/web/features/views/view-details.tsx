@@ -11,8 +11,8 @@ import { GroupedIssuesView } from '@/components/common/issues/grouped-issues-vie
 import { IssueFilterTrigger } from '@/components/common/issues/issue-filter-trigger';
 import { IssueFilterBar } from '@/components/common/issues/issue-filter-bar';
 import { InsightsPanel } from '@/components/common/issues/insights-panel';
-import ProjectsList from '@/components/common/projects/projects-list';
-import { ProjectGroup } from '@/components/common/projects/projects';
+import ProjectsList from '@/features/projects/projects-list';
+import { ProjectGroup } from '@/features/projects/projects';
 import { useProjectsData } from '@/features/projects/projects-data';
 import { useIssuesStore } from '@/store/issues-store';
 import { useRightPanelStore } from '@/store/right-panel-store';

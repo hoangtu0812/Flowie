@@ -1,6 +1,6 @@
 'use client';
 
-import Projects from '@/components/common/projects/projects';
+import Projects from '@/features/projects/projects';
 
 /**
  * Team "Projects" page: the exact same projects experience as /projects

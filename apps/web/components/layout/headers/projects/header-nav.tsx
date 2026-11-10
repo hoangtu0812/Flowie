@@ -3,7 +3,7 @@ import { useMessages } from '@/features/shared/use-messages';
 import { messages } from '@/features/navigation/messages.vi';
 
 import { Button } from '@/components/ui/button';
-import { CreateProjectDialog } from '@/components/common/projects/create-project-dialog';
+import { CreateProjectDialog } from '@/features/projects/create-project-dialog';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useProjectsData } from '@/features/projects/projects-data';
 import { Plus } from 'lucide-react';

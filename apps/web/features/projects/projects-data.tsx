@@ -6,7 +6,7 @@ import type { Status } from '@/lib/status-presentations';
 import { status as circleStatuses } from '@/lib/status-presentations';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import type { Project } from '@/types/projects';
-import { projectIcon } from '@/components/common/projects/project-icon';
+import { projectIcon } from '@/features/projects/project-icon';
 import {
    createContext,
    type ReactNode,

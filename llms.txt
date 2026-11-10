@@ -39,8 +39,8 @@ Key facts for coding agents:
 - [components/data-table-filter](./components/data-table-filter): vendored bazza/ui filter component (chips UI, filter fns)
 - [features/cycles/cycles.tsx](./features/cycles/cycles.tsx): cycles timeline with burn-up chart
 - [features/members/member-profile.tsx](./features/members/member-profile.tsx): member profile (Assigned/Created tabs, identity panel, breakdowns)
-- [components/common/projects/details/project-overview.tsx](./components/common/projects/details/project-overview.tsx): project detail tabs (overview/activity/issues) + properties panel
-- [components/common/projects/projects.tsx](./components/common/projects/projects.tsx): projects page — All table + Active timeline (gantt) + Health/Teams/Leads insights panel
+- [features/projects/details/project-overview.tsx](./features/projects/details/project-overview.tsx): project detail tabs (overview/activity/issues) + properties panel
+- [features/projects/projects.tsx](./features/projects/projects.tsx): projects page — All table + Active timeline (gantt) + Health/Teams/Leads insights panel
 - [features/agent/agent-chat.tsx](./features/agent/agent-chat.tsx): functional mock Agent chat (canned replies, word-by-word streaming)
 
 ## Optional
