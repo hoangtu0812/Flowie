@@ -197,7 +197,7 @@ export default function Inbox() {
                </DropdownMenu>
             </div>
          </div>
-         <div className="w-full flex flex-col items-center justify-start overflow-y-scroll h-[calc(100%-40px)] pb-0.25">
+         <div className="w-full flex flex-col items-center justify-start overflow-y-scroll overflow-x-hidden h-[calc(100%-40px)] pb-0.25">
             {loading && notifications.length === 0 && (
                <LoadingState label={t('loadingNotifications')} />
             )}

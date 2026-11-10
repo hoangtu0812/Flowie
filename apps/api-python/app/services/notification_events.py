@@ -102,11 +102,17 @@ notification_hub = NotificationHub()
 
 
 def actor_payload(actor: Any) -> dict[str, str | None]:
-    return {
-        'id': actor['id'],
-        'name': actor['name'],
-        'avatarUrl': actor.get('avatar_url') if hasattr(actor, 'get') else actor['avatar_url'],
-    }
+    # Session users and database rows carry `avatar_url`; an MCP principal's user
+    # carries `avatarUrl`. Reading only one key left every notification an agent
+    # caused without the actor's picture, so the Inbox showed initials instead.
+    # VI: User phiên đăng nhập và dòng DB có `avatar_url`; user của principal MCP
+    # có `avatarUrl`. Chỉ đọc một khoá khiến mọi thông báo do agent tạo mất ảnh
+    # người thao tác, nên Inbox hiện chữ viết tắt thay vì ảnh.
+    if hasattr(actor, 'get'):
+        avatar = actor.get('avatar_url') or actor.get('avatarUrl')
+    else:
+        avatar = actor['avatar_url']
+    return {'id': actor['id'], 'name': actor['name'], 'avatarUrl': avatar}
 
 
 async def team_recipient_ids(db: AsyncSession, team_id: str | None) -> set[str]:

@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { Button } from '@astryxdesign/core/Button';
 import { Check, ArrowUpRight, Clock } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { initials } from '@/lib/initials';
 import { getNotificationIcon } from '@/lib/notification-utils';
 import { VStack } from '@astryxdesign/core/Layout';
 import { Text } from '@astryxdesign/core/Text';
@@ -120,10 +121,7 @@ export function NotificationPreview({
                            alt={notification.user.name}
                         />
                         <AvatarFallback className="text-xs">
-                           {notification.user.name
-                              .split(' ')
-                              .map((part) => part[0])
-                              .join('')}
+                           {initials(notification.user.name)}
                         </AvatarFallback>
                      </Avatar>
                      <div className="min-w-0 text-sm">
