@@ -1,7 +1,9 @@
-from sqlalchemy import text
 
 from ....core.clock import utcnow
 from ....core.identifiers import cuid
+from .commands import (
+    RECORD_EVENT_INSERT_ACCOUNT_SECURITY_EVENTS,
+)
 
 
 def request_metadata(request):
@@ -15,9 +17,7 @@ async def record_event(db, user_id, kind, method, request):
     if user_id is None:
         return
     await db.execute(
-        text(
-            "INSERT INTO account_security_events(id,user_id,kind,method,ip_address,user_agent,created_at) VALUES (:id,:user,:kind,:method,:ip,:agent,:now)"
-        ),
+        RECORD_EVENT_INSERT_ACCOUNT_SECURITY_EVENTS,
         {
             "id": cuid(),
             "user": user_id,

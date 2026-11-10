@@ -5,7 +5,6 @@ from typing import Any, Literal
 
 from fastapi import Depends, Request
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import utcnow
@@ -17,6 +16,19 @@ from .auth import (
     _is_environment_admin,
     _platform_role,
     current_user,
+)
+from .commands import (
+    UPDATE_USER_INSERT_AUDIT_LOGS,
+    UPDATE_USER_UPDATE_SESSIONS,
+    update_user_update_users_sql,
+)
+from .queries import (
+    AUDIT_LOGS_SELECT_AUDIT_LOGS,
+    OVERVIEW_SELECT_USERS,
+    UPDATE_USER_SELECT_USERS,
+    WORKSPACES_SELECT_WORKSPACE_MEMBERS,
+    update_user_select_sql,
+    users_select_sql,
 )
 
 router = APIRouter(prefix='/api/v1/admin', tags=['admin'])
@@ -90,14 +102,7 @@ async def overview(
 ) -> dict[str, dict[str, int]]:
     await _platform_admin(user)
     result = await db.execute(
-        text(
-            '''SELECT (SELECT COUNT(*)::int FROM users) AS users,
-                      (SELECT COUNT(*)::int FROM users WHERE status = 'ACTIVE') AS active_users,
-                      (SELECT COUNT(*)::int FROM organizations) AS organizations,
-                      (SELECT COUNT(*)::int FROM workspaces) AS workspaces,
-                      (SELECT COUNT(*)::int FROM projects) AS projects,
-                      (SELECT COUNT(*)::int FROM issues) AS issues'''
-        )
+        OVERVIEW_SELECT_USERS
     )
     row = result.mappings().one()
     return {
@@ -119,7 +124,7 @@ async def users(
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, list[dict[str, Any]]]:
     await _platform_admin(user)
-    result = await db.execute(text(f'{ADMIN_USER_QUERY} ORDER BY u.created_at DESC'))
+    result = await db.execute(users_select_sql(ADMIN_USER_QUERY))
     return {
         'data': [
             _admin_user(row, user, request.app.state.settings)
@@ -134,19 +139,7 @@ async def workspaces(
 ) -> dict[str, list[dict[str, Any]]]:
     await _platform_admin(user)
     result = await db.execute(
-        text(
-            '''SELECT w.id, w.name, w.slug, w.created_at,
-                      o.name AS organization_name, o.slug AS organization_slug,
-                      ow.name AS owner_name, ow.email AS owner_email,
-                      (SELECT COUNT(*)::int FROM workspace_members m WHERE m.workspace_id = w.id) AS members,
-                      (SELECT COUNT(*)::int FROM teams t WHERE t.workspace_id = w.id) AS teams,
-                      (SELECT COUNT(*)::int FROM projects p WHERE p.workspace_id = w.id) AS projects,
-                      (SELECT COUNT(*)::int FROM issues i WHERE i.workspace_id = w.id) AS issues
-               FROM workspaces w
-               JOIN organizations o ON o.id = w.organization_id
-               JOIN users ow ON ow.id = o.owner_id
-               ORDER BY w.created_at DESC'''
-        )
+        WORKSPACES_SELECT_WORKSPACE_MEMBERS
     )
     return {
         'data': [
@@ -178,10 +171,7 @@ async def audit_logs(
 ) -> dict[str, list[dict[str, Any]]]:
     await _super_admin(user)
     result = await db.execute(
-        text(
-            '''SELECT id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at
-               FROM audit_logs ORDER BY created_at DESC LIMIT 200'''
-        )
+        AUDIT_LOGS_SELECT_AUDIT_LOGS
     )
     return {
         'data': [
@@ -216,7 +206,7 @@ async def update_user(
             'Bad Request',
         )
     target = await db.execute(
-        text('SELECT id, email, status, platform_role FROM users WHERE id = :id'), {'id': user_id}
+        UPDATE_USER_SELECT_USERS, {'id': user_id}
     )
     row = target.mappings().first()
     if not row:
@@ -252,19 +242,14 @@ async def update_user(
         params['platform_role'] = payload.platformRole
         params['is_platform_admin'] = payload.platformRole is not None
     if sets:
-        await db.execute(text(f"UPDATE users SET {', '.join(sets)} WHERE id = :id"), params)
+        await db.execute(update_user_update_users_sql(sets), params)
     if payload.status and payload.status != 'ACTIVE':
         await db.execute(
-            text(
-                'UPDATE sessions SET revoked_at = :now WHERE user_id = :id AND revoked_at IS NULL'
-            ),
+            UPDATE_USER_UPDATE_SESSIONS,
             {'id': user_id, 'now': now},
         )
     await db.execute(
-        text(
-            '''INSERT INTO audit_logs (id, actor_id, action, entity_type, entity_id, metadata, created_at)
-               VALUES (:id, :actor_id, 'admin.user.updated', 'user', :entity_id, CAST(:metadata AS jsonb), :now)'''
-        ),
+        UPDATE_USER_INSERT_AUDIT_LOGS,
         {
             'id': cuid(),
             'actor_id': user['id'],
@@ -288,5 +273,5 @@ async def update_user(
         },
     )
     await db.commit()
-    updated = await db.execute(text(f'{ADMIN_USER_QUERY} WHERE u.id = :id'), {'id': user_id})
+    updated = await db.execute(update_user_select_sql(ADMIN_USER_QUERY), {'id': user_id})
     return {'data': _admin_user(updated.mappings().one(), user, settings)}
