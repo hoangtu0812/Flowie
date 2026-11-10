@@ -19,13 +19,13 @@ from ..modules.work_items.comment_repository import (
 )
 from ..modules.work_items.comment_repository import _text_from_body as _text_from_body
 from ..modules.work_items.contracts import CommentInput, CreateCommentInput
+from ..modules.work_items.issue_queries import issue_row
 from ..services.notification_events import (
     create_notification_batch,
     issue_recipient_ids,
     publish_notification_batches,
 )
 from .auth import _cuid, _utcnow, current_user
-from .native_issues import _issue_row, _write_activity
 
 router = APIRouter(prefix='/api/v1/_native/comments', tags=['native-comments'])
 # Comments have no web UI adapter switched yet. Expose the audited native
@@ -49,7 +49,7 @@ class ToggleReactionInput(BaseModel):
 @public_router.get('/mentions')
 async def mention_members(workspaceId: str = Query(min_length=1), issueId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict:
     from ..modules.work_items.comment_mentions import mention_options
-    issue = await _issue_row(db, issueId, workspaceId, user['id'])
+    issue = await issue_row(db, issueId, workspaceId, user['id'])
     return {'data': await mention_options(db, issue)}
 
 

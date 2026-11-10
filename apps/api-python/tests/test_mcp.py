@@ -1683,8 +1683,8 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(current["version"], 2)
 
     async def test_removed_workspace_membership_blocks_web_and_mcp(self):
-        from app.domains.native_issues import update_issue
         from app.modules.work_items.contracts import UpdateIssueInput
+        from app.modules.work_items.issues_api import update_issue
 
         async with self.factory() as db:
             await db.execute(

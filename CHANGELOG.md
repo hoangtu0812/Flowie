@@ -64,6 +64,8 @@ pull request and commit references, which are for us.
 
 ### Changed
 
+- The API code for issues, sub-issues, relations, reactions and issue templates now lives in `app/modules/work_items` instead of `app/domains`, and `scripts/benchmark-issue-queries.py --baseline-ref` reads the issue API from either location. Every route, response and error stays the same. Rebuild `api`; no migration. (DTD-523, DTD-702, #259)
+  VI: Mã API của issue, sub-issue, quan hệ, reaction và mẫu issue nay nằm trong `app/modules/work_items` thay vì `app/domains`, và `scripts/benchmark-issue-queries.py --baseline-ref` đọc được API issue ở cả hai vị trí. Mọi route, phản hồi và lỗi giữ nguyên. Build lại `api`; không có migration. (DTD-523, DTD-702)
 - The API code for projects, their statuses, custom fields, updates and members now lives in `app/modules/portfolio` instead of `app/domains`, and the team serializer has a public name. Every route, response and error stays the same. Rebuild `api`; no migration. (DTD-523, DTD-693, #258)
   VI: Mã API của dự án, trạng thái, trường tuỳ chỉnh, cập nhật và thành viên dự án nay nằm trong `app/modules/portfolio` thay vì `app/domains`, và hàm dựng dữ liệu team có tên công khai. Mọi route, phản hồi và lỗi giữ nguyên. Build lại `api`; không có migration. (DTD-523, DTD-693)
 - The API code for workspaces, their members, invitations, auto-join and display defaults now lives in `app/modules/workspaces` instead of `app/domains`, and the email-normalising helper has a public name. Every route, response and error stays the same. Rebuild `api`; no migration. (DTD-523, DTD-690, #257)

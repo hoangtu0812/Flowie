@@ -35,8 +35,18 @@ def baseline_list(ref):
         "apps/api-python/app/modules/work_items/issue_queries.py",
         "app.modules.work_items",
     )
-    api = source("apps/api-python/app/domains/native_issues.py", "app.domains")
-    api["_issue_row"] = rows["_issue_row"]
+    # Refs before DTD-523 keep the issue API in app/domains and call `_issue_row`;
+    # later refs keep it in app/modules/work_items and call `issue_row`.
+    # VI: Ref trước DTD-523 để API issue trong app/domains và gọi `_issue_row`;
+    # ref sau để ở app/modules/work_items và gọi `issue_row`.
+    try:
+        api = source(
+            "apps/api-python/app/modules/work_items/issues_api.py",
+            "app.modules.work_items",
+        )
+    except subprocess.CalledProcessError:
+        api = source("apps/api-python/app/domains/native_issues.py", "app.domains")
+    api["_issue_row"] = api["issue_row"] = rows["_issue_row"]
     return api["list_issues"]
 
 
@@ -78,7 +88,7 @@ async def main(args):
     elif args.baseline_ref:
         operation = baseline_list(args.baseline_ref)
     else:
-        from app.domains.native_issues import list_issues
+        from app.modules.work_items.issues_api import list_issues
 
         operation = list_issues
     reports = []
