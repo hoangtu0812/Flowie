@@ -35,8 +35,8 @@ from ..modules.portfolio.projects_api import (
     create_project,
     update_project,
 )
+from ..modules.work_items.issues_api import CreateIssueInput, create_issue
 from .auth import _cuid, _utcnow, current_user
-from .native_issues import CreateIssueInput, create_issue
 from .team_insights import (
     assignment_suggestions,
     hcm_today,

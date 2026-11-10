@@ -26,8 +26,6 @@ from .domains.native_documents import router as native_documents_router
 from .domains.native_initiatives import public_router as initiatives_router
 from .domains.native_initiatives import router as native_initiatives_router
 from .domains.native_integrations import router as integrations_router
-from .domains.native_issues import public_router as issues_router
-from .domains.native_issues import router as native_issues_router
 from .domains.native_notifications import router as notifications_router
 from .domains.native_pulse import router as pulse_router
 from .domains.native_slas import router as slas_router
@@ -63,6 +61,8 @@ from .modules.views.api import router as views_router
 from .modules.work_items.activity_api import public_router as activities_router
 from .modules.work_items.activity_api import router as native_activities_router
 from .modules.work_items.approvals_api import router as approvals_router
+from .modules.work_items.issues_api import public_router as issues_router
+from .modules.work_items.issues_api import router as native_issues_router
 from .modules.work_items.manual_order import router as manual_order_router
 from .modules.workspaces.api import router as workspaces_router
 

@@ -14,13 +14,13 @@ from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
 from ..modules.access.projects import team_access, workspace_access
 from ..modules.notifications.outbox import stage_notifications
+from ..modules.work_items.issues_api import CreateIssueInput, create_issue
 from ..services.notification_events import (
     create_notification_batch,
     project_teams_batch,
     team_recipient_ids,
 )
 from .auth import _cuid, _utcnow, current_user
-from .native_issues import CreateIssueInput, create_issue
 from .service_desk_assistant import AssistantQuestion, answer_question, assistant_status
 
 router = APIRouter(prefix='/api/v1/asks', tags=['asks'])

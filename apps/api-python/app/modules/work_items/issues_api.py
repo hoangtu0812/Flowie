@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal
 
 from fastapi import Depends, Query, Request
@@ -9,50 +9,28 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.errors import ApiError
-from ..core.utc_responses import UtcAPIRouter as APIRouter
-from ..db.session import get_session
-from ..modules.access.project_scope import project_read_scope
-from ..modules.access.projects import team_access, workspace_access
-from ..modules.work_items.contracts import CreateIssueInput, UpdateIssueInput
-from ..modules.work_items.issue_activity import _transition as _transition
-from ..modules.work_items.issue_activity import _write_activity as _write_activity
-from ..modules.work_items.issue_hierarchy import issue_ancestors
-from ..modules.work_items.issue_queries import _issue_row as _issue_row
-from ..modules.work_items.issue_queries import _person_name as _person_name
-from ..modules.work_items.issue_queries import _project_name as _project_name
-from ..modules.work_items.issue_queries import _relation_summary as _relation_summary
-from ..modules.work_items.issue_queries import _status_name as _status_name
-from ..modules.work_items.issue_queries import _template_row as _template_row
-from ..modules.work_items.issue_relations import (
-    _add_issue_relation as _add_issue_relation,
+from ...core.clock import utcnow
+from ...core.errors import ApiError
+from ...core.identifiers import cuid
+from ...core.utc_responses import UtcAPIRouter as APIRouter
+from ...db.session import get_session
+from ...domains.auth import current_user
+from ..access.membership import manager
+from ..access.project_scope import project_read_scope
+from ..access.projects import team_access, workspace_access
+from .contracts import CreateIssueInput, UpdateIssueInput
+from .issue_activity import _write_activity
+from .issue_hierarchy import issue_ancestors
+from .issue_queries import (
+    _relation_summary,
+    _template_row,
+    issue_row,
 )
-from ..modules.work_items.issue_relations import _relation_kind as _relation_kind
-from ..modules.work_items.issue_rules import (
-    _ensure_default_issue_statuses as _ensure_default_issue_statuses,
+from .issue_relations import _add_issue_relation, _relation_kind
+from .issue_rules import (
+    _ensure_default_issue_statuses,
+    _validate_template_references,
 )
-from ..modules.work_items.issue_rules import (
-    _validate_references as _validate_references,
-)
-from ..modules.work_items.issue_rules import (
-    _validate_release_ids as _validate_release_ids,
-)
-from ..modules.work_items.issue_rules import (
-    _validate_schedule_dates as _validate_schedule_dates,
-)
-from ..modules.work_items.issue_rules import (
-    _validate_template_references as _validate_template_references,
-)
-from ..modules.work_items.workflow_catalog import DEFAULT_ISSUE_STATUSES
-from ..services.notification_events import (
-    create_notification_batch,
-    issue_recipient_ids,
-    publish_notification_batches,
-    team_recipient_ids,
-)
-from .auth import _cuid, _utcnow, current_user
-from .native_slas import resolve_deadline
-from .teams import _manager
 
 # Mutations remain staged under the private prefix. Read endpoints are exposed
 # through the audited public router below once their web UI adapter is ready.
@@ -168,7 +146,11 @@ async def list_issues(
     workspaceId: str = Query(min_length=1), teamId: str | None = None,
     categories: str | None = None, scope: Literal['assigned', 'created', 'subscribed', 'activity'] | None = None,
     user: Any = Depends(current_user), db: AsyncSession = Depends(get_session), *,
-    request: Request = None,
+    # FastAPI injects the request through the plain `Request` annotation; None is only for direct
+    # calls outside a request, which read settings from the environment.
+    # VI: FastAPI inject request qua annotation `Request` thuần; None chỉ dành cho lời gọi trực tiếp
+    # VI: ngoài request, khi đó settings lấy từ biến môi trường.
+    request: Request = None,  # type: ignore[assignment]
     limit: Annotated[int, Query(ge=1, le=100)] = 100,
     cursor: Annotated[str | None, Query(max_length=2000)] = None,
     projectId: str | None = None, assigneeId: str | None = None, creatorId: str | None = None,
@@ -182,8 +164,8 @@ async def list_issues(
     ordering: Literal['manual'] | None = None,
     sort: Annotated[str | None, Query(max_length=2000)] = None,
 ) -> dict:
-    from ..core.config import Settings
-    from ..modules.work_items.issue_search import search_page
+    from ...core.config import Settings
+    from .issue_search import search_page
     await workspace_access(db, workspaceId, user['id'])
     if teamId:
         await team_access(db, workspaceId, teamId, user['id'])
@@ -199,7 +181,7 @@ async def list_issues(
     if ordering:
         options['ordering'] = ordering
     if insights:
-        from ..modules.work_items.issue_insights import issue_insights
+        from .issue_insights import issue_insights
         return {'data':await issue_insights(db,workspaceId,user['id'],options,sliceBy,segmentBy)}
     return await search_page(db, workspaceId, user['id'], settings.auth_jwt_secret, options)
 
@@ -212,7 +194,7 @@ async def lookup_issue(reference: str, workspaceId: str = Query(min_length=1), u
     row = (await db.execute(text('SELECT id FROM issues WHERE workspace_id=:workspace AND (id=:reference OR identifier=:reference) AND archived_at IS NULL LIMIT 1'), {'workspace': workspaceId, 'reference': reference})).mappings().first()
     if not row:
         raise ApiError(404, 'Issue not found.', 'Not Found')
-    issue = await _issue_row(db, row['id'], workspaceId, user['id'])
+    issue = await issue_row(db, row['id'], workspaceId, user['id'])
     # Only the issue page reads this endpoint, so the parent chain for its breadcrumb is added here
     # instead of to every list row.
     # VI: Chỉ trang issue đọc endpoint này, nên chuỗi cha cho breadcrumb được thêm ở đây thay vì vào
@@ -263,7 +245,7 @@ async def issue_options(
     return {'data': {
         'statuses': [{'id': row['id'], 'name': row['name'], 'category': row['category'], 'color': row['color'], 'position': row['position']} for row in statuses.mappings().all()],
         'projects': [{'id': row['id'], 'name': row['name'], 'identifier': row['identifier'], 'status': row['status'], 'priority': row['priority'], 'health': row['health'], 'startDate': row['start_date'], 'targetDate': row['target_date'], 'leadId': row['lead_id'], 'teamId': row['team_id']} for row in projects.mappings().all()],
-        'members': [{'id': row['id'], 'name': row['name'], 'email': row['email'], 'avatarUrl': row['avatar_url'], 'lastSeenAt': row['last_seen_at'], 'isOnline': bool(row['last_seen_at'] and row['last_seen_at'] >= _utcnow() - timedelta(minutes=2))} for row in members.mappings().all()],
+        'members': [{'id': row['id'], 'name': row['name'], 'email': row['email'], 'avatarUrl': row['avatar_url'], 'lastSeenAt': row['last_seen_at'], 'isOnline': bool(row['last_seen_at'] and row['last_seen_at'] >= utcnow() - timedelta(minutes=2))} for row in members.mappings().all()],
         'labels': [dict(row) for row in labels.mappings().all()],
         'cycles': [{'id': row['id'], 'teamId': row['team_id'], 'name': row['name'], 'status': row['status'], 'startDate': row['start_date'], 'endDate': row['end_date']} for row in cycles.mappings().all()],
         'releases': [{'id': row['id'], 'name': row['name'], 'version': row['version'], 'status': row['status'], 'targetDate': row['target_date']} for row in releases.mappings().all()],
@@ -279,7 +261,7 @@ async def issue_options(
 @public_router.get('/bug-report')
 async def bug_report(workspaceId: str = Query(min_length=1), teamId: str | None = None,
     projectId: str | None = None, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict:
-    from ..modules.work_items.bug_reports import report
+    from .bug_reports import report
     return {'data': await report(db, workspaceId, user['id'], teamId, projectId)}
 
 
@@ -300,8 +282,8 @@ async def create_issue(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    from ..db.mutations import commit_mutation
-    from ..modules.work_items.issues import create_issue as operation
+    from ...db.mutations import commit_mutation
+    from .issues import create_issue as operation
 
     return await commit_mutation(db, lambda: operation(payload=payload, user=user, db=db))
 
@@ -350,10 +332,10 @@ async def create_issue_template(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _manager(db, payload.workspaceId, user['id'])
+    await manager(db, payload.workspaceId, user['id'])
     values = payload.model_dump()
     await _validate_template_references(db, payload.workspaceId, values)
-    template_id, now = _cuid(), _utcnow()
+    template_id, now = cuid(), utcnow()
     await db.execute(
         text(
             '''INSERT INTO issue_templates
@@ -384,13 +366,13 @@ async def update_issue_template(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _manager(db, workspaceId, user['id'])
+    await manager(db, workspaceId, user['id'])
     if not await _template_row(db, template_id, workspaceId):
         raise ApiError(404, 'Issue template not found.', 'Not Found')
     values = payload.model_dump(exclude_unset=True)
     await _validate_template_references(db, workspaceId, values)
     columns = {'name': 'name', 'description': 'description', 'title': 'title', 'issueDescription': 'issue_description', 'statusId': 'status_id', 'priority': 'priority', 'projectId': 'project_id', 'assigneeId': 'assignee_id', 'labelIds': 'label_ids'}
-    sets, params = [], {'template_id': template_id, 'workspace_id': workspaceId, 'now': _utcnow()}
+    sets, params = [], {'template_id': template_id, 'workspace_id': workspaceId, 'now': utcnow()}
     for field, column in columns.items():
         if field in values:
             params[field] = values[field].strip() if field in {'name', 'title'} and values[field] else values[field]
@@ -409,7 +391,7 @@ async def delete_issue_template(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _manager(db, workspaceId, user['id'])
+    await manager(db, workspaceId, user['id'])
     result = await db.execute(text('DELETE FROM issue_templates WHERE id = :template_id AND workspace_id = :workspace_id RETURNING id'), {'template_id': template_id, 'workspace_id': workspaceId})
     if result.scalar_one_or_none() is None:
         raise ApiError(404, 'Issue template not found.', 'Not Found')
@@ -464,7 +446,7 @@ async def list_sub_issues(
     VI: có `parentIssueId` để client dựng lại cây, cùng trạng thái, assignee, các ngày và version
     VI: mà các hàng của cây và timeline sub-issue hiển thị và cho sửa.
     """
-    parent = await _issue_row(db, issue_id, workspaceId, user['id'])
+    parent = await issue_row(db, issue_id, workspaceId, user['id'])
     if descendants:
         ids = await _descendant_ids(db, workspaceId, parent['teamId'], parent['id'])
     else:
@@ -530,7 +512,7 @@ async def list_issue_relations(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, list[dict[str, Any]]]:
-    await _issue_row(db, issue_id, workspaceId, user['id'])
+    await issue_row(db, issue_id, workspaceId, user['id'])
     result = await db.execute(
         text(
             '''SELECT relation.issue_id, relation.related_issue_id, relation.type
@@ -600,8 +582,8 @@ async def remove_issue_relation(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    issue = await _issue_row(db, issue_id, workspaceId, user['id'])
-    related = await _issue_row(db, related_issue_id, workspaceId, user['id'])
+    issue = await issue_row(db, issue_id, workspaceId, user['id'])
+    related = await issue_row(db, related_issue_id, workspaceId, user['id'])
     result = await db.execute(
         text(
             '''DELETE FROM issue_relations
@@ -643,17 +625,17 @@ async def move_issue(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    issue = await _issue_row(db, issue_id, payload.workspaceId, user['id'])
-    from ..modules.sla.synchronization import locked_issue, sync_issue
-    from ..modules.work_items.lifecycle import actor_context
+    issue = await issue_row(db, issue_id, payload.workspaceId, user['id'])
+    from ..sla.synchronization import locked_issue, sync_issue
+    from .lifecycle import actor_context
     await locked_issue(db, issue_id)
     await actor_context(db, user['id'])
-    issue = await _issue_row(db, issue_id, payload.workspaceId, user['id'])
+    issue = await issue_row(db, issue_id, payload.workspaceId, user['id'])
     if issue['teamId'] == payload.teamId:
         return {'data': issue}
     if payload.teamId:
         await team_access(db, payload.workspaceId, payload.teamId, user['id'])
-    from ..modules.work_items.issue_numbering import allocate_issue_number
+    from .issue_numbering import allocate_issue_number
     team = await allocate_issue_number(db, payload.workspaceId, payload.teamId)
     status = await db.execute(
         text(
@@ -678,7 +660,7 @@ async def move_issue(
             text('SELECT team_id FROM projects WHERE id = :project_id'), {'project_id': issue['projectId']}
         )
         project_team_id = project_team.scalar_one_or_none()
-    now = _utcnow()
+    now = utcnow()
     await db.execute(text('DELETE FROM issue_cycles WHERE issue_id = :issue_id'), {'issue_id': issue_id})
     await db.execute(
         text('UPDATE issues SET parent_issue_id = NULL, updated_at = :now WHERE parent_issue_id = :issue_id'),
@@ -711,7 +693,7 @@ async def move_issue(
     })
     await sync_issue(db, issue_id)
     await db.commit()
-    return {'data': await _issue_row(db, issue_id, payload.workspaceId, user['id'])}
+    return {'data': await issue_row(db, issue_id, payload.workspaceId, user['id'])}
 
 
 @router.post('/{issue_id}/classification')
@@ -722,12 +704,12 @@ async def classify_issue(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    issue = await _issue_row(db, issue_id, payload.workspaceId, user['id'])
-    from ..modules.sla.synchronization import locked_issue, sync_issue
-    from ..modules.work_items.lifecycle import actor_context
+    issue = await issue_row(db, issue_id, payload.workspaceId, user['id'])
+    from ..sla.synchronization import locked_issue, sync_issue
+    from .lifecycle import actor_context
     await locked_issue(db, issue_id)
     await actor_context(db, user['id'])
-    issue = await _issue_row(db, issue_id, payload.workspaceId, user['id'])
+    issue = await issue_row(db, issue_id, payload.workspaceId, user['id'])
     duplicate_of_id: str | None = None
     duplicate_identifier: str | None = None
     if payload.resolution == 'DUPLICATE':
@@ -746,7 +728,7 @@ async def classify_issue(
             raise ApiError(404, 'Duplicate target issue not found.', 'Not Found')
         if duplicate_of_id == issue['id']:
             raise ApiError(400, 'An issue cannot be a duplicate of itself.', 'Bad Request')
-        duplicate = await _issue_row(db, duplicate_of_id, payload.workspaceId, user['id'])
+        duplicate = await issue_row(db, duplicate_of_id, payload.workspaceId, user['id'])
         duplicate_identifier = duplicate['identifier']
     canceled_status = await db.execute(
         text(
@@ -761,7 +743,7 @@ async def classify_issue(
     status_id = canceled_status.scalar_one_or_none()
     if not status_id:
         raise ApiError(404, 'No canceled status is configured for this team.', 'Not Found')
-    now = _utcnow()
+    now = utcnow()
     await db.execute(
         text(
             '''UPDATE issues SET resolution = :resolution, duplicate_of_id = :duplicate_of_id,
@@ -784,7 +766,7 @@ async def classify_issue(
     })
     await sync_issue(db, issue_id)
     await db.commit()
-    return {'data': await _issue_row(db, issue_id, payload.workspaceId, user['id'])}
+    return {'data': await issue_row(db, issue_id, payload.workspaceId, user['id'])}
 
 
 @router.post('/{issue_id}/convert-to-comment')
@@ -795,12 +777,12 @@ async def convert_issue_to_comment(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    source = await _issue_row(db, issue_id, payload.workspaceId, user['id'])
-    from ..modules.sla.synchronization import locked_issue, sync_issue
-    from ..modules.work_items.lifecycle import actor_context
+    source = await issue_row(db, issue_id, payload.workspaceId, user['id'])
+    from ..sla.synchronization import locked_issue, sync_issue
+    from .lifecycle import actor_context
     await locked_issue(db, issue_id)
     await actor_context(db, user['id'])
-    source = await _issue_row(db, issue_id, payload.workspaceId, user['id'])
+    source = await issue_row(db, issue_id, payload.workspaceId, user['id'])
     target_id = await db.execute(
         text('''SELECT id FROM issues WHERE workspace_id = :workspace_id AND identifier = :identifier
                 AND archived_at IS NULL LIMIT 1'''),
@@ -811,12 +793,12 @@ async def convert_issue_to_comment(
         raise ApiError(404, 'Target issue not found.', 'Not Found')
     if target_issue_id == source['id']:
         raise ApiError(400, 'An issue cannot be converted into its own comment.', 'Bad Request')
-    target = await _issue_row(db, target_issue_id, payload.workspaceId, user['id'])
+    target = await issue_row(db, target_issue_id, payload.workspaceId, user['id'])
     actor = await db.execute(text('SELECT id, name, avatar_url FROM users WHERE id = :user_id'), {'user_id': user['id']})
     actor_row = actor.mappings().one()
     content = '\n\n'.join(filter(None, [f"**{source['identifier']}: {source['title']}**", (source['description'] or '').strip()]))
     body = {'type': 'doc', 'content': [{'type': 'paragraph', 'content': [{'type': 'text', 'text': content}]}]}
-    comment_id, now = _cuid(), _utcnow()
+    comment_id, now = cuid(), utcnow()
     await db.execute(
         text('''INSERT INTO comments (id, issue_id, author_id, content, body, created_at, updated_at)
                 VALUES (:id, :issue_id, :author_id, :content, CAST(:body AS jsonb), :now, :now)'''),
@@ -845,13 +827,13 @@ async def set_issue_reminder(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _issue_row(db, issue_id, payload.workspaceId, user['id'])
+    await issue_row(db, issue_id, payload.workspaceId, user['id'])
     remind_at = (
         payload.remindAt.astimezone(UTC).replace(tzinfo=None)
         if payload.remindAt.tzinfo
         else payload.remindAt
     )
-    now = _utcnow()
+    now = utcnow()
     if remind_at <= now:
         raise ApiError(400, 'Reminder time must be in the future.', 'Bad Request')
     if remind_at > now + timedelta(days=366):
@@ -864,7 +846,7 @@ async def set_issue_reminder(
                SET remind_at = EXCLUDED.remind_at, delivered_at = NULL, updated_at = EXCLUDED.updated_at
                RETURNING id, issue_id, user_id, remind_at, delivered_at, created_at, updated_at'''
         ),
-        {'id': _cuid(), 'issue_id': issue_id, 'user_id': user['id'], 'remind_at': remind_at, 'now': now},
+        {'id': cuid(), 'issue_id': issue_id, 'user_id': user['id'], 'remind_at': remind_at, 'now': now},
     )
     reminder = result.mappings().one()
     await db.commit()
@@ -879,7 +861,7 @@ async def cancel_issue_reminder(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _issue_row(db, issue_id, workspaceId, user['id'])
+    await issue_row(db, issue_id, workspaceId, user['id'])
     await db.execute(text('DELETE FROM issue_reminders WHERE issue_id = :issue_id AND user_id = :user_id'), {'issue_id': issue_id, 'user_id': user['id']})
     await db.commit()
     return {'data': {'issueId': issue_id, 'reminder': None}}
@@ -893,7 +875,7 @@ async def get_issue(
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
     await workspace_access(db, workspaceId, user['id'])
-    return {'data': await _issue_row(db, issue_id, workspaceId, user['id'])}
+    return {'data': await issue_row(db, issue_id, workspaceId, user['id'])}
 
 
 
@@ -912,8 +894,8 @@ async def update_issue(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    from ..db.mutations import commit_mutation
-    from ..modules.work_items.issues import update_issue as operation
+    from ...db.mutations import commit_mutation
+    from .issues import update_issue as operation
 
     return await commit_mutation(db, lambda: operation(issue_id=issue_id, payload=payload, workspaceId=workspaceId, user=user, db=db))
 
@@ -933,19 +915,19 @@ async def archive_issue(
     VI: team trong cùng transaction, mỗi issue có activity `issue.archived`. Không có cờ thì các
     VI: con vẫn hoạt động và thành gốc ở nơi không còn hiển thị cha.
     """
-    issue = await _issue_row(db, issue_id, workspaceId, user['id'])
-    from ..modules.sla.synchronization import locked_issue, sync_issue
-    from ..modules.work_items.lifecycle import actor_context
+    issue = await issue_row(db, issue_id, workspaceId, user['id'])
+    from ..sla.synchronization import locked_issue, sync_issue
+    from .lifecycle import actor_context
     await locked_issue(db, issue_id)
     await actor_context(db, user['id'])
-    await _issue_row(db, issue_id, workspaceId, user['id'])
+    await issue_row(db, issue_id, workspaceId, user['id'])
     archived_ids = [issue_id]
     if includeSubIssues:
         descendant_ids = await _descendant_ids(db, workspaceId, issue['teamId'], issue_id)
         for descendant_id in descendant_ids:
             await locked_issue(db, descendant_id)
         archived_ids += descendant_ids
-    now = _utcnow()
+    now = utcnow()
     await db.execute(
         text('UPDATE issues SET archived_at = :now, updated_at = :now WHERE id = ANY(CAST(:ids AS text[])) AND workspace_id = :workspace_id AND archived_at IS NULL'),
         {'ids': archived_ids, 'workspace_id': workspaceId, 'now': now},
@@ -997,7 +979,7 @@ async def subscribe_issue(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _issue_row(db, issue_id, workspaceId, user['id'])
+    await issue_row(db, issue_id, workspaceId, user['id'])
     await db.execute(
         text('''INSERT INTO issue_subscriptions (issue_id, user_id) VALUES (:issue_id, :user_id)
                 ON CONFLICT DO NOTHING'''),
@@ -1015,7 +997,7 @@ async def unsubscribe_issue(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _issue_row(db, issue_id, workspaceId, user['id'])
+    await issue_row(db, issue_id, workspaceId, user['id'])
     await db.execute(
         text('DELETE FROM issue_subscriptions WHERE issue_id = :issue_id AND user_id = :user_id'),
         {'issue_id': issue_id, 'user_id': user['id']},
@@ -1032,7 +1014,7 @@ async def favorite_issue(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _issue_row(db, issue_id, workspaceId, user['id'])
+    await issue_row(db, issue_id, workspaceId, user['id'])
     await db.execute(
         text('''INSERT INTO issue_favorites (issue_id, user_id) VALUES (:issue_id, :user_id)
                 ON CONFLICT DO NOTHING'''),
@@ -1050,7 +1032,7 @@ async def unfavorite_issue(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _issue_row(db, issue_id, workspaceId, user['id'])
+    await issue_row(db, issue_id, workspaceId, user['id'])
     await db.execute(
         text('DELETE FROM issue_favorites WHERE issue_id = :issue_id AND user_id = :user_id'),
         {'issue_id': issue_id, 'user_id': user['id']},
@@ -1076,7 +1058,7 @@ async def issue_reactions(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, list[dict[str, Any]]]:
-    await _issue_row(db, issue_id, workspaceId, user['id'])
+    await issue_row(db, issue_id, workspaceId, user['id'])
     return {'data': await _issue_reactions(db, issue_id, user['id'])}
 
 
@@ -1088,7 +1070,7 @@ async def toggle_issue_reaction(  # noqa: D401 - kept for existing API clients
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, list[dict[str, Any]]]:
-    await _issue_row(db, issue_id, payload.workspaceId, user['id'])
+    await issue_row(db, issue_id, payload.workspaceId, user['id'])
     emoji = payload.emoji.strip()
     deleted = await db.execute(
         text('''DELETE FROM issue_reactions WHERE issue_id = :issue_id AND user_id = :user_id
@@ -1116,7 +1098,7 @@ async def add_issue_reaction(
 ) -> dict[str, list[dict[str, Any]]]:
     """Add one emoji for the signed-in user; reacting twice is not an error."""
 
-    await _issue_row(db, issue_id, workspaceId, user['id'])
+    await issue_row(db, issue_id, workspaceId, user['id'])
     value = emoji.strip()
     if not value:
         raise ApiError(400, 'emoji must not be empty', 'Bad Request')
@@ -1140,7 +1122,7 @@ async def remove_issue_reaction(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, list[dict[str, Any]]]:
-    await _issue_row(db, issue_id, workspaceId, user['id'])
+    await issue_row(db, issue_id, workspaceId, user['id'])
     await db.execute(
         text(
             '''DELETE FROM issue_reactions WHERE issue_id = :issue_id

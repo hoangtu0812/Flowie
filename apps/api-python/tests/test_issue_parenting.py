@@ -10,14 +10,14 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
-from app.domains.native_issues import (
+from app.modules.work_items.contracts import CreateIssueInput, UpdateIssueInput
+from app.modules.work_items.issues import create_issue, update_issue
+from app.modules.work_items.issues_api import (
     archive_issue,
     get_issue,
     list_sub_issues,
     lookup_issue,
 )
-from app.modules.work_items.contracts import CreateIssueInput, UpdateIssueInput
-from app.modules.work_items.issues import create_issue, update_issue
 
 
 @pytest.mark.skipif(
