@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...core.clock import _utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import _cuid
-from ...domains.workflow_catalog import DEFAULT_ISSUE_STATUSES
+from .workflow_catalog import DEFAULT_ISSUE_STATUSES
 
 
 def _validate_schedule_dates(

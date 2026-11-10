@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from fastapi import Depends, Query
@@ -9,13 +9,14 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.errors import ApiError
-from ..core.utc_responses import UtcAPIRouter as APIRouter
-from ..db.session import get_session
-from ..modules.access.projects import _team_access
-from ..modules.work_items.saved_view_config import issue_view_config
-from .auth import _cuid, _utcnow, current_user
-from .native_projects import _workspace_access
+from ...core.clock import utcnow
+from ...core.errors import ApiError
+from ...core.identifiers import cuid
+from ...core.utc_responses import UtcAPIRouter as APIRouter
+from ...db.session import get_session
+from ...domains.auth import current_user
+from ..access.projects import team_access, workspace_access
+from ..work_items.saved_view_config import issue_view_config
 
 router = APIRouter(prefix="/api/v1/views", tags=["views"])
 
@@ -45,7 +46,9 @@ class UpdateViewInput(BaseModel):
     isShared: bool
     expectedUpdatedAt: datetime
 
-    _trimmed_name = field_validator("name")(CreateViewInput.trimmed_name.__func__)
+    # Reuses the create model's trim validator; mypy types the classmethod as a plain callable without `__func__`.
+    # VI: Dùng lại validator trim của model tạo mới; mypy coi classmethod là callable thường, không có `__func__`.
+    _trimmed_name = field_validator("name")(CreateViewInput.trimmed_name.__func__)  # type: ignore[attr-defined]
 
 
 def _revision(value: datetime) -> datetime:
@@ -174,9 +177,9 @@ async def list_views(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, list[dict[str, Any]]]:
-    await _workspace_access(db, workspaceId, user["id"])
+    await workspace_access(db, workspaceId, user["id"])
     if teamId:
-        await _team_access(db, workspaceId, teamId, user["id"])
+        await team_access(db, workspaceId, teamId, user["id"])
     result = await db.execute(
         text(
             """SELECT id FROM saved_views
@@ -210,7 +213,7 @@ async def get_view(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _workspace_access(db, workspaceId, user["id"])
+    await workspace_access(db, workspaceId, user["id"])
     return {"data": await _view(db, view_id, workspaceId, user["id"])}
 
 
@@ -220,7 +223,7 @@ async def create_view(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _workspace_access(db, payload.workspaceId, user["id"])
+    await workspace_access(db, payload.workspaceId, user["id"])
     filters = (
         issue_view_config(payload.filters)
         if payload.entityType == "issue"
@@ -229,8 +232,8 @@ async def create_view(
     if payload.entityType == "issue":
         await _config_references(db, filters, payload.workspaceId)
         if filters.get("teamId"):
-            await _team_access(db, payload.workspaceId, filters["teamId"], user["id"])
-    view_id = _cuid()
+            await team_access(db, payload.workspaceId, filters["teamId"], user["id"])
+    view_id = cuid()
     await db.execute(
         text(
             """INSERT INTO saved_views
@@ -247,7 +250,7 @@ async def create_view(
             "entity_type": payload.entityType,
             "filters": json.dumps(filters),
             "is_shared": payload.isShared,
-            "now": _utcnow(),
+            "now": utcnow(),
         },
     )
     await db.commit()
@@ -262,7 +265,7 @@ async def update_view(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _workspace_access(db, workspaceId, user["id"])
+    await workspace_access(db, workspaceId, user["id"])
     view = await _view(db, view_id, workspaceId, user["id"])
     if view["createdById"] != user["id"]:
         raise ApiError(403, "Only the creator can edit this saved view.", "Forbidden")
@@ -271,7 +274,7 @@ async def update_view(
     filters = issue_view_config(payload.filters)
     await _config_references(db, filters, workspaceId)
     if filters.get("teamId"):
-        await _team_access(db, workspaceId, filters["teamId"], user["id"])
+        await team_access(db, workspaceId, filters["teamId"], user["id"])
     # Millisecond timestamps must advance even when two successful writes share the same clock tick.
     # VI: Timestamp mili giây phải tăng ngay cả khi hai lần ghi thành công nằm trong cùng một nhịp đồng hồ.
     result = await db.execute(
@@ -287,7 +290,7 @@ async def update_view(
             "description": payload.description.strip() if payload.description else None,
             "filters": json.dumps(filters),
             "shared": payload.isShared,
-            "now": _utcnow(),
+            "now": utcnow(),
             "expected": _revision(payload.expectedUpdatedAt),
         },
     )
@@ -309,7 +312,7 @@ async def delete_view(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
-    await _workspace_access(db, workspaceId, user["id"])
+    await workspace_access(db, workspaceId, user["id"])
     result = await db.execute(
         text(
             """DELETE FROM saved_views

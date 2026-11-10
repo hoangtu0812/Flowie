@@ -30,6 +30,7 @@ from ..core.passwords import verify_password
 from ..core.slugs import GENERATED_ID, RESERVED_WORKSPACE_SLUGS
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
+from ..modules.work_items.workflow_catalog import DEFAULT_ISSUE_STATUSES
 from ..services.auth_policy import require_password_sign_in
 from ..services.microsoft_identity import MicrosoftIdentityClient, MicrosoftProfile
 from ..services.registration_verification import (
@@ -37,7 +38,6 @@ from ..services.registration_verification import (
     deliver_registration_code,
 )
 from ..storage.minio import MinioStorage
-from .workflow_catalog import DEFAULT_ISSUE_STATUSES
 
 router = APIRouter(prefix='/api/v1/auth', tags=['auth'])
 password_hasher = PasswordHasher()

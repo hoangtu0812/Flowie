@@ -113,7 +113,7 @@ async def _issue_rows(
     ]
 
 
-async def _issue_row(
+async def issue_row(
     db: AsyncSession, issue_id: str, workspace_id: str, user_id: str
 ) -> dict[str, Any]:
     await _workspace_access(db, workspace_id, user_id)
@@ -232,7 +232,7 @@ def _present_issue(row, labels, cycles, releases, user_id):
 async def _relation_summary(
     db: AsyncSession, issue_id: str, workspace_id: str, user_id: str
 ) -> dict[str, Any]:
-    issue = await _issue_row(db, issue_id, workspace_id, user_id)
+    issue = await issue_row(db, issue_id, workspace_id, user_id)
     return {
         "id": issue["id"],
         "identifier": issue["identifier"],
@@ -284,3 +284,10 @@ async def _project_name(db: AsyncSession, project_id: str | None) -> str | None:
         text("SELECT name FROM projects WHERE id = :id"), {"id": project_id}
     )
     return result.scalar_one_or_none()
+
+
+# shortcut: private alias kept for callers not yet moved out of app/domains; delete it once DTD-523
+# has switched every caller to `issue_row`.
+# VI: shortcut: alias nội bộ giữ cho các nơi gọi chưa chuyển khỏi app/domains; xoá khi DTD-523 đã
+# VI: chuyển mọi nơi gọi sang `issue_row`.
+_issue_row = issue_row

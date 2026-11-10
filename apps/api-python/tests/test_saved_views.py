@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
-from app.domains.native_views import (
+from app.modules.views.api import (
     CreateViewInput,
     UpdateViewInput,
     create_view,

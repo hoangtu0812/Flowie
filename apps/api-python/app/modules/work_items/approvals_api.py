@@ -18,12 +18,12 @@ from fastapi import Depends, Query
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.utc_responses import UtcAPIRouter as APIRouter
-from ..db.session import get_session
-from ..modules.access.membership import _workspace_role
-from ..modules.access.team_scope import workspace_team_scope
-from ..modules.work_items.document_review import approval_block, approver_ids
-from .auth import current_user
+from ...core.utc_responses import UtcAPIRouter as APIRouter
+from ...db.session import get_session
+from ...domains.auth import current_user
+from ..access.membership import workspace_role
+from ..access.team_scope import workspace_team_scope
+from .document_review import approval_block, approver_ids
 
 router = APIRouter(prefix='/api/v1/approvals', tags=['approvals'])
 
@@ -43,7 +43,7 @@ JOINS = """LEFT JOIN users author ON author.id=d.created_by
 SCOPE = workspace_team_scope('d')
 
 
-def _item(row: Mapping[str, Any], reviewers: list[dict[str, Any]]) -> dict[str, Any]:
+def _item(row: Mapping[Any, Any], reviewers: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         'kind': 'document',
         'id': row['id'],
@@ -191,7 +191,7 @@ async def list_approvals(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
-    role = await _workspace_role(db, workspaceId, user['id'])
+    role = await workspace_role(db, workspaceId, user['id'])
     return {
         'data': {
             'waiting': await _waiting(db, workspaceId, user['id'], role),

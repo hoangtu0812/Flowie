@@ -42,6 +42,7 @@ from ..modules.work_items.issue_rules import (
 from ..modules.work_items.issue_rules import (
     _validate_template_references as _validate_template_references,
 )
+from ..modules.work_items.workflow_catalog import DEFAULT_ISSUE_STATUSES
 from ..services.notification_events import (
     create_notification_batch,
     issue_recipient_ids,
@@ -52,7 +53,6 @@ from .auth import _cuid, _utcnow, current_user
 from .native_projects import _date, _team_access, _workspace_access
 from .native_slas import resolve_deadline
 from .teams import _manager
-from .workflow_catalog import DEFAULT_ISSUE_STATUSES
 
 # Mutations remain staged under the private prefix. Read endpoints are exposed
 # through the audited public router below once their web UI adapter is ready.
