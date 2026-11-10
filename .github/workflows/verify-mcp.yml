@@ -141,6 +141,12 @@ jobs:
           pnpm --filter @flowie/database exec prisma migrate deploy --schema prisma/schema.prisma
           pnpm --filter @flowie/database exec prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
           pnpm --filter @flowie/database exec prisma generate --schema prisma/schema.prisma
+      # Table and column names in the API's raw SQL must exist in schema.prisma; a renamed
+      # column fails here instead of on the first request that runs the statement.
+      # VI: Tên bảng và cột trong SQL thô của API phải có trong schema.prisma; cột bị đổi tên
+      # VI: sẽ lỗi ở đây thay vì ở request đầu tiên chạy câu lệnh đó.
+      - name: Check SQL names against schema.prisma
+        run: python scripts/check_sql_schema.py
       - name: Verify backend and MCP integration
         run: |
           ruff check apps/api-python scripts
