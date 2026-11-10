@@ -1,10 +1,14 @@
 from collections import defaultdict
 
-from sqlalchemy import text
-
 from ...core.pagination import CursorCodec
 from ..access.project_scope import project_read_scope
 from .projects import project_summaries
+from .queries import (
+    INITIATIVE_PAGE_SELECT_INITIATIVE_LABEL_LINKS,
+    initiative_page_select_initiative_projects_sql,
+    initiative_page_select_initiatives_sql,
+    initiative_page_select_initiatives_sql_2,
+)
 
 
 async def initiative_page(db, workspace, user, secret, *, limit=100, cursor=None):
@@ -13,7 +17,7 @@ async def initiative_page(db, workspace, user, secret, *, limit=100, cursor=None
     codec = CursorCodec(secret, user, "portfolio.initiatives", {"workspace": workspace})
     total = (
         await db.execute(
-            text("SELECT COUNT(*) FROM initiatives n WHERE " + predicate), params
+            initiative_page_select_initiatives_sql(predicate), params
         )
     ).scalar_one()
     if cursor:
@@ -22,12 +26,7 @@ async def initiative_page(db, workspace, user, secret, *, limit=100, cursor=None
     rows = (
         (
             await db.execute(
-                text(
-                    """SELECT n.*,u.name AS owner_name,u.avatar_url AS owner_avatar
-        FROM initiatives n LEFT JOIN users u ON u.id=n.owner_id WHERE """
-                    + predicate
-                    + " ORDER BY n.created_at DESC,n.id DESC LIMIT :limit"
-                ),
+                initiative_page_select_initiatives_sql_2(predicate),
                 params,
             )
         )
@@ -45,8 +44,7 @@ async def initiative_page(db, workspace, user, secret, *, limit=100, cursor=None
     links = (
         (
             await db.execute(
-                text(f"""SELECT ip.* FROM initiative_projects ip JOIN projects p ON p.id=ip.project_id
-        WHERE ip.initiative_id=ANY(CAST(:ids AS text[])) AND {project_read_scope()} ORDER BY ip.created_at,ip.project_id"""),
+                initiative_page_select_initiative_projects_sql(project_read_scope),
                 params,
             )
         )
@@ -70,8 +68,7 @@ async def initiative_page(db, workspace, user, secret, *, limit=100, cursor=None
     labels = defaultdict(list)
     for row in (
         await db.execute(
-            text("""SELECT il.initiative_id,l.id,l.name,l.color FROM initiative_label_links il
-        JOIN labels l ON l.id=il.label_id WHERE il.initiative_id=ANY(CAST(:ids AS text[])) AND l.workspace_id=:workspace ORDER BY l.name,l.id"""),
+            INITIATIVE_PAGE_SELECT_INITIATIVE_LABEL_LINKS,
             params,
         )
     ).mappings():

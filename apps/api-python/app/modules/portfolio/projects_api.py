@@ -7,7 +7,6 @@ from urllib.parse import urlparse
 
 from fastapi import Depends, Query, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,6 +25,96 @@ from ...services.notification_events import (
 from ..access.projects import team_access, workspace_access, workspace_manager
 from ..identity.auth import current_user
 from ..teams.api import team_record
+from .commands import (
+    CREATE_CUSTOM_FIELD_INSERT_PROJECT_CUSTOM_FIELDS,
+    CREATE_MILESTONE_INSERT_PROJECT_MILESTONES,
+    CREATE_PROJECT_INSERT_ACTIVITIES,
+    CREATE_PROJECT_INSERT_PROJECTS,
+    CREATE_PROJECT_LABEL_INSERT_PROJECT_LABELS,
+    CREATE_PROJECT_STATUS_INSERT_PROJECT_STATUSES,
+    CREATE_PROJECT_TEMPLATE_INSERT_PROJECT_TEMPLATES,
+    CREATE_RESOURCE_INSERT_ACTIVITIES,
+    CREATE_RESOURCE_INSERT_PROJECT_RESOURCES,
+    CREATE_UPDATE_INSERT_ACTIVITIES,
+    CREATE_UPDATE_INSERT_PROJECT_SUBSCRIPTIONS,
+    CREATE_UPDATE_INSERT_PROJECT_UPDATES,
+    CREATE_UPDATE_UPDATE_PROJECTS,
+    DELETE_CUSTOM_FIELD_DELETE_PROJECT_CUSTOM_FIELDS,
+    DELETE_PROJECT_LABEL_DELETE_PROJECT_LABELS,
+    DELETE_PROJECT_STATUS_DELETE_PROJECT_STATUSES,
+    DELETE_PROJECT_TEMPLATE_DELETE_PROJECT_TEMPLATES,
+    ENSURE_DEFAULT_PROJECT_STATUSES_INSERT_PROJECT_STATUSES,
+    FAVORITE_INSERT_PROJECT_FAVORITES,
+    REMOVE_MILESTONE_DELETE_PROJECT_MILESTONES,
+    SUBSCRIBE_INSERT_PROJECT_SUBSCRIPTIONS,
+    UNFAVORITE_DELETE_PROJECT_FAVORITES,
+    UNSUBSCRIBE_DELETE_PROJECT_SUBSCRIPTIONS,
+    UPDATE_CUSTOM_FIELD_DELETE_PROJECT_CUSTOM_FIELD_VALUES,
+    UPDATE_MEMBERS_DELETE_PROJECT_MEMBERS,
+    UPDATE_MEMBERS_INSERT_ACTIVITIES,
+    UPDATE_MEMBERS_INSERT_PROJECT_MEMBERS,
+    UPDATE_PROJECT_CUSTOM_FIELD_INSERT_ACTIVITIES,
+    UPDATE_PROJECT_CUSTOM_FIELD_INSERT_PROJECT_CUSTOM_FIELD_VALUES,
+    UPDATE_PROJECT_DELETE_PROJECT_LABEL_LINKS,
+    UPDATE_PROJECT_INSERT_ACTIVITIES,
+    UPDATE_PROJECT_INSERT_PROJECT_LABEL_LINKS,
+    UPDATE_PROJECT_STATUS_UPDATE_PROJECTS,
+    update_custom_field_update_project_custom_fields_sql,
+    update_milestone_update_project_milestones_sql,
+    update_project_label_update_project_labels_sql,
+    update_project_status_update_project_statuses_sql,
+    update_project_template_update_project_templates_sql,
+    update_project_update_projects_sql,
+)
+from .queries import (
+    ACTIVITY_SELECT_ACTIVITIES,
+    CREATE_CUSTOM_FIELD_SELECT_PROJECT_CUSTOM_FIELDS,
+    CREATE_MILESTONE_SELECT_PROJECT_MILESTONES,
+    CREATE_PROJECT_LABEL_SELECT_PROJECT_LABELS,
+    CREATE_PROJECT_SELECT_PROJECT_TEMPLATES,
+    CREATE_PROJECT_STATUS_SELECT_PROJECT_STATUSES,
+    CREATE_PROJECT_TEMPLATE_SELECT_PROJECT_TEMPLATES,
+    DELETE_CUSTOM_FIELD_SELECT_PROJECT_CUSTOM_FIELDS,
+    DELETE_PROJECT_LABEL_SELECT_PROJECT_LABELS,
+    DELETE_PROJECT_STATUS_SELECT_PROJECT_STATUSES,
+    DELETE_PROJECT_STATUS_SELECT_PROJECTS,
+    DELETE_PROJECT_TEMPLATE_SELECT_PROJECT_TEMPLATES,
+    FAVORITE_SELECT_PROJECT_FAVORITES,
+    LIST_CUSTOM_FIELDS_SELECT_PROJECT_CUSTOM_FIELDS,
+    LIST_MILESTONES_SELECT_PROJECT_MILESTONES,
+    LIST_PROJECT_LABELS_SELECT_PROJECT_LABELS,
+    LIST_PROJECT_TEMPLATES_SELECT_PROJECT_TEMPLATES,
+    MEMBERS_SELECT_PROJECT_MEMBERS,
+    PROJECT_CUSTOM_FIELDS_SELECT_PROJECT_CUSTOM_FIELDS,
+    PROJECT_ISSUE_ROWS_SELECT_ISSUE_CYCLES,
+    PROJECT_ISSUE_ROWS_SELECT_ISSUE_LABELS,
+    PROJECT_ISSUE_ROWS_SELECT_ISSUES,
+    PROJECT_SELECT_INITIATIVE_PROJECTS,
+    PROJECT_SELECT_ISSUES,
+    PROJECT_SELECT_ISSUES_2,
+    PROJECT_SELECT_PROJECT_LABEL_LINKS,
+    PROJECT_SELECT_PROJECT_RESOURCES,
+    PROJECT_SELECT_TEAMS,
+    PROJECT_STATUSES_SELECT_PROJECT_STATUSES,
+    RESOLVE_PROJECT_SELECT_PROJECTS,
+    SUBSCRIBE_SELECT_PROJECT_SUBSCRIPTIONS,
+    SUBSCRIPTION_SELECT_PROJECT_SUBSCRIPTIONS,
+    UPDATE_CUSTOM_FIELD_SELECT_PROJECT_CUSTOM_FIELDS,
+    UPDATE_CUSTOM_FIELD_SELECT_PROJECT_CUSTOM_FIELDS_2,
+    UPDATE_MEMBERS_SELECT_WORKSPACE_MEMBERS,
+    UPDATE_MILESTONE_SELECT_PROJECT_MILESTONES,
+    UPDATE_MILESTONE_SELECT_PROJECT_MILESTONES_2,
+    UPDATE_PROJECT_CUSTOM_FIELD_SELECT_PROJECT_CUSTOM_FIELDS,
+    UPDATE_PROJECT_LABEL_SELECT_PROJECT_LABELS,
+    UPDATE_PROJECT_LABEL_SELECT_PROJECT_LABELS_2,
+    UPDATE_PROJECT_SELECT_PROJECT_LABELS,
+    UPDATE_PROJECT_SELECT_PROJECT_STATUSES,
+    UPDATE_PROJECT_SELECT_WORKSPACE_MEMBERS,
+    UPDATE_PROJECT_STATUS_SELECT_PROJECT_STATUSES,
+    UPDATE_PROJECT_STATUS_SELECT_PROJECT_STATUSES_2,
+    UPDATE_PROJECT_TEMPLATE_SELECT_PROJECT_TEMPLATES,
+    UPDATE_PROJECT_TEMPLATE_SELECT_PROJECT_TEMPLATES_2,
+)
 
 # This router is deliberately private until the complete Projects contract is
 # ported. It lets us exercise real Python/database behavior without switching
@@ -251,7 +340,7 @@ def _custom_field_options(field_type: ProjectCustomFieldType, options: list[str]
 @public_router.get('/custom-fields')
 async def list_custom_fields(workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
     await workspace_access(db, workspaceId, user['id'])
-    rows = await db.execute(text('SELECT * FROM project_custom_fields WHERE workspace_id = :workspace_id ORDER BY position ASC, name ASC'), {'workspace_id': workspaceId})
+    rows = await db.execute(LIST_CUSTOM_FIELDS_SELECT_PROJECT_CUSTOM_FIELDS, {'workspace_id': workspaceId})
     return {'data': [_custom_field(row) for row in rows.mappings().all()]}
 
 
@@ -263,9 +352,7 @@ async def create_custom_field(payload: CreateProjectCustomFieldInput, user: Any 
     field_id = cuid()
     try:
         await db.execute(
-            text('''INSERT INTO project_custom_fields
-                    (id, workspace_id, name, type, description, options, required, position, created_at, updated_at)
-                    VALUES (:id, :workspace_id, :name, CAST(:type AS "ProjectCustomFieldType"), :description, CAST(:options AS jsonb), :required, :position, :now, :now)'''),
+            CREATE_CUSTOM_FIELD_INSERT_PROJECT_CUSTOM_FIELDS,
             {
                 'id': field_id, 'workspace_id': payload.workspaceId, 'name': payload.name.strip(),
                 'type': payload.type, 'description': payload.description.strip() if payload.description else None,
@@ -277,7 +364,7 @@ async def create_custom_field(payload: CreateProjectCustomFieldInput, user: Any 
     except IntegrityError as error:
         await db.rollback()
         raise ApiError(409, 'A project property with this name already exists.', 'Conflict') from error
-    row = (await db.execute(text('SELECT * FROM project_custom_fields WHERE id = :id'), {'id': field_id})).mappings().one()
+    row = (await db.execute(CREATE_CUSTOM_FIELD_SELECT_PROJECT_CUSTOM_FIELDS, {'id': field_id})).mappings().one()
     return {'data': _custom_field(row)}
 
 
@@ -285,7 +372,7 @@ async def create_custom_field(payload: CreateProjectCustomFieldInput, user: Any 
 @public_router.patch('/custom-fields/{field_id}')
 async def update_custom_field(field_id: str, payload: UpdateProjectCustomFieldInput, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     await workspace_manager(db, workspaceId, user['id'])
-    current = (await db.execute(text('SELECT * FROM project_custom_fields WHERE id = :id AND workspace_id = :workspace_id'), {'id': field_id, 'workspace_id': workspaceId})).mappings().first()
+    current = (await db.execute(UPDATE_CUSTOM_FIELD_SELECT_PROJECT_CUSTOM_FIELDS, {'id': field_id, 'workspace_id': workspaceId})).mappings().first()
     if not current:
         raise ApiError(404, 'Project custom field not found.', 'Not Found')
     values = payload.model_dump(exclude_unset=True)
@@ -299,13 +386,13 @@ async def update_custom_field(field_id: str, payload: UpdateProjectCustomFieldIn
             assignments.append(f'{column} = :{field}')
     try:
         if field_type != current['type']:
-            await db.execute(text('DELETE FROM project_custom_field_values WHERE field_id = :id'), {'id': field_id})
-        await db.execute(text(f"UPDATE project_custom_fields SET {', '.join(assignments)} WHERE id = :id"), params)
+            await db.execute(UPDATE_CUSTOM_FIELD_DELETE_PROJECT_CUSTOM_FIELD_VALUES, {'id': field_id})
+        await db.execute(update_custom_field_update_project_custom_fields_sql(assignments), params)
         await db.commit()
     except IntegrityError as error:
         await db.rollback()
         raise ApiError(409, 'A project property with this name already exists.', 'Conflict') from error
-    row = (await db.execute(text('SELECT * FROM project_custom_fields WHERE id = :id'), {'id': field_id})).mappings().one()
+    row = (await db.execute(UPDATE_CUSTOM_FIELD_SELECT_PROJECT_CUSTOM_FIELDS_2, {'id': field_id})).mappings().one()
     return {'data': _custom_field(row)}
 
 
@@ -313,10 +400,10 @@ async def update_custom_field(field_id: str, payload: UpdateProjectCustomFieldIn
 @public_router.delete('/custom-fields/{field_id}')
 async def delete_custom_field(field_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     await workspace_manager(db, workspaceId, user['id'])
-    exists = await db.execute(text('SELECT 1 FROM project_custom_fields WHERE id = :id AND workspace_id = :workspace_id'), {'id': field_id, 'workspace_id': workspaceId})
+    exists = await db.execute(DELETE_CUSTOM_FIELD_SELECT_PROJECT_CUSTOM_FIELDS, {'id': field_id, 'workspace_id': workspaceId})
     if exists.scalar_one_or_none() is None:
         raise ApiError(404, 'Project custom field not found.', 'Not Found')
-    await db.execute(text('DELETE FROM project_custom_fields WHERE id = :id'), {'id': field_id})
+    await db.execute(DELETE_CUSTOM_FIELD_DELETE_PROJECT_CUSTOM_FIELDS, {'id': field_id})
     await db.commit()
     return {'data': {'id': field_id, 'deleted': True}}
 
@@ -334,10 +421,7 @@ def _project_label(row: Any) -> dict[str, Any]:
 async def list_project_labels(workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
     await workspace_access(db, workspaceId, user['id'])
     rows = await db.execute(
-        text('''SELECT l.*, COUNT(pl.project_id)::integer AS project_count
-                FROM project_labels l LEFT JOIN project_label_links pl ON pl.label_id = l.id
-                WHERE l.workspace_id = :workspace_id
-                GROUP BY l.id ORDER BY l.name ASC'''),
+        LIST_PROJECT_LABELS_SELECT_PROJECT_LABELS,
         {'workspace_id': workspaceId},
     )
     return {'data': [_project_label(row) for row in rows.mappings().all()]}
@@ -350,15 +434,14 @@ async def create_project_label(payload: CreateProjectLabelInput, user: Any = Dep
     label_id, now = cuid(), utcnow()
     try:
         await db.execute(
-            text('''INSERT INTO project_labels (id, workspace_id, name, color, description, created_at, updated_at)
-                    VALUES (:id, :workspace_id, :name, :color, :description, :now, :now)'''),
+            CREATE_PROJECT_LABEL_INSERT_PROJECT_LABELS,
             {'id': label_id, 'workspace_id': payload.workspaceId, 'name': payload.name.strip(), 'color': payload.color, 'description': payload.description.strip() if payload.description else None, 'now': now},
         )
         await db.commit()
     except IntegrityError as error:
         await db.rollback()
         raise ApiError(409, 'A project label with this name already exists.', 'Conflict') from error
-    row = (await db.execute(text('''SELECT l.*, 0::integer AS project_count FROM project_labels l WHERE l.id = :id'''), {'id': label_id})).mappings().one()
+    row = (await db.execute(CREATE_PROJECT_LABEL_SELECT_PROJECT_LABELS, {'id': label_id})).mappings().one()
     return {'data': _project_label(row)}
 
 
@@ -366,7 +449,7 @@ async def create_project_label(payload: CreateProjectLabelInput, user: Any = Dep
 @public_router.patch('/labels/{label_id}')
 async def update_project_label(label_id: str, payload: UpdateProjectLabelInput, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     await workspace_manager(db, workspaceId, user['id'])
-    current = (await db.execute(text('SELECT 1 FROM project_labels WHERE id = :id AND workspace_id = :workspace_id'), {'id': label_id, 'workspace_id': workspaceId})).scalar_one_or_none()
+    current = (await db.execute(UPDATE_PROJECT_LABEL_SELECT_PROJECT_LABELS, {'id': label_id, 'workspace_id': workspaceId})).scalar_one_or_none()
     if current is None:
         raise ApiError(404, 'Project label not found.', 'Not Found')
     values = payload.model_dump(exclude_unset=True)
@@ -377,12 +460,12 @@ async def update_project_label(label_id: str, payload: UpdateProjectLabelInput, 
                 params[field] = values[field].strip() if isinstance(values[field], str) and field in {'name', 'description'} else values[field]
                 sets.append(f'{"description" if field == "description" else field} = :{field}')
         try:
-            await db.execute(text(f"UPDATE project_labels SET {', '.join(sets)} WHERE id = :id"), params)
+            await db.execute(update_project_label_update_project_labels_sql(sets), params)
             await db.commit()
         except IntegrityError as error:
             await db.rollback()
             raise ApiError(409, 'A project label with this name already exists.', 'Conflict') from error
-    row = (await db.execute(text('''SELECT l.*, COUNT(pl.project_id)::integer AS project_count FROM project_labels l LEFT JOIN project_label_links pl ON pl.label_id = l.id WHERE l.id = :id GROUP BY l.id'''), {'id': label_id})).mappings().one()
+    row = (await db.execute(UPDATE_PROJECT_LABEL_SELECT_PROJECT_LABELS_2, {'id': label_id})).mappings().one()
     return {'data': _project_label(row)}
 
 
@@ -390,10 +473,10 @@ async def update_project_label(label_id: str, payload: UpdateProjectLabelInput, 
 @public_router.delete('/labels/{label_id}')
 async def delete_project_label(label_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     await workspace_manager(db, workspaceId, user['id'])
-    exists = await db.execute(text('SELECT 1 FROM project_labels WHERE id = :id AND workspace_id = :workspace_id'), {'id': label_id, 'workspace_id': workspaceId})
+    exists = await db.execute(DELETE_PROJECT_LABEL_SELECT_PROJECT_LABELS, {'id': label_id, 'workspace_id': workspaceId})
     if exists.scalar_one_or_none() is None:
         raise ApiError(404, 'Project label not found.', 'Not Found')
-    await db.execute(text('DELETE FROM project_labels WHERE id = :id'), {'id': label_id})
+    await db.execute(DELETE_PROJECT_LABEL_DELETE_PROJECT_LABELS, {'id': label_id})
     await db.commit()
     return {'data': {'id': label_id, 'deleted': True}}
 
@@ -413,11 +496,7 @@ def _status_name(value: str) -> str:
 async def _project_statuses(db: AsyncSession, workspace_id: str) -> list[dict[str, Any]]:
     await _ensure_default_project_statuses(db, workspace_id)
     rows = await db.execute(
-        text('''SELECT s.*, COUNT(p.id)::integer AS project_count
-                FROM project_statuses s LEFT JOIN projects p ON p.workspace_id = s.workspace_id
-                   AND p.status = s.name AND p.archived_at IS NULL
-                WHERE s.workspace_id = :workspace_id
-                GROUP BY s.id ORDER BY s.category ASC, s.position ASC, s.name ASC'''),
+        PROJECT_STATUSES_SELECT_PROJECT_STATUSES,
         {'workspace_id': workspace_id},
     )
     return [_project_status(row) for row in rows.mappings().all()]
@@ -439,15 +518,14 @@ async def create_project_status(payload: CreateProjectStatusInput, user: Any = D
     status_id, now = cuid(), utcnow()
     try:
         await db.execute(
-            text('''INSERT INTO project_statuses (id, workspace_id, name, category, color, position, created_at, updated_at)
-                    VALUES (:id, :workspace_id, :name, :category, :color, :position, :now, :now)'''),
+            CREATE_PROJECT_STATUS_INSERT_PROJECT_STATUSES,
             {'id': status_id, 'workspace_id': payload.workspaceId, 'name': _status_name(payload.name), 'category': payload.category, 'color': payload.color, 'position': payload.position or 0, 'now': now},
         )
         await db.commit()
     except IntegrityError as error:
         await db.rollback()
         raise ApiError(409, 'A project status with this name already exists.', 'Conflict') from error
-    row = (await db.execute(text('''SELECT s.*, 0::integer AS project_count FROM project_statuses s WHERE s.id = :id'''), {'id': status_id})).mappings().one()
+    row = (await db.execute(CREATE_PROJECT_STATUS_SELECT_PROJECT_STATUSES, {'id': status_id})).mappings().one()
     return {'data': _project_status(row)}
 
 
@@ -455,7 +533,7 @@ async def create_project_status(payload: CreateProjectStatusInput, user: Any = D
 @public_router.patch('/statuses/{status_id}')
 async def update_project_status(status_id: str, payload: UpdateProjectStatusInput, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     await workspace_manager(db, workspaceId, user['id'])
-    current = (await db.execute(text('SELECT * FROM project_statuses WHERE id = :id AND workspace_id = :workspace_id'), {'id': status_id, 'workspace_id': workspaceId})).mappings().first()
+    current = (await db.execute(UPDATE_PROJECT_STATUS_SELECT_PROJECT_STATUSES, {'id': status_id, 'workspace_id': workspaceId})).mappings().first()
     if not current:
         raise ApiError(404, 'Project status not found.', 'Not Found')
     values = payload.model_dump(exclude_unset=True)
@@ -467,13 +545,13 @@ async def update_project_status(status_id: str, payload: UpdateProjectStatusInpu
             sets.append(f'{field} = :{field}')
     try:
         if next_name != current['name']:
-            await db.execute(text('UPDATE projects SET status = :name, updated_at = :now WHERE workspace_id = :workspace_id AND status = :previous'), {**params, 'workspace_id': workspaceId, 'previous': current['name']})
-        await db.execute(text(f"UPDATE project_statuses SET {', '.join(sets)} WHERE id = :id"), params)
+            await db.execute(UPDATE_PROJECT_STATUS_UPDATE_PROJECTS, {**params, 'workspace_id': workspaceId, 'previous': current['name']})
+        await db.execute(update_project_status_update_project_statuses_sql(sets), params)
         await db.commit()
     except IntegrityError as error:
         await db.rollback()
         raise ApiError(409, 'A project status with this name already exists.', 'Conflict') from error
-    row = (await db.execute(text('''SELECT s.*, COUNT(p.id)::integer AS project_count FROM project_statuses s LEFT JOIN projects p ON p.workspace_id = s.workspace_id AND p.status = s.name AND p.archived_at IS NULL WHERE s.id = :id GROUP BY s.id'''), {'id': status_id})).mappings().one()
+    row = (await db.execute(UPDATE_PROJECT_STATUS_SELECT_PROJECT_STATUSES_2, {'id': status_id})).mappings().one()
     return {'data': _project_status(row)}
 
 
@@ -481,13 +559,13 @@ async def update_project_status(status_id: str, payload: UpdateProjectStatusInpu
 @public_router.delete('/statuses/{status_id}')
 async def delete_project_status(status_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     await workspace_manager(db, workspaceId, user['id'])
-    status = (await db.execute(text('SELECT name FROM project_statuses WHERE id = :id AND workspace_id = :workspace_id'), {'id': status_id, 'workspace_id': workspaceId})).mappings().first()
+    status = (await db.execute(DELETE_PROJECT_STATUS_SELECT_PROJECT_STATUSES, {'id': status_id, 'workspace_id': workspaceId})).mappings().first()
     if not status:
         raise ApiError(404, 'Project status not found.', 'Not Found')
-    in_use = await db.execute(text('SELECT COUNT(*) FROM projects WHERE workspace_id = :workspace_id AND status = :status AND archived_at IS NULL'), {'workspace_id': workspaceId, 'status': status['name']})
+    in_use = await db.execute(DELETE_PROJECT_STATUS_SELECT_PROJECTS, {'workspace_id': workspaceId, 'status': status['name']})
     if in_use.scalar_one() > 0:
         raise ApiError(400, 'Move projects to another status before deleting it.', 'Bad Request')
-    await db.execute(text('DELETE FROM project_statuses WHERE id = :id'), {'id': status_id})
+    await db.execute(DELETE_PROJECT_STATUS_DELETE_PROJECT_STATUSES, {'id': status_id})
     await db.commit()
     return {'data': {'id': status_id, 'deleted': True}}
 
@@ -504,7 +582,7 @@ def _project_template(row: Any) -> dict[str, Any]:
 @public_router.get('/templates')
 async def list_project_templates(workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
     await workspace_access(db, workspaceId, user['id'])
-    rows = await db.execute(text('SELECT * FROM project_templates WHERE workspace_id = :workspace_id ORDER BY name ASC'), {'workspace_id': workspaceId})
+    rows = await db.execute(LIST_PROJECT_TEMPLATES_SELECT_PROJECT_TEMPLATES, {'workspace_id': workspaceId})
     return {'data': [_project_template(row) for row in rows.mappings().all()]}
 
 
@@ -515,15 +593,14 @@ async def create_project_template(payload: CreateProjectTemplateInput, user: Any
     template_id, now = cuid(), utcnow()
     try:
         await db.execute(
-            text('''INSERT INTO project_templates (id, workspace_id, name, description, type, config, created_at, updated_at)
-                    VALUES (:id, :workspace_id, :name, :description, CAST(:type AS "ProjectType"), CAST(:config AS jsonb), :now, :now)'''),
+            CREATE_PROJECT_TEMPLATE_INSERT_PROJECT_TEMPLATES,
             {'id': template_id, 'workspace_id': payload.workspaceId, 'name': payload.name.strip(), 'description': payload.description.strip() if payload.description else None, 'type': payload.type or 'GENERAL', 'config': json.dumps(payload.config or {}), 'now': now},
         )
         await db.commit()
     except IntegrityError as error:
         await db.rollback()
         raise ApiError(409, 'A project template with this name already exists.', 'Conflict') from error
-    row = (await db.execute(text('SELECT * FROM project_templates WHERE id = :id'), {'id': template_id})).mappings().one()
+    row = (await db.execute(CREATE_PROJECT_TEMPLATE_SELECT_PROJECT_TEMPLATES, {'id': template_id})).mappings().one()
     return {'data': _project_template(row)}
 
 
@@ -531,7 +608,7 @@ async def create_project_template(payload: CreateProjectTemplateInput, user: Any
 @public_router.patch('/templates/{template_id}')
 async def update_project_template(template_id: str, payload: UpdateProjectTemplateInput, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     await workspace_manager(db, workspaceId, user['id'])
-    exists = await db.execute(text('SELECT 1 FROM project_templates WHERE id = :id AND workspace_id = :workspace_id'), {'id': template_id, 'workspace_id': workspaceId})
+    exists = await db.execute(UPDATE_PROJECT_TEMPLATE_SELECT_PROJECT_TEMPLATES, {'id': template_id, 'workspace_id': workspaceId})
     if exists.scalar_one_or_none() is None:
         raise ApiError(404, 'Project template not found.', 'Not Found')
     values = payload.model_dump(exclude_unset=True)
@@ -545,12 +622,12 @@ async def update_project_template(template_id: str, payload: UpdateProjectTempla
             params['config'] = json.dumps(values['config'])
             sets.append('config = CAST(:config AS jsonb)')
         try:
-            await db.execute(text(f"UPDATE project_templates SET {', '.join(sets)} WHERE id = :id"), params)
+            await db.execute(update_project_template_update_project_templates_sql(sets), params)
             await db.commit()
         except IntegrityError as error:
             await db.rollback()
             raise ApiError(409, 'A project template with this name already exists.', 'Conflict') from error
-    row = (await db.execute(text('SELECT * FROM project_templates WHERE id = :id'), {'id': template_id})).mappings().one()
+    row = (await db.execute(UPDATE_PROJECT_TEMPLATE_SELECT_PROJECT_TEMPLATES_2, {'id': template_id})).mappings().one()
     return {'data': _project_template(row)}
 
 
@@ -558,10 +635,10 @@ async def update_project_template(template_id: str, payload: UpdateProjectTempla
 @public_router.delete('/templates/{template_id}')
 async def delete_project_template(template_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     await workspace_manager(db, workspaceId, user['id'])
-    exists = await db.execute(text('SELECT 1 FROM project_templates WHERE id = :id AND workspace_id = :workspace_id'), {'id': template_id, 'workspace_id': workspaceId})
+    exists = await db.execute(DELETE_PROJECT_TEMPLATE_SELECT_PROJECT_TEMPLATES, {'id': template_id, 'workspace_id': workspaceId})
     if exists.scalar_one_or_none() is None:
         raise ApiError(404, 'Project template not found.', 'Not Found')
-    await db.execute(text('DELETE FROM project_templates WHERE id = :id'), {'id': template_id})
+    await db.execute(DELETE_PROJECT_TEMPLATE_DELETE_PROJECT_TEMPLATES, {'id': template_id})
     await db.commit()
     return {'data': {'id': template_id, 'deleted': True}}
 
@@ -570,12 +647,7 @@ async def _ensure_default_project_statuses(db: AsyncSession, workspace_id: str) 
     now = utcnow()
     for position, (name, category, color) in enumerate(DEFAULT_PROJECT_STATUSES):
         await db.execute(
-            text(
-                '''INSERT INTO project_statuses
-                   (id, workspace_id, name, category, color, position, created_at, updated_at)
-                   VALUES (:id, :workspace_id, :name, :category, :color, :position, :now, :now)
-                   ON CONFLICT (workspace_id, name) DO NOTHING'''
-            ),
+            ENSURE_DEFAULT_PROJECT_STATUSES_INSERT_PROJECT_STATUSES,
             {
                 'id': cuid(),
                 'workspace_id': workspace_id,
@@ -635,39 +707,37 @@ def _custom_field_value(field: Any, value: Any) -> Any:
 
 async def _project_custom_fields(db: AsyncSession, project_id: str, workspace_id: str) -> list[dict[str, Any]]:
     rows = await db.execute(
-        text('''SELECT f.*, v.value FROM project_custom_fields f
-                LEFT JOIN project_custom_field_values v ON v.field_id = f.id AND v.project_id = :project_id
-                WHERE f.workspace_id = :workspace_id ORDER BY f.position ASC, f.name ASC'''),
+        PROJECT_CUSTOM_FIELDS_SELECT_PROJECT_CUSTOM_FIELDS,
         {'project_id': project_id, 'workspace_id': workspace_id},
     )
     return [{**_custom_field(row), 'value': row['value']} for row in rows.mappings().all()]
 
 
 async def _members(db: AsyncSession, project_id: str) -> list[dict[str, Any]]:
-    members = await db.execute(text('''SELECT pm.project_id, pm.user_id, pm.created_at, u.id, u.name, u.avatar_url FROM project_members pm JOIN users u ON u.id = pm.user_id WHERE pm.project_id = :project_id ORDER BY pm.created_at'''), {'project_id': project_id})
+    members = await db.execute(MEMBERS_SELECT_PROJECT_MEMBERS, {'project_id': project_id})
     return [{'projectId': member['project_id'], 'userId': member['user_id'], 'createdAt': member['created_at'], 'user': {'id': member['id'], 'name': member['name'], 'avatarUrl': member['avatar_url']}} for member in members.mappings().all()]
 
 
 async def _activity(db: AsyncSession, project_id: str) -> list[dict[str, Any]]:
-    rows = await db.execute(text('''SELECT a.*, u.id AS actor_id_value, u.name AS actor_name, u.avatar_url AS actor_avatar_url FROM activities a LEFT JOIN users u ON u.id = a.actor_id WHERE a.project_id = :project_id ORDER BY a.created_at DESC LIMIT 100'''), {'project_id': project_id})
+    rows = await db.execute(ACTIVITY_SELECT_ACTIVITIES, {'project_id': project_id})
     return [{'id': row['id'], 'workspaceId': row['workspace_id'], 'projectId': row['project_id'], 'actorId': row['actor_id'], 'type': row['type'], 'data': row['data'], 'createdAt': row['created_at'], 'actor': {'id': row['actor_id_value'], 'name': row['actor_name'], 'avatarUrl': row['actor_avatar_url']} if row['actor_id_value'] else None} for row in rows.mappings().all()]
 
 
 async def _project(db: AsyncSession, project_id: str, workspace_id: str, user_id: str, *, include_favorites: bool = True) -> dict[str, Any]:
-    result = await db.execute(text('''SELECT p.*, t.id AS team_id_value, t.name AS team_name, t.identifier AS team_identifier, t.icon AS team_icon, u.id AS lead_id_value, u.name AS lead_name, u.avatar_url AS lead_avatar_url, (SELECT COUNT(*) FROM issues i WHERE i.project_id = p.id) AS issue_count, EXISTS(SELECT 1 FROM project_favorites f WHERE f.project_id = p.id AND f.user_id = :user_id) AS is_favorite FROM projects p LEFT JOIN teams t ON t.id = p.team_id LEFT JOIN users u ON u.id = p.lead_id WHERE p.id = :project_id AND p.workspace_id = :workspace_id AND p.archived_at IS NULL LIMIT 1'''), {'project_id': project_id, 'workspace_id': workspace_id, 'user_id': user_id})
+    result = await db.execute(PROJECT_SELECT_ISSUES, {'project_id': project_id, 'workspace_id': workspace_id, 'user_id': user_id})
     row = result.mappings().first()
     if not row: raise ApiError(404, 'Project not found.', 'Not Found')
     if row['team_id']:
         await team_access(db, workspace_id, row['team_id'], user_id)
     team = None
     if row['team_id_value']:
-        team_result = await db.execute(text('SELECT * FROM teams WHERE id = :team_id'), {'team_id': row['team_id_value']})
+        team_result = await db.execute(PROJECT_SELECT_TEAMS, {'team_id': row['team_id_value']})
         team_row = team_result.mappings().first()
         team = team_record(team_row) if team_row else None
-    labels = await db.execute(text('''SELECT l.* FROM project_label_links pl JOIN project_labels l ON l.id = pl.label_id WHERE pl.project_id = :project_id ORDER BY l.name'''), {'project_id': project_id})
-    resources = await db.execute(text('''SELECT r.*, u.id AS creator_id_value, u.name AS creator_name, u.avatar_url AS creator_avatar_url FROM project_resources r JOIN users u ON u.id = r.created_by WHERE r.project_id = :project_id ORDER BY r.created_at'''), {'project_id': project_id})
-    initiatives = await db.execute(text('''SELECT ip.initiative_id, ip.project_id, ip.created_at, i.id, i.name FROM initiative_projects ip JOIN initiatives i ON i.id = ip.initiative_id WHERE ip.project_id = :project_id'''), {'project_id': project_id})
-    issues = await db.execute(text('''SELECT i.id, i.identifier, i.title, i.priority, i.updated_at, s.id AS status_id_value, s.name AS status_name, s.category AS status_category, s.color AS status_color, a.id AS assignee_id_value, a.name AS assignee_name, a.avatar_url AS assignee_avatar_url FROM issues i JOIN issue_statuses s ON s.id = i.status_id LEFT JOIN users a ON a.id = i.assignee_id WHERE i.project_id = :project_id AND i.archived_at IS NULL AND (i.team_id IS NULL OR EXISTS(SELECT 1 FROM team_members tm JOIN teams scoped_team ON scoped_team.id=tm.team_id WHERE tm.team_id=i.team_id AND tm.user_id=:user_id AND scoped_team.archived_at IS NULL)) ORDER BY i.updated_at DESC'''), {'project_id': project_id,'user_id':user_id})
+    labels = await db.execute(PROJECT_SELECT_PROJECT_LABEL_LINKS, {'project_id': project_id})
+    resources = await db.execute(PROJECT_SELECT_PROJECT_RESOURCES, {'project_id': project_id})
+    initiatives = await db.execute(PROJECT_SELECT_INITIATIVE_PROJECTS, {'project_id': project_id})
+    issues = await db.execute(PROJECT_SELECT_ISSUES_2, {'project_id': project_id,'user_id':user_id})
     issue_records=issues.mappings().all()
     return {
         'id': row['id'], 'manualOrder': str(row['manual_order']), 'workspaceId': row['workspace_id'], 'teamId': row['team_id'], 'name': row['name'], 'icon': row['icon'], 'identifier': row['identifier'], 'slug': row['slug'], 'serviceDeskEnabled': row['service_desk_enabled'], 'description': row['description'], 'type': row['type'], 'status': row['status'], 'priority': row['priority'], 'health': row['health'], 'leadId': row['lead_id'], 'startDate': row['start_date'], 'targetDate': row['target_date'], 'archivedAt': row['archived_at'], 'createdAt': row['created_at'], 'updatedAt': row['updated_at'],
@@ -706,7 +776,7 @@ async def create_project(payload: CreateProjectInput, user: Any = Depends(curren
     if payload.teamId: await team_access(db, payload.workspaceId, payload.teamId, user['id'])
     template = None
     if payload.templateId:
-        template = (await db.execute(text('SELECT * FROM project_templates WHERE id = :id AND workspace_id = :workspace_id'), {'id': payload.templateId, 'workspace_id': payload.workspaceId})).mappings().first()
+        template = (await db.execute(CREATE_PROJECT_SELECT_PROJECT_TEMPLATES, {'id': payload.templateId, 'workspace_id': payload.workspaceId})).mappings().first()
         if template is None: raise ApiError(404, 'Project template not found.', 'Not Found')
     template_config = template['config'] if template and isinstance(template['config'], dict) else {}
     description = payload.description if payload.description is not None else (template['description'] if template else None)
@@ -717,8 +787,8 @@ async def create_project(payload: CreateProjectInput, user: Any = Depends(curren
     project_id, now = cuid(), utcnow()
     slug = _project_slug(payload.slug) if payload.slug else None
     try:
-        await db.execute(text('''INSERT INTO projects (id, workspace_id, team_id, name, identifier, slug, description, type, status, priority, health, created_at, updated_at) VALUES (:id, :workspace_id, :team_id, :name, :identifier, :slug, :description, :type, :status, :priority, :health, :now, :now)'''), {'id': project_id, 'workspace_id': payload.workspaceId, 'team_id': payload.teamId, 'name': payload.name.strip(), 'identifier': payload.identifier.strip().upper(), 'slug': slug, 'description': description, 'type': project_type, 'status': status, 'priority': priority, 'health': health, 'now': now})
-        await db.execute(text("INSERT INTO activities (id, workspace_id, project_id, actor_id, type, data, created_at) VALUES (:id, :workspace_id, :project_id, :actor_id, 'project.created', CAST(:data AS jsonb), :now)"), {'id': cuid(), 'workspace_id': payload.workspaceId, 'project_id': project_id, 'actor_id': user['id'], 'data': '{"source":"python"}', 'now': now})
+        await db.execute(CREATE_PROJECT_INSERT_PROJECTS, {'id': project_id, 'workspace_id': payload.workspaceId, 'team_id': payload.teamId, 'name': payload.name.strip(), 'identifier': payload.identifier.strip().upper(), 'slug': slug, 'description': description, 'type': project_type, 'status': status, 'priority': priority, 'health': health, 'now': now})
+        await db.execute(CREATE_PROJECT_INSERT_ACTIVITIES, {'id': cuid(), 'workspace_id': payload.workspaceId, 'project_id': project_id, 'actor_id': user['id'], 'data': '{"source":"python"}', 'now': now})
         await db.commit()
     except IntegrityError as error:
         await db.rollback()
@@ -761,7 +831,7 @@ async def update_project(project_id: str, payload: UpdateProjectInput, workspace
     if 'icon' in values: values['icon'] = (values['icon'] or '').strip() or None
     if 'slug' in values: values['slug'] = _project_slug(values['slug'] or '')
     if values.get('leadId'):
-        lead = await db.execute(text("SELECT 1 FROM workspace_members WHERE workspace_id = :workspace_id AND user_id = :user_id AND status = 'ACTIVE'"), {'workspace_id': workspaceId, 'user_id': values['leadId']})
+        lead = await db.execute(UPDATE_PROJECT_SELECT_WORKSPACE_MEMBERS, {'workspace_id': workspaceId, 'user_id': values['leadId']})
         if lead.scalar_one_or_none() is None: raise ApiError(404, 'Project lead must be an active workspace member.', 'Not Found')
     if values.get('teamId'): await team_access(db, workspaceId, values['teamId'], user['id'])
     # Every Ask needs a team, so a team-less project could never receive a ticket. Removing the team
@@ -772,13 +842,13 @@ async def update_project(project_id: str, payload: UpdateProjectInput, workspace
         raise ApiError(400, 'Service Desk needs a project with a team.', 'Bad Request')
     if values.get('status'):
         await _ensure_default_project_statuses(db, workspaceId)
-        status = await db.execute(text('SELECT 1 FROM project_statuses WHERE workspace_id = :workspace_id AND name = :name'), {'workspace_id': workspaceId, 'name': values['status']})
+        status = await db.execute(UPDATE_PROJECT_SELECT_PROJECT_STATUSES, {'workspace_id': workspaceId, 'name': values['status']})
         if status.scalar_one_or_none() is None: raise ApiError(404, 'Project status is not configured in this workspace.', 'Not Found')
     label_ids = values.pop('labelIds', None)
     if label_ids is not None:
         ids = list(set(label_ids))
         if ids:
-            labels = await db.execute(text('SELECT COUNT(*) FROM project_labels WHERE workspace_id = :workspace_id AND id = ANY(:ids)'), {'workspace_id': workspaceId, 'ids': ids})
+            labels = await db.execute(UPDATE_PROJECT_SELECT_PROJECT_LABELS, {'workspace_id': workspaceId, 'ids': ids})
             if labels.scalar_one() != len(ids): raise ApiError(404, 'One or more project labels are not available in this workspace.', 'Not Found')
     column_map = {'name':'name','icon':'icon','slug':'slug','description':'description','status':'status','priority':'priority','health':'health','leadId':'lead_id','teamId':'team_id','startDate':'start_date','targetDate':'target_date','type':'type','serviceDeskEnabled':'service_desk_enabled'}
     params, sets = {'id': project_id, 'now': utcnow()}, []
@@ -788,7 +858,7 @@ async def update_project(project_id: str, payload: UpdateProjectInput, workspace
             params[key] = value.strip() if key in {'name','description'} and isinstance(value, str) else value; sets.append(f'{column} = :{key}')
     if sets:
         try:
-            await db.execute(text(f"UPDATE projects SET {', '.join(sets)}, updated_at = :now WHERE id = :id"), params)
+            await db.execute(update_project_update_projects_sql(sets), params)
         except IntegrityError as error:
             # The slug trigger (current slugs and aliases are one namespace) settles races too.
             # VI: Trigger slug (slug hiện tại và alias chung một không gian tên) xử lý cả ghi đồng thời.
@@ -796,9 +866,9 @@ async def update_project(project_id: str, payload: UpdateProjectInput, workspace
             if _slug_conflict(error): raise ApiError(409, 'This slug is already used by a project in this workspace.', 'Conflict') from error
             raise
     if label_ids is not None:
-        await db.execute(text('DELETE FROM project_label_links WHERE project_id = :project_id'), {'project_id': project_id})
-        for label_id in set(label_ids): await db.execute(text('INSERT INTO project_label_links (project_id, label_id) VALUES (:project_id, :label_id)'), {'project_id': project_id, 'label_id': label_id})
-    await db.execute(text("INSERT INTO activities (id, workspace_id, project_id, actor_id, type, data, created_at) VALUES (:id, :workspace_id, :project_id, :actor_id, 'project.updated', CAST('{}' AS jsonb), :now)"), {'id': cuid(), 'workspace_id': workspaceId, 'project_id': project_id, 'actor_id': user['id'], 'now': utcnow()})
+        await db.execute(UPDATE_PROJECT_DELETE_PROJECT_LABEL_LINKS, {'project_id': project_id})
+        for label_id in set(label_ids): await db.execute(UPDATE_PROJECT_INSERT_PROJECT_LABEL_LINKS, {'project_id': project_id, 'label_id': label_id})
+    await db.execute(UPDATE_PROJECT_INSERT_ACTIVITIES, {'id': cuid(), 'workspace_id': workspaceId, 'project_id': project_id, 'actor_id': user['id'], 'now': utcnow()})
     updated = await _project(db, project_id, workspaceId, user['id'])
     tracked = {
         'name': 'Name',
@@ -878,22 +948,7 @@ async def _project_issue_rows(db: AsyncSession, project_id: str, workspace_id: s
     """
 
     result = await db.execute(
-        text(
-            """SELECT i.*,
-                      s.id AS status_id_value, s.name AS status_name, s.category AS status_category, s.color AS status_color,
-                      s.position AS status_position,
-                      t.id AS team_id_value, t.name AS team_name, t.identifier AS team_identifier,
-                      c.id AS creator_id_value, c.name AS creator_name, c.avatar_url AS creator_avatar_url,
-                      a.id AS assignee_id_value, a.name AS assignee_name, a.avatar_url AS assignee_avatar_url
-               FROM issues i
-               JOIN issue_statuses s ON s.id = i.status_id
-               LEFT JOIN teams t ON t.id = i.team_id
-               JOIN users c ON c.id = i.creator_id
-               LEFT JOIN users a ON a.id = i.assignee_id
-               WHERE i.project_id = :project_id AND i.workspace_id = :workspace_id AND i.archived_at IS NULL
-               AND t.archived_at IS NULL AND (i.team_id IS NULL OR EXISTS(SELECT 1 FROM team_members tm WHERE tm.team_id=i.team_id AND tm.user_id=:user_id))
-               ORDER BY i.updated_at DESC"""
-        ),
+        PROJECT_ISSUE_ROWS_SELECT_ISSUES,
         {'project_id': project_id, 'workspace_id': workspace_id,'user_id':user_id},
     )
     rows = result.mappings().all()
@@ -902,19 +957,11 @@ async def _project_issue_rows(db: AsyncSession, project_id: str, workspace_id: s
 
     issue_ids = [row['id'] for row in rows]
     labels = await db.execute(
-        text(
-            """SELECT il.issue_id, il.label_id, il.created_at, l.name, l.color
-               FROM issue_labels il JOIN labels l ON l.id = il.label_id
-               WHERE il.issue_id = ANY(:issue_ids) ORDER BY l.name"""
-        ),
+        PROJECT_ISSUE_ROWS_SELECT_ISSUE_LABELS,
         {'issue_ids': issue_ids},
     )
     cycles = await db.execute(
-        text(
-            """SELECT ic.issue_id, ic.cycle_id, ic.created_at, cy.name
-               FROM issue_cycles ic JOIN cycles cy ON cy.id = ic.cycle_id
-               WHERE ic.issue_id = ANY(:issue_ids) ORDER BY ic.created_at"""
-        ),
+        PROJECT_ISSUE_ROWS_SELECT_ISSUE_CYCLES,
         {'issue_ids': issue_ids},
     )
 
@@ -975,19 +1022,17 @@ async def project_custom_fields(project_id: str, workspaceId: str = Query(min_le
 @router.patch('/{project_id}/custom-fields/{field_id}')
 async def update_project_custom_field(project_id: str, field_id: str, payload: ProjectCustomFieldValueInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     await _project(db, project_id, payload.workspaceId, user['id'])
-    result = await db.execute(text('SELECT * FROM project_custom_fields WHERE id = :id AND workspace_id = :workspace_id'), {'id': field_id, 'workspace_id': payload.workspaceId})
+    result = await db.execute(UPDATE_PROJECT_CUSTOM_FIELD_SELECT_PROJECT_CUSTOM_FIELDS, {'id': field_id, 'workspace_id': payload.workspaceId})
     field = result.mappings().first()
     if not field:
         raise ApiError(404, 'Project custom field not found.', 'Not Found')
     value = _custom_field_value(field, payload.value)
     now = utcnow()
     await db.execute(
-        text('''INSERT INTO project_custom_field_values (project_id, field_id, value, created_at, updated_at)
-                VALUES (:project_id, :field_id, CAST(:value AS jsonb), :now, :now)
-                ON CONFLICT (project_id, field_id) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at'''),
+        UPDATE_PROJECT_CUSTOM_FIELD_INSERT_PROJECT_CUSTOM_FIELD_VALUES,
         {'project_id': project_id, 'field_id': field_id, 'value': json.dumps(value), 'now': now},
     )
-    await db.execute(text("INSERT INTO activities (id, workspace_id, project_id, actor_id, type, data, created_at) VALUES (:id, :workspace_id, :project_id, :actor_id, 'project.custom-field.updated', CAST(:data AS jsonb), :now)"), {'id': cuid(), 'workspace_id': payload.workspaceId, 'project_id': project_id, 'actor_id': user['id'], 'data': json.dumps({'fieldId': field_id}), 'now': now})
+    await db.execute(UPDATE_PROJECT_CUSTOM_FIELD_INSERT_ACTIVITIES, {'id': cuid(), 'workspace_id': payload.workspaceId, 'project_id': project_id, 'actor_id': user['id'], 'data': json.dumps({'fieldId': field_id}), 'now': now})
     await db.commit()
     return {'data': {**_custom_field(field), 'value': value}}
 
@@ -999,14 +1044,14 @@ async def update_members(project_id: str, payload: ProjectMembersInput, user: An
     if len(member_ids) != len(payload.userIds):
         raise ApiError(400, 'Project members must be unique.', 'Bad Request')
     if member_ids:
-        active = await db.execute(text("SELECT COUNT(*) FROM workspace_members WHERE workspace_id = :workspace_id AND status = 'ACTIVE' AND user_id = ANY(:user_ids)"), {'workspace_id': payload.workspaceId, 'user_ids': member_ids})
+        active = await db.execute(UPDATE_MEMBERS_SELECT_WORKSPACE_MEMBERS, {'workspace_id': payload.workspaceId, 'user_ids': member_ids})
         if active.scalar_one() != len(member_ids):
             raise ApiError(400, 'Project members must be active workspace members.', 'Bad Request')
     now = utcnow()
-    await db.execute(text('DELETE FROM project_members WHERE project_id = :project_id'), {'project_id': project_id})
+    await db.execute(UPDATE_MEMBERS_DELETE_PROJECT_MEMBERS, {'project_id': project_id})
     for member_id in member_ids:
-        await db.execute(text('INSERT INTO project_members (project_id, user_id, created_at) VALUES (:project_id, :user_id, :now)'), {'project_id': project_id, 'user_id': member_id, 'now': now})
-    await db.execute(text("INSERT INTO activities (id, workspace_id, project_id, actor_id, type, data, created_at) VALUES (:id, :workspace_id, :project_id, :actor_id, 'project.members.updated', CAST(:data AS jsonb), :now)"), {'id': cuid(), 'workspace_id': payload.workspaceId, 'project_id': project_id, 'actor_id': user['id'], 'data': json.dumps({'memberIds': member_ids}), 'now': now})
+        await db.execute(UPDATE_MEMBERS_INSERT_PROJECT_MEMBERS, {'project_id': project_id, 'user_id': member_id, 'now': now})
+    await db.execute(UPDATE_MEMBERS_INSERT_ACTIVITIES, {'id': cuid(), 'workspace_id': payload.workspaceId, 'project_id': project_id, 'actor_id': user['id'], 'data': json.dumps({'memberIds': member_ids}), 'now': now})
     await db.commit()
     return {'data': await _members(db, project_id)}
 
@@ -1014,7 +1059,7 @@ async def update_members(project_id: str, payload: ProjectMembersInput, user: An
 @router.get('/{project_id}/subscription')
 async def subscription(project_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
     await _project(db, project_id, workspaceId, user['id'])
-    result = await db.execute(text('SELECT created_at FROM project_subscriptions WHERE project_id = :project_id AND user_id = :user_id'), {'project_id': project_id, 'user_id': user['id']})
+    result = await db.execute(SUBSCRIPTION_SELECT_PROJECT_SUBSCRIPTIONS, {'project_id': project_id, 'user_id': user['id']})
     created_at = result.scalar_one_or_none()
     return {'data': {'subscribed': created_at is not None, 'subscribedAt': created_at}}
 
@@ -1023,16 +1068,16 @@ async def subscription(project_id: str, workspaceId: str = Query(min_length=1), 
 async def subscribe(project_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
     await _project(db, project_id, workspaceId, user['id'])
     now = utcnow()
-    await db.execute(text('INSERT INTO project_subscriptions (project_id, user_id, created_at) VALUES (:project_id, :user_id, :now) ON CONFLICT (project_id, user_id) DO NOTHING'), {'project_id': project_id, 'user_id': user['id'], 'now': now})
+    await db.execute(SUBSCRIBE_INSERT_PROJECT_SUBSCRIPTIONS, {'project_id': project_id, 'user_id': user['id'], 'now': now})
     await db.commit()
-    result = await db.execute(text('SELECT created_at FROM project_subscriptions WHERE project_id = :project_id AND user_id = :user_id'), {'project_id': project_id, 'user_id': user['id']})
+    result = await db.execute(SUBSCRIBE_SELECT_PROJECT_SUBSCRIPTIONS, {'project_id': project_id, 'user_id': user['id']})
     return {'data': {'subscribed': True, 'subscribedAt': result.scalar_one()}}
 
 
 @router.delete('/{project_id}/subscription')
 async def unsubscribe(project_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
     await _project(db, project_id, workspaceId, user['id'])
-    await db.execute(text('DELETE FROM project_subscriptions WHERE project_id = :project_id AND user_id = :user_id'), {'project_id': project_id, 'user_id': user['id']})
+    await db.execute(UNSUBSCRIBE_DELETE_PROJECT_SUBSCRIPTIONS, {'project_id': project_id, 'user_id': user['id']})
     await db.commit()
     return {'data': {'subscribed': False, 'subscribedAt': None}}
 
@@ -1041,16 +1086,16 @@ async def unsubscribe(project_id: str, workspaceId: str = Query(min_length=1), u
 async def favorite(project_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
     await _project(db, project_id, workspaceId, user['id'])
     now = utcnow()
-    await db.execute(text('INSERT INTO project_favorites (project_id, user_id, created_at) VALUES (:project_id, :user_id, :now) ON CONFLICT (project_id, user_id) DO NOTHING'), {'project_id': project_id, 'user_id': user['id'], 'now': now})
+    await db.execute(FAVORITE_INSERT_PROJECT_FAVORITES, {'project_id': project_id, 'user_id': user['id'], 'now': now})
     await db.commit()
-    result = await db.execute(text('SELECT created_at FROM project_favorites WHERE project_id = :project_id AND user_id = :user_id'), {'project_id': project_id, 'user_id': user['id']})
+    result = await db.execute(FAVORITE_SELECT_PROJECT_FAVORITES, {'project_id': project_id, 'user_id': user['id']})
     return {'data': {'favorite': True, 'favoritedAt': result.scalar_one()}}
 
 
 @router.delete('/{project_id}/favorite')
 async def unfavorite(project_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
     await _project(db, project_id, workspaceId, user['id'])
-    await db.execute(text('DELETE FROM project_favorites WHERE project_id = :project_id AND user_id = :user_id'), {'project_id': project_id, 'user_id': user['id']})
+    await db.execute(UNFAVORITE_DELETE_PROJECT_FAVORITES, {'project_id': project_id, 'user_id': user['id']})
     await db.commit()
     return {'data': {'favorite': False, 'favoritedAt': None}}
 
@@ -1067,7 +1112,7 @@ def _milestone(row: Any) -> dict[str, Any]:
 @router.get('/{project_id}/milestones')
 async def list_milestones(project_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
     await _project(db, project_id, workspaceId, user['id'])
-    result = await db.execute(text('SELECT * FROM project_milestones WHERE project_id = :project_id AND workspace_id = :workspace_id ORDER BY position, target_date'), {'project_id': project_id, 'workspace_id': workspaceId})
+    result = await db.execute(LIST_MILESTONES_SELECT_PROJECT_MILESTONES, {'project_id': project_id, 'workspace_id': workspaceId})
     return {'data': [_milestone(row) for row in result.mappings().all()]}
 
 
@@ -1075,16 +1120,16 @@ async def list_milestones(project_id: str, workspaceId: str = Query(min_length=1
 async def create_milestone(project_id: str, payload: MilestoneInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     await _project(db, project_id, payload.workspaceId, user['id'])
     milestone_id, now = cuid(), utcnow()
-    await db.execute(text('''INSERT INTO project_milestones (id, workspace_id, project_id, title, description, target_date, position, created_at, updated_at) VALUES (:id, :workspace_id, :project_id, :title, :description, :target_date, :position, :now, :now)'''), {'id': milestone_id, 'workspace_id': payload.workspaceId, 'project_id': project_id, 'title': payload.title.strip(), 'description': payload.description, 'target_date': parse_date(payload.targetDate), 'position': payload.position or 0, 'now': now})
+    await db.execute(CREATE_MILESTONE_INSERT_PROJECT_MILESTONES, {'id': milestone_id, 'workspace_id': payload.workspaceId, 'project_id': project_id, 'title': payload.title.strip(), 'description': payload.description, 'target_date': parse_date(payload.targetDate), 'position': payload.position or 0, 'now': now})
     await db.commit()
-    result = await db.execute(text('SELECT * FROM project_milestones WHERE id = :id'), {'id': milestone_id})
+    result = await db.execute(CREATE_MILESTONE_SELECT_PROJECT_MILESTONES, {'id': milestone_id})
     return {'data': _milestone(result.mappings().one())}
 
 
 @router.patch('/{project_id}/milestones/{milestone_id}')
 async def update_milestone(project_id: str, milestone_id: str, payload: UpdateMilestoneInput, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     await _project(db, project_id, workspaceId, user['id'])
-    exists = await db.execute(text('SELECT 1 FROM project_milestones WHERE id = :id AND project_id = :project_id AND workspace_id = :workspace_id'), {'id': milestone_id, 'project_id': project_id, 'workspace_id': workspaceId})
+    exists = await db.execute(UPDATE_MILESTONE_SELECT_PROJECT_MILESTONES, {'id': milestone_id, 'project_id': project_id, 'workspace_id': workspaceId})
     if exists.scalar_one_or_none() is None: raise ApiError(404, 'Project milestone not found.', 'Not Found')
     values, sets, params = payload.model_dump(exclude_unset=True), [], {'id': milestone_id, 'now': utcnow()}
     for key, column in {'title': 'title', 'description': 'description', 'position': 'position'}.items():
@@ -1092,15 +1137,15 @@ async def update_milestone(project_id: str, milestone_id: str, payload: UpdateMi
             params[key] = values[key].strip() if key == 'title' and isinstance(values[key], str) else values[key]; sets.append(f'{column} = :{key}')
     if 'targetDate' in values: params['targetDate'] = parse_date(values['targetDate']); sets.append('target_date = :targetDate')
     if 'completed' in values: params['completedAt'] = utcnow() if values['completed'] else None; sets.append('completed_at = :completedAt')
-    if sets: await db.execute(text(f"UPDATE project_milestones SET {', '.join(sets)}, updated_at = :now WHERE id = :id"), params); await db.commit()
-    result = await db.execute(text('SELECT * FROM project_milestones WHERE id = :id'), {'id': milestone_id})
+    if sets: await db.execute(update_milestone_update_project_milestones_sql(sets), params); await db.commit()
+    result = await db.execute(UPDATE_MILESTONE_SELECT_PROJECT_MILESTONES_2, {'id': milestone_id})
     return {'data': _milestone(result.mappings().one())}
 
 
 @router.delete('/{project_id}/milestones/{milestone_id}')
 async def remove_milestone(project_id: str, milestone_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     await _project(db, project_id, workspaceId, user['id'])
-    deleted = await db.execute(text('DELETE FROM project_milestones WHERE id = :id AND project_id = :project_id AND workspace_id = :workspace_id RETURNING id'), {'id': milestone_id, 'project_id': project_id, 'workspace_id': workspaceId})
+    deleted = await db.execute(REMOVE_MILESTONE_DELETE_PROJECT_MILESTONES, {'id': milestone_id, 'project_id': project_id, 'workspace_id': workspaceId})
     if deleted.scalar_one_or_none() is None: raise ApiError(404, 'Project milestone not found.', 'Not Found')
     await db.commit()
     return {'data': {'id': milestone_id, 'deleted': True}}
@@ -1146,10 +1191,10 @@ async def create_update(project_id: str, payload: ProjectUpdateInput, user: Any 
     project = await _project(db, project_id, payload.workspaceId, user['id']); body = payload.body.strip()
     if not body: raise ApiError(400, 'Project update cannot be empty.', 'Bad Request')
     update_id, now, kind = cuid(), utcnow(), payload.kind or 'update'
-    await db.execute(text('''INSERT INTO project_updates (id, workspace_id, project_id, author_id, body, kind, health, created_at, updated_at) VALUES (:id, :workspace_id, :project_id, :author_id, :body, :kind, :health, :now, :now)'''), {'id': update_id, 'workspace_id': payload.workspaceId, 'project_id': project_id, 'author_id': user['id'], 'body': body, 'kind': kind, 'health': None if kind == 'comment' else (payload.health or 'on-track'), 'now': now})
-    if kind != 'comment' and payload.health: await db.execute(text('UPDATE projects SET health = :health, updated_at = :now WHERE id = :id'), {'id': project_id, 'health': payload.health, 'now': now})
-    await db.execute(text('INSERT INTO project_subscriptions (project_id, user_id, created_at) VALUES (:project_id, :user_id, :now) ON CONFLICT (project_id, user_id) DO NOTHING'), {'project_id': project_id, 'user_id': user['id'], 'now': now})
-    await db.execute(text("INSERT INTO activities (id, workspace_id, project_id, actor_id, type, data, created_at) VALUES (:id, :workspace_id, :project_id, :actor_id, 'project.update.created', CAST(:data AS jsonb), :now)"), {'id': cuid(), 'workspace_id': payload.workspaceId, 'project_id': project_id, 'actor_id': user['id'], 'data': json.dumps({'updateId': update_id, 'preview': body[:200]}), 'now': now})
+    await db.execute(CREATE_UPDATE_INSERT_PROJECT_UPDATES, {'id': update_id, 'workspace_id': payload.workspaceId, 'project_id': project_id, 'author_id': user['id'], 'body': body, 'kind': kind, 'health': None if kind == 'comment' else (payload.health or 'on-track'), 'now': now})
+    if kind != 'comment' and payload.health: await db.execute(CREATE_UPDATE_UPDATE_PROJECTS, {'id': project_id, 'health': payload.health, 'now': now})
+    await db.execute(CREATE_UPDATE_INSERT_PROJECT_SUBSCRIPTIONS, {'project_id': project_id, 'user_id': user['id'], 'now': now})
+    await db.execute(CREATE_UPDATE_INSERT_ACTIVITIES, {'id': cuid(), 'workspace_id': payload.workspaceId, 'project_id': project_id, 'actor_id': user['id'], 'data': json.dumps({'updateId': update_id, 'preview': body[:200]}), 'now': now})
     batch = await create_notification_batch(
         db,
         workspace_id=payload.workspaceId,
@@ -1176,8 +1221,8 @@ async def create_update(project_id: str, payload: ProjectUpdateInput, user: Any 
 async def create_resource(project_id: str, payload: ProjectResourceInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     await _project(db, project_id, payload.workspaceId, user['id'])
     resource_id, now, label, resource_url = cuid(), utcnow(), payload.label.strip(), _url(payload.url)
-    await db.execute(text('''INSERT INTO project_resources (id, workspace_id, project_id, created_by, label, url, created_at, updated_at) VALUES (:id, :workspace_id, :project_id, :created_by, :label, :url, :now, :now)'''), {'id': resource_id, 'workspace_id': payload.workspaceId, 'project_id': project_id, 'created_by': user['id'], 'label': label, 'url': resource_url, 'now': now})
-    await db.execute(text("INSERT INTO activities (id, workspace_id, project_id, actor_id, type, data, created_at) VALUES (:id, :workspace_id, :project_id, :actor_id, 'project.resource.created', CAST(:data AS jsonb), :now)"), {'id': cuid(), 'workspace_id': payload.workspaceId, 'project_id': project_id, 'actor_id': user['id'], 'data': json.dumps({'resourceId': resource_id, 'label': label, 'url': resource_url}), 'now': now})
+    await db.execute(CREATE_RESOURCE_INSERT_PROJECT_RESOURCES, {'id': resource_id, 'workspace_id': payload.workspaceId, 'project_id': project_id, 'created_by': user['id'], 'label': label, 'url': resource_url, 'now': now})
+    await db.execute(CREATE_RESOURCE_INSERT_ACTIVITIES, {'id': cuid(), 'workspace_id': payload.workspaceId, 'project_id': project_id, 'actor_id': user['id'], 'data': json.dumps({'resourceId': resource_id, 'label': label, 'url': resource_url}), 'now': now})
     await db.commit()
     return {'data': {'id': resource_id, 'workspaceId': payload.workspaceId, 'projectId': project_id, 'createdById': user['id'], 'label': label, 'url': resource_url, 'createdAt': now, 'updatedAt': now, 'createdBy': {'id': user['id'], 'name': user['name'], 'avatarUrl': user['avatar_url']}}}
 
@@ -1221,10 +1266,7 @@ async def resolve_project(key: str = Query(min_length=1, max_length=100), worksp
     VI: Quyền được kiểm tra như khi đọc dự án, nên biết slug không cho thêm quyền gì.
     """
     await workspace_access(db, workspaceId, user['id'])
-    row = (await db.execute(text('''SELECT p.id, p.slug, p.team_id FROM projects p
-        WHERE p.workspace_id = :workspace_id AND p.archived_at IS NULL
-          AND (p.id = :key OR p.id = (SELECT s.project_id FROM project_slugs s WHERE s.workspace_id = :workspace_id AND s.slug = lower(:key)))
-        ORDER BY p.id = :key DESC LIMIT 1'''), {'workspace_id': workspaceId, 'key': key})).mappings().first()
+    row = (await db.execute(RESOLVE_PROJECT_SELECT_PROJECTS, {'workspace_id': workspaceId, 'key': key})).mappings().first()
     if not row: raise ApiError(404, 'Project not found.', 'Not Found')
     if row['team_id']: await team_access(db, workspaceId, row['team_id'], user['id'])
     return {'data': {'id': row['id'], 'slug': row['slug']}}

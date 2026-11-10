@@ -6,7 +6,6 @@ from urllib.parse import urlparse
 
 from fastapi import Depends, Query, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.audit_context import audit_source
@@ -20,6 +19,29 @@ from ..access.membership import manager
 from ..access.project_scope import project_read_scope
 from ..access.projects import workspace_access
 from ..identity.auth import current_user
+from .commands import (
+    ADD_RESOURCE_INSERT_INITIATIVE_RESOURCES,
+    ARCHIVE_INITIATIVE_UPDATE_INITIATIVES,
+    AUDIT_INSERT_AUDIT_LOGS,
+    CREATE_INITIATIVE_INSERT_INITIATIVES,
+    CREATE_UPDATE_INSERT_INITIATIVE_UPDATES,
+    CREATE_UPDATE_UPDATE_INITIATIVES,
+    LINK_LABEL_INSERT_INITIATIVE_LABEL_LINKS,
+    LINK_PROJECT_INSERT_INITIATIVE_PROJECTS,
+    UNLINK_LABEL_DELETE_INITIATIVE_LABEL_LINKS,
+    UNLINK_PROJECT_DELETE_INITIATIVE_PROJECTS,
+    update_initiative_update_initiatives_sql,
+)
+from .queries import (
+    ACTIVE_MEMBER_SELECT_WORKSPACE_MEMBERS,
+    INITIATIVE_SELECT_INITIATIVE_LABEL_LINKS,
+    INITIATIVE_SELECT_INITIATIVE_PROJECTS,
+    INITIATIVE_SELECT_INITIATIVE_RESOURCES,
+    INITIATIVE_SELECT_INITIATIVE_UPDATES,
+    INITIATIVE_SELECT_INITIATIVES,
+    LINK_LABEL_SELECT_LABELS,
+    link_project_select_projects_sql,
+)
 
 router = APIRouter(prefix='/api/v1/_native/initiatives', tags=['native-initiatives'])
 public_router = APIRouter(prefix='/api/v1/initiatives', tags=['initiatives'])
@@ -73,7 +95,7 @@ class InitiativeResourceInput(BaseModel):
 
 async def _active_member(db: AsyncSession, workspace_id: str, user_id: str) -> None:
     result = await db.execute(
-        text("SELECT 1 FROM workspace_members WHERE workspace_id = :workspace_id AND user_id = :user_id AND status = 'ACTIVE'"),
+        ACTIVE_MEMBER_SELECT_WORKSPACE_MEMBERS,
         {'workspace_id': workspace_id, 'user_id': user_id},
     )
     if result.scalar_one_or_none() is None:
@@ -84,10 +106,7 @@ async def _audit(
     db: AsyncSession, workspace_id: str, actor_id: str, action: str, initiative_id: str, metadata: dict[str, Any] | None = None
 ) -> None:
     await db.execute(
-        text(
-            """INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at)
-               VALUES (:id, :workspace_id, :actor_id, :action, 'initiative', :entity_id, CAST(:metadata AS jsonb), :now)"""
-        ),
+        AUDIT_INSERT_AUDIT_LOGS,
         {
             'id': cuid(), 'workspace_id': workspace_id, 'actor_id': actor_id, 'action': action,
             'entity_id': initiative_id, 'metadata': json.dumps({**(metadata or {}),'source':audit_source.get()}), 'now': utcnow(),
@@ -103,18 +122,14 @@ async def _project(db: AsyncSession, project_id: str, workspace_id: str, user_id
 async def _initiative(db: AsyncSession, initiative_id: str, workspace_id: str, user_id: str) -> dict[str, Any]:
     await workspace_access(db, workspace_id, user_id)
     result = await db.execute(
-        text(
-            """SELECT initiative.*, owner.id AS owner_id_value, owner.name AS owner_name, owner.avatar_url AS owner_avatar_url
-               FROM initiatives initiative LEFT JOIN users owner ON owner.id = initiative.owner_id
-               WHERE initiative.id = :initiative_id AND initiative.workspace_id = :workspace_id AND initiative.archived_at IS NULL"""
-        ),
+        INITIATIVE_SELECT_INITIATIVES,
         {'initiative_id': initiative_id, 'workspace_id': workspace_id},
     )
     row = result.mappings().first()
     if not row:
         raise ApiError(404, 'Initiative not found.', 'Not Found')
     links = await db.execute(
-        text('SELECT project_id, created_at FROM initiative_projects WHERE initiative_id = :initiative_id ORDER BY created_at'),
+        INITIATIVE_SELECT_INITIATIVE_PROJECTS,
         {'initiative_id': initiative_id},
     )
     from .projects import project_summaries
@@ -123,30 +138,15 @@ async def _initiative(db: AsyncSession, initiative_id: str, workspace_id: str, u
     project_links=[{'initiativeId':initiative_id,'projectId':link['project_id'],'createdAt':link['created_at'],'project':projects[link['project_id']]}
         for link in link_rows if link['project_id'] in projects]
     labels = await db.execute(
-        text(
-            '''SELECT label.id, label.workspace_id, label.name, label.color, label.description, label.created_at, label.updated_at,
-                      initiative_label.created_at AS linked_at
-               FROM initiative_label_links initiative_label
-               JOIN labels label ON label.id = initiative_label.label_id
-               WHERE initiative_label.initiative_id = :initiative_id AND label.workspace_id = :workspace_id
-               ORDER BY label.name ASC'''
-        ),
+        INITIATIVE_SELECT_INITIATIVE_LABEL_LINKS,
         {'initiative_id': initiative_id, 'workspace_id': workspace_id},
     )
     updates = await db.execute(
-        text(
-            """SELECT initiative_update.*, author.id AS author_id_value, author.name AS author_name, author.avatar_url AS author_avatar_url
-               FROM initiative_updates initiative_update JOIN users author ON author.id = initiative_update.author_id
-               WHERE initiative_update.initiative_id = :initiative_id ORDER BY initiative_update.created_at DESC LIMIT 100"""
-        ),
+        INITIATIVE_SELECT_INITIATIVE_UPDATES,
         {'initiative_id': initiative_id},
     )
     resources = await db.execute(
-        text(
-            """SELECT initiative_resource.*, creator.id AS creator_id_value, creator.name AS creator_name, creator.avatar_url AS creator_avatar_url
-               FROM initiative_resources initiative_resource JOIN users creator ON creator.id = initiative_resource.created_by
-               WHERE initiative_resource.initiative_id = :initiative_id ORDER BY initiative_resource.created_at ASC"""
-        ),
+        INITIATIVE_SELECT_INITIATIVE_RESOURCES,
         {'initiative_id': initiative_id},
     )
     return {
@@ -205,8 +205,7 @@ async def create_initiative(payload: CreateInitiativeInput, user: Any = Depends(
     await _active_member(db, payload.workspaceId, owner_id)
     initiative_id, now = cuid(), utcnow()
     await db.execute(
-        text('''INSERT INTO initiatives (id, workspace_id, name, description, status, priority, health, icon, owner_id, target_date, created_at, updated_at)
-                VALUES (:id, :workspace_id, :name, :description, :status, :priority, :health, :icon, :owner_id, :target_date, :now, :now)'''),
+        CREATE_INITIATIVE_INSERT_INITIATIVES,
         {'id': initiative_id, 'workspace_id': payload.workspaceId, 'name': payload.name.strip(), 'description': payload.description, 'status': payload.status, 'priority': payload.priority, 'health': payload.health, 'icon': payload.icon, 'owner_id': owner_id, 'target_date': parse_date(payload.targetDate), 'now': now},
     )
     await _audit(db, payload.workspaceId, user['id'], 'initiative.created', initiative_id, {'name': payload.name.strip()})
@@ -237,7 +236,7 @@ async def update_initiative(initiative_id: str, payload: UpdateInitiativeInput, 
             params[field] = value.strip() if field in {'name', 'description'} and isinstance(value, str) else value
             sets.append(f'{column} = :{field}')
     if sets:
-        await db.execute(text(f"UPDATE initiatives SET {', '.join(sets)}, updated_at = :now WHERE id = :initiative_id"), params)
+        await db.execute(update_initiative_update_initiatives_sql(sets), params)
         await _audit(db, workspaceId, user['id'], 'initiative.updated', initiative_id, values)
         await db.commit()
     return {'data': await _initiative(db, initiative_id, workspaceId, user['id'])}
@@ -249,7 +248,7 @@ async def archive_initiative(initiative_id: str, workspaceId: str = Query(min_le
     await manager(db, workspaceId, user['id'])
     await _initiative(db, initiative_id, workspaceId, user['id'])
     now = utcnow()
-    await db.execute(text('UPDATE initiatives SET archived_at = :now, updated_at = :now WHERE id = :initiative_id'), {'initiative_id': initiative_id, 'now': now})
+    await db.execute(ARCHIVE_INITIATIVE_UPDATE_INITIATIVES, {'initiative_id': initiative_id, 'now': now})
     await _audit(db, workspaceId, user['id'], 'initiative.archived', initiative_id)
     await db.commit()
     return {'data': {'id': initiative_id, 'archivedAt': now}}
@@ -260,11 +259,11 @@ async def archive_initiative(initiative_id: str, workspaceId: str = Query(min_le
 async def link_project(initiative_id: str, payload: ProjectLinkInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     await manager(db, payload.workspaceId, user['id'])
     await _initiative(db, initiative_id, payload.workspaceId, user['id'])
-    project = await db.execute(text(f'SELECT p.id,p.name FROM projects p WHERE p.id=:project_id AND {project_read_scope()}'), {'project_id': payload.projectId, 'workspace': payload.workspaceId, 'user': user['id']})
+    project = await db.execute(link_project_select_projects_sql(project_read_scope), {'project_id': payload.projectId, 'workspace': payload.workspaceId, 'user': user['id']})
     row = project.mappings().first()
     if not row:
         raise ApiError(404, 'Initiative or project not found.', 'Not Found')
-    await db.execute(text('INSERT INTO initiative_projects (initiative_id, project_id) VALUES (:initiative_id, :project_id) ON CONFLICT DO NOTHING'), {'initiative_id': initiative_id, 'project_id': payload.projectId})
+    await db.execute(LINK_PROJECT_INSERT_INITIATIVE_PROJECTS, {'initiative_id': initiative_id, 'project_id': payload.projectId})
     await _audit(db, payload.workspaceId, user['id'], 'initiative.project.linked', initiative_id, {'projectId': payload.projectId, 'projectName': row['name']})
     await db.commit()
     return {'data': {'initiativeId': initiative_id, 'projectId': payload.projectId}}
@@ -275,7 +274,7 @@ async def link_project(initiative_id: str, payload: ProjectLinkInput, user: Any 
 async def unlink_project(initiative_id: str, project_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     await manager(db, workspaceId, user['id'])
     await _initiative(db, initiative_id, workspaceId, user['id'])
-    await db.execute(text('DELETE FROM initiative_projects WHERE initiative_id = :initiative_id AND project_id = :project_id'), {'initiative_id': initiative_id, 'project_id': project_id})
+    await db.execute(UNLINK_PROJECT_DELETE_INITIATIVE_PROJECTS, {'initiative_id': initiative_id, 'project_id': project_id})
     await _audit(db, workspaceId, user['id'], 'initiative.project.unlinked', initiative_id, {'projectId': project_id})
     await db.commit()
     return {'data': {'initiativeId': initiative_id, 'projectId': project_id, 'removed': True}}
@@ -287,14 +286,14 @@ async def link_label(initiative_id: str, payload: InitiativeLabelLinkInput, user
     await manager(db, payload.workspaceId, user['id'])
     await _initiative(db, initiative_id, payload.workspaceId, user['id'])
     result = await db.execute(
-        text('SELECT id, name FROM labels WHERE id = :label_id AND workspace_id = :workspace_id'),
+        LINK_LABEL_SELECT_LABELS,
         {'label_id': payload.labelId, 'workspace_id': payload.workspaceId},
     )
     label = result.mappings().first()
     if not label:
         raise ApiError(404, 'Label not found.', 'Not Found')
     await db.execute(
-        text('INSERT INTO initiative_label_links (initiative_id, label_id) VALUES (:initiative_id, :label_id) ON CONFLICT DO NOTHING'),
+        LINK_LABEL_INSERT_INITIATIVE_LABEL_LINKS,
         {'initiative_id': initiative_id, 'label_id': payload.labelId},
     )
     await _audit(db, payload.workspaceId, user['id'], 'initiative.label.linked', initiative_id, {'labelId': payload.labelId, 'labelName': label['name']})
@@ -308,7 +307,7 @@ async def unlink_label(initiative_id: str, label_id: str, workspaceId: str = Que
     await manager(db, workspaceId, user['id'])
     await _initiative(db, initiative_id, workspaceId, user['id'])
     await db.execute(
-        text('DELETE FROM initiative_label_links WHERE initiative_id = :initiative_id AND label_id = :label_id'),
+        UNLINK_LABEL_DELETE_INITIATIVE_LABEL_LINKS,
         {'initiative_id': initiative_id, 'label_id': label_id},
     )
     await _audit(db, workspaceId, user['id'], 'initiative.label.unlinked', initiative_id, {'labelId': label_id})
@@ -353,10 +352,9 @@ async def create_update(initiative_id: str, payload: InitiativeUpdateInput, user
     initiative = await _initiative(db, initiative_id, payload.workspaceId, user['id'])
     update_id, now = cuid(), utcnow()
     health = payload.health or initiative['health']
-    await db.execute(text('''INSERT INTO initiative_updates (id, workspace_id, initiative_id, author_id, body, health, created_at, updated_at)
-        VALUES (:id, :workspace_id, :initiative_id, :author_id, :body, :health, :now, :now)'''), {'id': update_id, 'workspace_id': payload.workspaceId, 'initiative_id': initiative_id, 'author_id': user['id'], 'body': payload.body.strip(), 'health': health, 'now': now})
+    await db.execute(CREATE_UPDATE_INSERT_INITIATIVE_UPDATES, {'id': update_id, 'workspace_id': payload.workspaceId, 'initiative_id': initiative_id, 'author_id': user['id'], 'body': payload.body.strip(), 'health': health, 'now': now})
     if payload.health:
-        await db.execute(text('UPDATE initiatives SET health = :health, updated_at = :now WHERE id = :initiative_id'), {'health': health, 'now': now, 'initiative_id': initiative_id})
+        await db.execute(CREATE_UPDATE_UPDATE_INITIATIVES, {'health': health, 'now': now, 'initiative_id': initiative_id})
     await _audit(db, payload.workspaceId, user['id'], 'initiative.update.posted', initiative_id, {'body': payload.body.strip(), 'health': health, 'updateId': update_id})
     await db.commit()
     return {'data': (await _initiative(db, initiative_id, payload.workspaceId, user['id']))['updates'][0]}
@@ -371,8 +369,7 @@ async def add_resource(initiative_id: str, payload: InitiativeResourceInput, use
     if parsed.scheme not in {'http', 'https'} or not parsed.netloc:
         raise ApiError(400, 'Resource URL must be a valid HTTP or HTTPS URL.', 'Bad Request')
     resource_id, now = cuid(), utcnow()
-    await db.execute(text('''INSERT INTO initiative_resources (id, workspace_id, initiative_id, created_by, label, url, created_at, updated_at)
-        VALUES (:id, :workspace_id, :initiative_id, :created_by, :label, :url, :now, :now)'''), {'id': resource_id, 'workspace_id': payload.workspaceId, 'initiative_id': initiative_id, 'created_by': user['id'], 'label': payload.label.strip(), 'url': payload.url.strip(), 'now': now})
+    await db.execute(ADD_RESOURCE_INSERT_INITIATIVE_RESOURCES, {'id': resource_id, 'workspace_id': payload.workspaceId, 'initiative_id': initiative_id, 'created_by': user['id'], 'label': payload.label.strip(), 'url': payload.url.strip(), 'now': now})
     await _audit(db, payload.workspaceId, user['id'], 'initiative.resource.added', initiative_id, {'resourceId': resource_id, 'label': payload.label.strip(), 'url': payload.url.strip()})
     await db.commit()
     initiative = await _initiative(db, initiative_id, payload.workspaceId, user['id'])

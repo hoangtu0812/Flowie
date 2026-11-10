@@ -1,10 +1,16 @@
 from collections import defaultdict
 
-from sqlalchemy import text
-
 from ...core.pagination import CursorCodec
 from ..access.project_scope import project_read_scope
 from ..work_items.issue_search import issue_scope
+from .queries import (
+    PROJECT_SUMMARIES_SELECT_PROJECT_LABEL_LINKS,
+    project_page_select_projects_sql,
+    project_page_select_projects_sql_2,
+    project_page_select_projects_sql_3,
+    project_summaries_select_project_favorites_sql,
+    project_summaries_select_sql,
+)
 
 
 async def project_summaries(db, workspace, user, identifiers):
@@ -14,11 +20,7 @@ async def project_summaries(db, workspace, user, identifiers):
     rows = (
         (
             await db.execute(
-                text(f"""SELECT p.*,t.name AS team_name,t.identifier AS team_identifier,t.icon AS team_icon,
-        u.name AS lead_name,u.avatar_url AS lead_avatar,
-        EXISTS(SELECT 1 FROM project_favorites f WHERE f.project_id=p.id AND f.user_id=:user) AS favorite
-        FROM projects p LEFT JOIN teams t ON t.id=p.team_id LEFT JOIN users u ON u.id=p.lead_id
-        WHERE {project_read_scope()} AND p.id=ANY(CAST(:ids AS text[]))"""),
+                project_summaries_select_project_favorites_sql(project_read_scope),
                 params,
             )
         )
@@ -28,8 +30,7 @@ async def project_summaries(db, workspace, user, identifiers):
     labels = defaultdict(list)
     for row in (
         await db.execute(
-            text("""SELECT pl.project_id,l.* FROM project_label_links pl
-        JOIN project_labels l ON l.id=pl.label_id WHERE pl.project_id=ANY(CAST(:ids AS text[])) ORDER BY l.name,l.id"""),
+            PROJECT_SUMMARIES_SELECT_PROJECT_LABEL_LINKS,
             params,
         )
     ).mappings():
@@ -47,11 +48,7 @@ async def project_summaries(db, workspace, user, identifiers):
     counts: defaultdict[str, dict[str, int]] = defaultdict(dict)
     for row in (
         await db.execute(
-            text(
-                "SELECT i.project_id,lower(s.category::text) AS category,COUNT(*) AS count "
-                + scope
-                + " AND i.project_id=ANY(CAST(:ids AS text[])) GROUP BY i.project_id,s.category"
-            ),
+            project_summaries_select_sql(scope),
             {**query, "ids": list(identifiers)},
         )
     ).mappings():
@@ -131,7 +128,7 @@ async def project_page(
     codec = CursorCodec(secret, user, "portfolio.projects", binding)
     total = (
         await db.execute(
-            text("SELECT COUNT(*) FROM projects p WHERE " + predicate), params
+            project_page_select_projects_sql(predicate), params
         )
     ).scalar_one()
     if cursor:
@@ -142,11 +139,7 @@ async def project_page(
             params["after"], params["rank"] = decode_rank_cursor(codec, cursor)
             exists = (
                 await db.execute(
-                    text(
-                        "SELECT COUNT(*) FROM projects p WHERE "
-                        + predicate
-                        + " AND p.id=:after AND p.manual_order=:rank"
-                    ),
+                    project_page_select_projects_sql_2(predicate),
                     params,
                 )
             ).scalar_one()
@@ -163,15 +156,7 @@ async def project_page(
     rows = (
         (
             await db.execute(
-                text(
-                    "SELECT p.id,p.created_at,p.manual_order FROM projects p WHERE "
-                    + predicate
-                    + (
-                        " ORDER BY p.manual_order,p.id LIMIT :limit"
-                        if manual
-                        else " ORDER BY p.created_at DESC,p.id DESC LIMIT :limit"
-                    )
-                ),
+                project_page_select_projects_sql_3(predicate, manual),
                 params,
             )
         )
