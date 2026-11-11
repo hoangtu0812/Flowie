@@ -13,15 +13,31 @@ name: Verify MCP and application contracts
 # VI: nâng số worker của Playwright — thứ sẽ kéo lại đúng kiểu nhiễu chéo giữa
 # VI: các test mà DTD-506 đã dọn.
 
-# Manual only for now: the project is shipping features and a pull request
-# waiting on this suite cost more than it caught. Run it with
-# workflow_dispatch on a release commit or a risky branch. To check pull
-# requests again, restore the pull_request trigger with its paths filter.
-# VI: Tạm thời chỉ chạy tay: dự án đang cần ship tính năng, và việc pull request
-# VI: phải chờ bộ kiểm tra này tốn nhiều hơn những gì nó bắt được. Chạy bằng
-# VI: workflow_dispatch trên commit release hoặc một nhánh rủi ro. Muốn kiểm pull
-# VI: request trở lại thì khôi phục trigger pull_request cùng bộ lọc paths.
+# Pull requests into main run it on their own when they touch a path below;
+# the changes job then narrows which jobs that pull request needs. Nothing runs
+# on a push to main, so a commit pushed there directly — a release commit
+# above all — is checked only by running this with workflow_dispatch. The
+# paths cover every pattern the changes job tests, so a file that can select
+# a job also starts the run.
+# VI: Pull request vào main tự chạy workflow này khi chạm tới một path bên
+# VI: dưới; job changes sau đó thu hẹp những job mà pull request đó cần. Không
+# VI: có gì chạy khi push lên main, nên commit đẩy thẳng lên đó — trước hết là
+# VI: commit release — chỉ được kiểm khi chạy tay bằng workflow_dispatch. Danh
+# VI: sách path phủ mọi mẫu mà job changes kiểm tra, nên file nào có thể chọn
+# VI: một job thì cũng khởi động lần chạy.
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/api-python/**'
+      - 'apps/web/**'
+      - 'packages/**'
+      - 'scripts/**'
+      - 'infrastructure/**'
+      - 'docker-compose.yml'
+      - 'pnpm-lock.yaml'
+      - 'ruff.toml'
+      - '.github/workflows/verify-mcp.yml'
   workflow_dispatch:
   workflow_call:
 
@@ -45,7 +61,13 @@ jobs:
   # VI: giờ được đánh giá trên một tập con.
   changes:
     name: scope
-    runs-on: ubuntu-latest
+    # Every job names its image instead of ubuntu-latest: when that label moved
+    # to Ubuntu 26.04 it broke the storage job before a single test ran. A new
+    # image is now adopted on purpose, in its own change.
+    # VI: Mọi job ghi rõ image thay vì ubuntu-latest: khi nhãn đó chuyển sang
+    # VI: Ubuntu 26.04, job storage hỏng trước khi có một test nào chạy. Từ nay
+    # VI: lên image mới là việc có chủ ý, trong một thay đổi riêng.
+    runs-on: ubuntu-24.04
     outputs:
       backend: ${{ steps.scope.outputs.backend }}
       storage: ${{ steps.scope.outputs.storage }}
@@ -96,7 +118,7 @@ jobs:
     name: backend and MCP contracts
     needs: changes
     if: needs.changes.outputs.backend == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     services:
       postgres:
@@ -223,7 +245,7 @@ jobs:
     name: web build and unit tests
     needs: changes
     if: needs.changes.outputs.web == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -290,7 +312,7 @@ jobs:
     name: browser regression
     needs: changes
     if: needs.changes.outputs.e2e == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # One shard's share of a browser that took 12 minutes in a single job. The
     # ceiling allows for a slow runner, the retry a failing test gets, and the
     # run going all the way through instead of stopping at the fifth failure.
@@ -298,6 +320,26 @@ jobs:
     # VI: job. Mức trần tính thêm cho máy chạy chậm, cho lần thử lại mà một test
     # VI: hỏng được cấp, và cho việc chạy hết thay vì dừng ở lỗi thứ năm.
     timeout-minutes: 25
+    # Playwright's own image for the exact @playwright/test version in
+    # apps/web/package.json, so the browsers and every system library they
+    # need are already there. Installing them on the runner pulled over a
+    # hundred apt packages per shard and took more than 15 minutes when the
+    # Ubuntu mirror was slow. The tag must change with that dependency: a
+    # mismatched image has no browser build the test runner accepts. User 1001
+    # is the runner's own uid, which owns the workspace and HOME; Firefox
+    # refuses to start as root in a HOME another user owns. ipc=host gives
+    # Chromium the shared memory the default 64 MB would starve.
+    # VI: Image chính thức của Playwright đúng phiên bản @playwright/test trong
+    # VI: apps/web/package.json, nên trình duyệt và mọi thư viện hệ thống chúng
+    # VI: cần đã có sẵn. Cài chúng trên runner kéo hơn trăm gói apt mỗi shard và
+    # VI: mất hơn 15 phút khi mirror Ubuntu chậm. Tag phải đổi theo dependency
+    # VI: đó: image lệch phiên bản không có bản trình duyệt nào mà test runner
+    # VI: chấp nhận. User 1001 là uid của chính runner, chủ của workspace và
+    # VI: HOME; Firefox từ chối chạy dưới root trong HOME của user khác.
+    # VI: ipc=host cho Chromium đủ bộ nhớ dùng chung mà mức mặc định 64 MB thiếu.
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.0-noble
+      options: --user 1001 --ipc=host
     strategy:
       fail-fast: false
       matrix:
@@ -310,15 +352,17 @@ jobs:
           POSTGRES_USER: flowie_test
           POSTGRES_PASSWORD: test-only-password
           POSTGRES_DB: flowie_mcp_test
-        ports:
-          - 5432:5432
         options: >-
           --health-cmd "pg_isready -U flowie_test -d flowie_mcp_test"
           --health-interval 5s --health-timeout 5s --health-retries 12
+    # From inside the job container the service is reached by its name on the
+    # job's network, so no port is published on the runner.
+    # VI: Từ trong container của job, service được gọi bằng tên của nó trên
+    # VI: mạng của job, nên không cần mở cổng nào trên runner.
     env:
       PYTHONPATH: apps/api-python
-      DATABASE_URL: postgresql://flowie_test:test-only-password@localhost:5432/flowie_mcp_test
-      FLOWIE_E2E_DATABASE_URL: postgresql://flowie_test:test-only-password@localhost:5432/flowie_mcp_test
+      DATABASE_URL: postgresql://flowie_test:test-only-password@postgres:5432/flowie_mcp_test
+      FLOWIE_E2E_DATABASE_URL: postgresql://flowie_test:test-only-password@postgres:5432/flowie_mcp_test
     steps:
       - uses: actions/checkout@v4
         with:
@@ -355,17 +399,6 @@ jobs:
         run: |
           pnpm --filter @flowie/contracts build
           pnpm --filter @flowie/web build
-      # Only the browser this job runs. Installing all three cost every job
-      # three downloads for two it would never open.
-      # VI: Chỉ trình duyệt mà job này chạy. Cài cả ba khiến mỗi job tải về ba
-      # VI: bản cho hai bản nó không bao giờ mở tới.
-      # WebKit pulls well over a hundred apt packages; when the runner's Ubuntu mirror is slow
-      # that alone has taken more than 15 minutes, so allow 30 before calling it stuck.
-      # VI: WebKit kéo hơn một trăm gói apt; khi mirror Ubuntu của runner chậm, riêng bước này
-      # VI: đã mất hơn 15 phút, nên cho phép 30 phút trước khi coi là bị treo.
-      - name: Install browser test dependencies
-        timeout-minutes: 30
-        run: pnpm --filter @flowie/web exec playwright install --with-deps ${{ matrix.browser }}
       - name: Verify browser regression workflows
         run: |
           python scripts/seed-ui-regression.py
@@ -389,7 +422,7 @@ jobs:
     name: verify
     needs: [changes, backend, storage, web, e2e]
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Require every job that ran to have succeeded
         env:

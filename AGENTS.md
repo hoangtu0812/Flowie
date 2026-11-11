@@ -29,13 +29,16 @@
   checkout, then rebuild and restart the Compose services. Merging to `main`
   does not put a change on that server; it is live only after the maintainer
   pulls and rebuilds.
-- Nothing deploys automatically. `.github/workflows/verify-mcp.yml` runs only
-  by hand (`workflow_dispatch`) for now, so pull requests are not checked
-  automatically: run the targeted tests for what you changed before opening
-  one, and dispatch the suite on a risky branch. It deploys nothing. Every
-  environment is deployed by hand from its own checkout, so merging changes no
-  running system. There is no staging, preview, or development target.
-- Because `main` itself is unchecked, a commit pushed straight to it — a
+- Nothing deploys automatically. `.github/workflows/verify-mcp.yml` runs on
+  every pull request into `main` that touches application, script,
+  infrastructure, lockfile or workflow paths, and its `scope` job picks the
+  jobs that change can affect; it can also be started by hand
+  (`workflow_dispatch`). Still run the targeted tests for what you changed
+  before opening a pull request. It deploys nothing. Every environment is
+  deployed by hand from its own checkout, so merging changes no running
+  system. There is no staging, preview, or development target. No branch
+  protection requires the check; the maintainer decides that.
+- Nothing runs on a push to `main`, so a commit pushed straight to it — a
   release commit is the usual case — has passed nothing. Run `verify-mcp.yml`
   on that commit with `workflow_dispatch` and require it green before relying
   on it.
