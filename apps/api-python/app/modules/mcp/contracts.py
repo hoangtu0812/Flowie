@@ -122,8 +122,30 @@ class DocumentReadInput(DocumentInput):
     limit: int = Field(default=20000, ge=1, le=40000)
 
 
+class DocumentPartInput(DocumentReadInput):
+    # Headings with offsets and section sizes instead of the text; `section` reads one heading's
+    # part, with offset/limit counted inside it. Without either, the full text is read as before.
+    # VI: Danh sách heading kèm offset và độ dài từng phần thay cho văn bản; `section` đọc phần
+    # VI: của một heading, offset/limit tính trong phần đó. Không gửi cả hai thì đọc toàn văn như cũ.
+    outline: bool = False
+    section: str | None = Field(default=None, min_length=1, max_length=250)
+
+    @model_validator(mode="after")
+    def outline_or_section(self):
+        if self.outline and self.section:
+            raise ValueError("Give outline or section, not both.")
+        return self
+
+
 class DocumentRevisionInput(DocumentReadInput):
     revisionVersion: int = Field(ge=1)
+
+
+class FeatureDocsInput(IssueInput):
+    # Linked FDS/TDS come with their outline; the text only on request or for one section.
+    # VI: FDS/TDS liên kết trả kèm mục lục; văn bản chỉ khi yêu cầu hoặc theo một phần.
+    includeContent: bool = False
+    section: str | None = Field(default=None, min_length=1, max_length=250)
 
 
 class DocumentDiffInput(DocumentInput):
@@ -271,6 +293,9 @@ class CreateDocumentTool(WriteInput):
     # VI: kết với issue (CommandService.link_target kiểm tra).
     projectId: str | None = None
     issueId: str | None = None
+    # Off by default: the agent already has what it wrote; the result carries version and outline.
+    # VI: Mặc định tắt: agent đã có nội dung vừa ghi; kết quả có version và mục lục.
+    includeContent: bool = False
 
 
 class DocumentEdit(StrictInput):
@@ -288,6 +313,9 @@ class UpdateDocumentTool(VersionInput, DocumentInput):
     # Agents can draft and submit for review; approving (and so publishing) stays with people.
     # VI: Agent được soạn nháp và gửi duyệt; việc duyệt (và phát hành) do người thực hiện.
     status: Literal["DRAFT", "IN_REVIEW"] | None = None
+    # Off by default: the agent already has what it wrote; the result carries version and outline.
+    # VI: Mặc định tắt: agent đã có nội dung vừa ghi; kết quả có version và mục lục.
+    includeContent: bool = False
 
     @model_validator(mode="after")
     def content_or_edits(self):
@@ -336,6 +364,9 @@ class LinkDocumentTool(WriteInput, DocumentInput):
 
 class RestoreDocumentTool(VersionInput, DocumentInput):
     revisionVersion: int = Field(ge=1)
+    # Off by default: the agent already has what it wrote; the result carries version and outline.
+    # VI: Mặc định tắt: agent đã có nội dung vừa ghi; kết quả có version và mục lục.
+    includeContent: bool = False
 
 
 # Argument names that MCP clients were measured sending instead of the published ones (MCP

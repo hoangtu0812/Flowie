@@ -955,10 +955,11 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             documentId=document["id"],
             revisionVersion=1,
             expectedVersion=2,
+            includeContent=True,
             idempotencyKey="document-restore-key",
         )
         self.assertEqual(restored["data"]["content"], "First")
-        self.assertEqual(restored["data"]["version"], 3)
+        self.assertEqual((restored["data"]["version"], restored["data"]["length"]), (3, 5))
         await self.call(
             "link_document",
             documentId=document["id"],
@@ -1072,8 +1073,20 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         after = await self.call("get_feature_docs", issueId=self.issue["id"])
         self.assertIsNone(after["warning"])
         [linked] = after["linked"]
+        # Default: version and outline without the text (DTD-777).
+        # VI: Mặc định: version và mục lục, không kèm văn bản (DTD-777).
+        self.assertNotIn("content", linked)
+        self.assertEqual(linked["outline"][0]["title"], "FDS · Tree")
+        self.assertEqual(linked["version"], 2)
+        [linked] = (await self.call("get_feature_docs", issueId=self.issue["id"], includeContent=True))["linked"]
         self.assertIn("Scope v2.", linked["content"])
         self.assertIn(f"| {self.issue['identifier']} | First draft |", linked["content"])
+        [part] = (await self.call("get_feature_docs", issueId=self.issue["id"], section="Lịch sử thay đổi"))["linked"]
+        self.assertTrue(part["content"].startswith("## Lịch sử thay đổi"))
+        self.assertNotIn("Scope v2.", part["content"])
+        [missing] = (await self.call("get_feature_docs", issueId=self.issue["id"], section="Nope"))["linked"]
+        self.assertIn("not found", missing["sectionError"])
+        self.assertNotIn("content", missing)
         self.assertEqual(
             [(f["module"], f["feature"], len(f["documents"])) for f in after["features"]],
             [("Documents", "Tree", 1)],
@@ -2179,7 +2192,26 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             "update_document", documentId=document["id"], expectedVersion=document["version"],
             edits=[{"oldText": "Old rule.", "newText": "New rule."}], idempotencyKey="lean-edit",
         )
-        self.assertEqual(edited["data"]["content"], "# Spec\n\nNew rule.\n\nKeep me.")
+        # Document writes return version, length and outline instead of the text (DTD-777).
+        # VI: Ghi tài liệu trả version, độ dài và mục lục thay cho văn bản (DTD-777).
+        self.assertNotIn("content", document)
+        self.assertNotIn("content", edited["data"])
+        self.assertEqual(edited["data"]["outline"], [{"level": 1, "title": "Spec", "line": 1}])
+        self.assertEqual(edited["data"]["length"], len("# Spec\n\nNew rule.\n\nKeep me."))
+        full = await self.call("get_document", documentId=document["id"])
+        self.assertEqual(full["content"], "# Spec\n\nNew rule.\n\nKeep me.")
+        self.assertEqual(full["length"], len(full["content"]))
+        toc = await self.call("get_document", documentId=document["id"], outline=True)
+        self.assertNotIn("content", toc)
+        self.assertEqual(toc["outline"], [{"level": 1, "title": "Spec", "line": 1, "offset": 0, "length": full["length"]}])
+        self.assertEqual(toc["version"], edited["data"]["version"])
+        part = await self.call("get_document", documentId=document["id"], section="spec", offset=8, limit=9)
+        self.assertEqual((part["content"], part["nextOffset"]), ("New rule.", 17))
+        with self.assertRaises(ApiError) as unknown_section:
+            await self.call("get_document", documentId=document["id"], section="Missing")
+        self.assertEqual(unknown_section.exception.status_code, 404)
+        with self.assertRaises(ApiError):
+            await self.call("get_document", documentId=document["id"], outline=True, section="Spec")
         for edits, key in (
             ([{"oldText": "Missing", "newText": "x"}], "lean-edit-missing"),
             ([{"oldText": "e", "newText": "x"}], "lean-edit-ambiguous"),

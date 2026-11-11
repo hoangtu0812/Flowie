@@ -21,7 +21,7 @@ from .commands import (
     MUTATE_LOCK_2,
     MUTATE_LOCK_3,
 )
-from .compact import compact_comment, compact_issue
+from .compact import compact_comment, compact_document, compact_issue
 from .connections import validate_current
 from .contracts import normalize_arguments
 from .log_redaction import failure_details, redact_arguments
@@ -256,6 +256,8 @@ class ToolApplication:
             }
         elif tool.name in {"add_comment", "update_comment"}:
             data = compact_comment(data)
+        elif tool.name in {"create_document", "update_document", "restore_document"}:
+            data = compact_document(data, payload.includeContent)
         result = {
             "data": data,
             "correlationId": correlation,

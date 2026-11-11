@@ -379,14 +379,34 @@ class QueryService:
         return result
 
     async def document(self, payload) -> dict:
+        """A document page: the whole text from offset (the default, unchanged for older
+        agents), only its outline (`outline`), or one heading's part (`section`) where
+        offset/limit and nextOffset count inside that part. `length` is the full text's size.
+        VI: Một trang tài liệu: toàn văn từ offset (mặc định, giữ nguyên cho agent cũ), chỉ mục
+        VI: lục (`outline`), hoặc phần của một heading (`section`) với offset/limit và nextOffset
+        VI: tính trong phần đó. `length` là độ dài toàn văn.
+        """
+        from .outline import find_section, outline
+
         row = await self.policy.document(payload.documentId)
-        end = payload.offset + payload.limit
-        return {
-            "id": row["id"],
-            "title": row["title"],
-            "content": row["content"][payload.offset : end],
-            "nextOffset": end if end < len(row["content"]) else None,
-            "truncated": end < len(row["content"]),
+        text, part = row["content"], None
+        result: dict = {"id": row["id"], "title": row["title"]}
+        if payload.outline:
+            result["outline"] = outline(text)
+        else:
+            if payload.section:
+                part = find_section(text, payload.section)
+                text = text[part["offset"] : part["offset"] + part["length"]]
+            end = payload.offset + payload.limit
+            result |= {
+                "content": text[payload.offset : end],
+                "nextOffset": end if end < len(text) else None,
+                "truncated": end < len(text),
+            }
+            if part:
+                result["section"] = part
+        return result | {
+            "length": len(row["content"]),
             "version": row["version"],
             "teamId": row["team_id"],
             "folderId": row["folder_id"],
@@ -433,7 +453,9 @@ class QueryService:
     async def feature_docs(self, payload) -> dict:
         from .feature_docs import read_feature_docs
 
-        return await read_feature_docs(self.db, self.policy, payload.issueId)
+        return await read_feature_docs(
+            self.db, self.policy, payload.issueId, payload.includeContent, payload.section
+        )
 
     async def revisions(self, payload) -> dict:
         from ..work_items.document_history import list_revisions
