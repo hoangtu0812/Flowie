@@ -5,6 +5,22 @@ import { persist } from 'zustand/middleware';
 export type DefaultHome = 'inbox' | 'my-issues';
 export type FontSize = 'default' | 'small' | 'large';
 
+/**
+ * Issue list columns as the account stored them: visibility per display
+ * property, column order and pixel widths keyed by column. Keys are strings
+ * because a document written by another release may name columns this bundle
+ * does not know; `resolveIssueColumns` drops those and fills in defaults.
+ * VI: Cột danh sách issue như tài khoản đã lưu: ẩn/hiện theo thuộc tính hiển
+ * thị, thứ tự cột và độ rộng px theo cột. Khoá là chuỗi vì document do bản
+ * phát hành khác ghi có thể chứa cột bundle này không biết; `resolveIssueColumns`
+ * bỏ các khoá đó và bổ sung giá trị mặc định.
+ */
+export interface StoredIssueColumns {
+   visible: Record<string, boolean>;
+   order: string[];
+   widths: Record<string, number>;
+}
+
 interface UiPreferencesState {
    accountId?: string;
    syncStatus: 'loading' | 'saved' | 'saving' | 'pending' | 'error';
@@ -15,6 +31,9 @@ interface UiPreferencesState {
    timezone: string | null;
    weekStart: 0 | 1 | 6;
    autoAssignSelf: boolean;
+   /** Null until the account configures its issue columns. VI: Null cho tới khi tài khoản cấu hình cột issue. */
+   issueColumns: StoredIssueColumns | null;
+   setIssueColumns: (issueColumns: StoredIssueColumns) => void;
    setTimezone: (timezone: string | null) => void;
    setWeekStart: (weekStart: 0 | 1 | 6) => void;
    setAutoAssignSelf: (autoAssignSelf: boolean) => void;
@@ -59,6 +78,8 @@ export const useUiPreferencesStore = create<UiPreferencesState>()(
          timezone: null,
          weekStart: 1,
          autoAssignSelf: false,
+         issueColumns: null,
+         setIssueColumns: (issueColumns) => set({ issueColumns }),
          setTimezone: (timezone) => set({ timezone }),
          setWeekStart: (weekStart) => set({ weekStart }),
          setAutoAssignSelf: (autoAssignSelf) => set({ autoAssignSelf }),

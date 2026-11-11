@@ -140,6 +140,32 @@ async def verify_preferences():
             assert (await read_preferences(db, other))["values"][
                 "lastSeenReleaseVersion"
             ] is None
+            # Issue columns are per account and replaced as one object; writing
+            # another setting keeps them.
+            columns = {
+                "visible": {"labels": False},
+                "order": ["project", "labels"],
+                "widths": {"title": 480},
+            }
+            stored = await write_preferences(
+                db,
+                user,
+                PreferencesUpdate(
+                    accountId=user,
+                    expectedVersion=6,
+                    values=UiValues.model_validate({"issueColumns": columns}),
+                ),
+            )
+            assert stored["values"]["issueColumns"] == columns
+            kept = await write_preferences(
+                db,
+                user,
+                PreferencesUpdate(
+                    accountId=user, expectedVersion=7, values=UiValues(locale="vi")
+                ),
+            )
+            assert kept["values"]["issueColumns"] == columns
+            assert (await read_preferences(db, other))["values"]["issueColumns"] is None
             await db.rollback()
     finally:
         await engine.dispose()
@@ -165,3 +191,28 @@ def test_account_timezone_requires_recognized_iana_zone():
     with pytest.raises(ApiError):
         UiValues(timezone="not-a-real-zone")
     assert UiValues(timezone="UTC").timezone == "UTC"
+
+
+def test_issue_columns_are_bounded_but_tolerate_unknown_columns():
+    saved = UiValues.model_validate(
+        {
+            "issueColumns": {
+                "visible": {"columnFromANewerRelease": True},
+                "order": ["columnFromANewerRelease", "labels"],
+                "widths": {"title": 2000, "labels": 40},
+                "subFieldFromANewerRelease": 1,
+            }
+        }
+    )
+    assert saved.issueColumns is not None
+    assert saved.issueColumns.order == ["columnFromANewerRelease", "labels"]
+    assert "subFieldFromANewerRelease" not in saved.issueColumns.model_dump()
+    for columns in [
+        {"widths": {"title": 39}},
+        {"widths": {"title": 2001}},
+        {"order": ["not a key"]},
+        {"order": ["labels"] * 31},
+        {"visible": {"x" * 41: True}},
+    ]:
+        with pytest.raises(ValidationError):
+            UiValues.model_validate({"issueColumns": columns})

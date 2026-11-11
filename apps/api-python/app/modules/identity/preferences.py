@@ -1,8 +1,8 @@
 import json
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import Depends
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
 from ...core.clock import utcnow
 from ...core.errors import ApiError
@@ -22,6 +22,38 @@ from .queries import (
 router = UtcAPIRouter(
     prefix="/api/v1/users/me/ui-preferences", tags=["account-preferences"]
 )
+
+
+# Column keys are free text within a strict shape instead of a fixed list: an
+# API rolled back to an older build must still read a document a newer build
+# wrote with a column it does not know, and the web app ignores unknown keys.
+# VI: Khoá cột là văn bản tự do trong một khuôn chặt thay vì danh sách cố định:
+# API rollback về bản cũ vẫn phải đọc được document do bản mới ghi với cột nó
+# không biết, và web bỏ qua các khoá lạ.
+ColumnKey = Annotated[str, StringConstraints(pattern=r"^[A-Za-z]{1,40}$")]
+ColumnWidth = Annotated[int, Field(ge=40, le=2000)]
+
+
+class IssueColumns(BaseModel):
+    """Issue list columns of one account: visibility, order and pixel widths.
+
+    Each write replaces the whole object, because the preference document is
+    merged only at its top level. Sizes are bounded so a client cannot store an
+    unbounded document; sub-fields a later release may add are dropped rather
+    than rejected, for the same rollback reason as ColumnKey.
+
+    VI: Cột của danh sách issue theo tài khoản: ẩn/hiện, thứ tự và độ rộng px.
+
+    Mỗi lần ghi thay cả object, vì document preferences chỉ merge ở cấp ngoài
+    cùng. Kích thước có giới hạn để client không lưu document vô hạn; field con
+    mà bản sau có thể thêm bị bỏ đi thay vì từ chối, cùng lý do rollback như
+    ColumnKey.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+    visible: dict[ColumnKey, bool] = Field(default_factory=dict, max_length=30)
+    order: list[ColumnKey] = Field(default_factory=list, max_length=30)
+    widths: dict[ColumnKey, ColumnWidth] = Field(default_factory=dict, max_length=30)
 
 
 class UiValues(BaseModel):
@@ -48,6 +80,11 @@ class UiValues(BaseModel):
     # chạy" để không chen vào lần đăng nhập đầu tiên. Có giới hạn độ dài vì đây
     # là văn bản tự do từ client, không phải identifier mà API tra cứu.
     lastSeenReleaseVersion: str | None = Field(default=None, max_length=50)
+    # None means the account never configured its issue columns, so the web
+    # app keeps the defaults (or the choice the browser already had).
+    # VI: None nghĩa là tài khoản chưa từng cấu hình cột issue, nên web giữ mặc
+    # định (hoặc lựa chọn trình duyệt đã có).
+    issueColumns: IssueColumns | None = None
 
     @field_validator("timezone")
     @classmethod

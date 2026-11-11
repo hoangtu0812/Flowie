@@ -18,7 +18,7 @@ import { CustomDragLayer } from './issue-grid';
 import { IssuesListHeader } from './issues-list-header';
 import { LoadingState } from '@/components/common/loading-state';
 import { QueryState } from '@/components/common/query-state';
-import { issueListMinWidth } from './issue-columns';
+import { issueListMinWidth, useIssueColumns } from './issue-columns';
 
 interface GroupedIssuesViewProps {
    /** Issues to display (after the filter bar has been applied). */
@@ -144,8 +144,9 @@ export const GroupedIssuesView: FC<GroupedIssuesViewProps> = ({
    error,
    onRetry,
 }) => {
-   const { grouping, ordering, columnSorts, completedIssues, showEmptyGroups, displayProperties } =
+   const { grouping, ordering, columnSorts, completedIssues, showEmptyGroups } =
       useDisplaySettingsStore();
+   const columns = useIssueColumns();
    const { filters } = useFilterStore();
    const hasActiveFilters = filters.length > 0;
 
@@ -323,7 +324,7 @@ export const GroupedIssuesView: FC<GroupedIssuesViewProps> = ({
       <DndProvider backend={HTML5Backend}>
          <CustomDragLayer />
          <div className="h-full overflow-auto">
-            <div className="min-h-full" style={{ minWidth: issueListMinWidth(displayProperties) }}>
+            <div className="min-h-full" style={{ minWidth: issueListMinWidth(columns) }}>
                <IssuesListHeader />
                {loading && <LoadingState label="Loading issues…" className="min-h-40" />}
                {!loading && listGroups.length === 0 && !showFooter && (

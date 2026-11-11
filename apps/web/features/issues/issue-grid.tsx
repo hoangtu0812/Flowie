@@ -1,7 +1,7 @@
 'use client';
 
 import { Issue } from '@/types/issues';
-import { useDisplaySettingsStore } from '@/store/display-settings-store';
+import { useIssueColumns } from './issue-columns';
 import { format } from 'date-fns';
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
@@ -82,7 +82,7 @@ export function IssueGrid({ issue }: IssueGridProps) {
    const ref = useRef<HTMLDivElement>(null);
    const { orgId } = useParams<{ orgId: string }>();
    const pathname = usePathname();
-   const { displayProperties } = useDisplaySettingsStore();
+   const { visible: displayProperties } = useIssueColumns();
 
    // Set up drag functionality.
    const [{ isDragging }, drag, preview] = useDrag(() => ({
