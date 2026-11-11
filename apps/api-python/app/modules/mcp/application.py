@@ -23,6 +23,7 @@ from .commands import (
 )
 from .compact import compact_comment, compact_issue
 from .connections import validate_current
+from .contracts import normalize_arguments
 from .log_redaction import failure_details, redact_arguments
 from .planning import planning_warnings
 from .queries import (
@@ -71,7 +72,7 @@ class ToolApplication:
                 raise ApiError(403, "MCP writes are disabled.", "Forbidden")
             if tool.write and await self.read_only(principal):
                 raise ApiError(403, "Your role in this workspace is read-only.", "Forbidden")
-            payload = tool.model.model_validate(arguments)
+            payload = tool.model.model_validate(normalize_arguments(tool.model, arguments))
             await consume_quota(self.factory, principal.workspace_id, name)
         except ApiError as error:
             await self.failed_audit(
@@ -79,11 +80,7 @@ class ToolApplication:
             )
             raise
         except ValidationError as error:
-            api_error = ApiError(
-                400,
-                "Tool arguments do not match the input schema: " + schema_errors(error),
-                "Bad Request",
-            )
+            api_error = invalid_arguments(error, "Tool arguments do not match the input schema: ")
             await self.failed_audit(
                 principal, name, correlation, api_error, started, arguments
             )
@@ -139,6 +136,18 @@ class ToolApplication:
                 return result
             except BaseException as error:
                 await db.rollback()
+                # A handler that builds a web input model from the tool arguments (for example
+                # document content that grows past its limit after edits) fails pydantic
+                # validation: that is a client error, not an internal one.
+                # VI: Handler dựng model input của web từ tham số tool (ví dụ nội dung tài liệu
+                # VI: vượt giới hạn sau khi áp dụng edits) bị pydantic từ chối: đó là lỗi của
+                # VI: client, không phải lỗi nội bộ.
+                if isinstance(error, ValidationError):
+                    api_error = invalid_arguments(error, "Tool arguments are not valid: ")
+                    await self.failed_audit(
+                        principal, name, correlation, api_error, started, arguments
+                    )
+                    raise api_error from error
                 if not isinstance(error, asyncio.CancelledError):
                     await self.failed_audit(
                         principal, name, correlation, error, started, arguments
@@ -323,10 +332,7 @@ class ToolApplication:
                     principal,
                     name,
                     correlation,
-                    "denied"
-                    if isinstance(error, ApiError)
-                    and error.status_code in {401, 403, 404}
-                    else "failed",
+                    audit_outcome(error),
                     duration_ms=int((monotonic() - started) * 1000)
                     if started
                     else None,
@@ -338,6 +344,30 @@ class ToolApplication:
                 await db.commit()
         except Exception:
             logger.warning("MCP audit is unavailable correlation=%s", correlation)
+
+
+def audit_outcome(error: BaseException) -> str:
+    """`denied` only when access was refused: 401, 403, or a 404 raised by AccessPolicy for a
+    record outside the connection's scope ("… not found in the allowed scope."). Every other
+    error, including a 404 for data that does not exist yet ("No TDS exists … send content")
+    and an unknown tool name, is a `failed` call the client can fix.
+    VI: `denied` chỉ khi bị từ chối truy cập: 401, 403, hoặc 404 do AccessPolicy trả cho bản ghi
+    VI: ngoài phạm vi kết nối ("… not found in the allowed scope."). Mọi lỗi khác, kể cả 404 vì
+    VI: dữ liệu chưa có ("No TDS exists … send content") và tên tool lạ, là `failed` mà client sửa
+    VI: được.
+    """
+    if isinstance(error, ApiError) and (
+        error.status_code in {401, 403}
+        or (error.status_code == 404 and "in the allowed scope" in error.message)
+    ):
+        return "denied"
+    return "failed"
+
+
+def invalid_arguments(error: ValidationError, prefix: str) -> ApiError:
+    """400 naming the wrong arguments without echoing their values.
+    VI: Lỗi 400 nêu tham số sai mà không lặp lại giá trị của chúng."""
+    return ApiError(400, prefix + schema_errors(error), "Bad Request")
 
 
 def schema_errors(error: ValidationError, limit: int = 5) -> str:

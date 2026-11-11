@@ -176,7 +176,7 @@ DEFINITIONS = (
     ),
     ToolDefinition(
         "create_issue",
-        "Create an issue using valid team references; set dueDate (ask the requester when none is given) and, when known, startDate, targetDate and estimatedEffort in man-days. The result lists planningWarnings to fix. Retries require the same idempotency key.",
+        "Create an issue using valid team references (statusId defaults to the team's first Unstarted status); set dueDate (ask the requester when none is given) and, when known, startDate, targetDate and estimatedEffort in man-days. The result lists planningWarnings to fix. Retries require the same idempotency key.",
         c.CreateIssueTool,
         "issues:write",
         "create_issue",
@@ -230,7 +230,7 @@ DEFINITIONS = (
     ),
     ToolDefinition(
         "add_comment",
-        "Add a comment to an authorized issue with retry deduplication.",
+        "Add a comment to an authorized issue with retry deduplication. parentCommentId may be any comment of a thread; a reply to a reply joins its top-level comment.",
         c.AddCommentTool,
         "comments:write",
         "add_comment",
@@ -248,7 +248,7 @@ DEFINITIONS = (
     ),
     ToolDefinition(
         "create_document",
-        "Create a Markdown document, optionally linked to a project or issue.",
+        "Create a Markdown document, optionally linked to one project or one issue: send projectId or issueId. With both, the issue must belong to that project and the document is linked to the issue.",
         c.CreateDocumentTool,
         "documents:write",
         "create_document",
@@ -275,7 +275,7 @@ DEFINITIONS = (
     ),
     ToolDefinition(
         "link_document",
-        "Link a document to an authorized project or issue.",
+        "Link a document to an authorized project or issue: send projectId or issueId. With both, the issue must belong to that project and the link goes to the issue.",
         c.LinkDocumentTool,
         "documents:write",
         "link_document",

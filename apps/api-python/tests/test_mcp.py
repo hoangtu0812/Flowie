@@ -80,6 +80,76 @@ class McpContractTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             CreateDocumentTool.model_validate({**base, "docType": "XYZ"})
 
+    def test_client_argument_mistakes_are_normalized(self):
+        from app.modules.mcp.contracts import (
+            AddCommentTool,
+            EmptyInput,
+            IssueContextInput,
+            normalize_arguments,
+        )
+        from app.modules.mcp.registry import TOOLS
+
+        # Every tool with a limit is clamped to its own maximum; 0 is left for validation.
+        # VI: Mọi tool có limit được kẹp về mức tối đa của chính nó; 0 để validation từ chối.
+        with_limit = [tool for tool in TOOLS.values() if "limit" in tool.model.model_fields]
+        self.assertGreaterEqual(len(with_limit), 5)
+        for tool in with_limit:
+            maximum = tool.model.model_json_schema()["properties"]["limit"]["maximum"]
+            with self.subTest(tool=tool.name):
+                self.assertEqual(
+                    normalize_arguments(tool.model, {"limit": maximum + 1})["limit"], maximum
+                )
+                self.assertEqual(normalize_arguments(tool.model, {"limit": 0})["limit"], 0)
+        self.assertEqual(
+            normalize_arguments(IssueContextInput, {"identifier": "DTD-1"}), {"issueId": "DTD-1"}
+        )
+        self.assertEqual(
+            normalize_arguments(AddCommentTool, {"issueKey": "DTD-1", "body": "Hi"}),
+            {"issueId": "DTD-1", "content": "Hi"},
+        )
+        # The real name wins; the alias stays and fails as an extra argument.
+        # VI: Tên thật được dùng; alias giữ nguyên và bị lỗi như tham số thừa.
+        self.assertEqual(
+            normalize_arguments(IssueContextInput, {"issueId": "a", "identifier": "b"}),
+            {"issueId": "a", "identifier": "b"},
+        )
+        self.assertEqual(normalize_arguments(EmptyInput, {"random_string": "x"}), {})
+        self.assertEqual(EmptyInput.model_validate(normalize_arguments(EmptyInput, {"random_string": "x"})), EmptyInput())
+
+    def test_audit_outcome_separates_denied_from_failed(self):
+        from app.modules.mcp.application import audit_outcome
+
+        for error, outcome in (
+            (ApiError(401, "Expired.", "Unauthorized"), "denied"),
+            (ApiError(403, "Read-only.", "Forbidden"), "denied"),
+            (ApiError(404, "Issue not found in the allowed scope.", "Not Found"), "denied"),
+            (ApiError(404, "No TDS exists for A / B yet; send content to create it.", "Not Found"), "failed"),
+            (ApiError(404, "Tool not found.", "Not Found"), "failed"),
+            (ApiError(409, "The record changed.", "Conflict"), "failed"),
+            (RuntimeError("boom"), "failed"),
+        ):
+            with self.subTest(message=str(error)):
+                self.assertEqual(audit_outcome(error), outcome)
+
+    def test_failed_edits_point_at_the_nearest_text(self):
+        from types import SimpleNamespace
+
+        from app.modules.mcp.edits import HINT_CHARS, apply_edits
+
+        content = "# Spec\n\n- Old rule here.\nSame\nSame\n- " + "z" * 500
+        with self.assertRaises(ApiError) as missing:
+            apply_edits(content, [SimpleNamespace(oldText="- Old rule her.\nmore", newText="x")])
+        self.assertIn('was not found (nearest line 3: "- Old rule here.")', missing.exception.message)
+        with self.assertRaises(ApiError) as twice:
+            apply_edits(content, [SimpleNamespace(oldText="Same", newText="x")])
+        self.assertIn("occurs 2 times (at lines 4, 5)", twice.exception.message)
+        with self.assertRaises(ApiError) as long_line:
+            apply_edits(content, [SimpleNamespace(oldText="- " + "z" * 499 + "y", newText="x")])
+        self.assertIn('"- ' + "z" * (HINT_CHARS - 2) + '…")', long_line.exception.message)
+        with self.assertRaises(ApiError) as unrelated:
+            apply_edits(content, [SimpleNamespace(oldText="qqqq wwww", newText="x")])
+        self.assertNotIn("nearest", unrelated.exception.message)
+
     def test_required_patch_values_cannot_be_null(self):
         from pydantic import ValidationError
 
@@ -683,14 +753,18 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             )
         )["data"]
         self.assertEqual(reply["parentCommentId"], parent["id"])
-        with self.assertRaises(ApiError):
+        # A reply to a reply joins the thread of its top-level comment.
+        # VI: Trả lời một reply được gắn vào thread của comment gốc.
+        nested = (
             await self.call(
                 "add_comment",
                 issueId=self.issue["id"],
-                content="Invalid nested reply",
+                content="Nested reply",
                 parentCommentId=reply["id"],
                 idempotencyKey="comment-nested-key",
             )
+        )["data"]
+        self.assertEqual(nested["parentCommentId"], parent["id"])
         with self.assertRaises(ApiError):
             await self.call(
                 "add_comment",
@@ -1119,6 +1193,28 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                     },
                 )
                 self.assertTrue(denied.json()["result"]["isError"])
+                # A stale version reaches the client with currentVersion beside the error.
+                # VI: Version cũ tới client kèm currentVersion bên cạnh lỗi.
+                stale = await client.post(
+                    "/mcp/",
+                    headers=headers,
+                    json={
+                        "jsonrpc": "2.0",
+                        "id": 5,
+                        "method": "tools/call",
+                        "params": {
+                            "name": "update_issue",
+                            "arguments": {
+                                "issueId": self.issue["id"], "expectedVersion": 99,
+                                "title": "Stale", "idempotencyKey": "http-stale-key",
+                            },
+                        },
+                    },
+                )
+                error = stale.json()["result"]["structuredContent"]
+                self.assertEqual(
+                    (error["statusCode"], error["currentVersion"]), (409, self.issue["version"])
+                )
 
     async def test_official_sdk_client_round_trip(self):
         import httpx2
@@ -1503,7 +1599,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 for leaked in ["abc.def", "sig=1", self.connection["token"]]:
                     self.assertNotIn(leaked, stored)
                 self.assertEqual(
-                    by_tool["no_such_tool"]["action"], "mcp.no_such_tool.denied"
+                    by_tool["no_such_tool"]["action"], "mcp.no_such_tool.failed"
                 )
                 only_tool = (
                     await client.get(
@@ -1519,8 +1615,8 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                     await client.get("/api/v1/mcp/audit/summary", params=scope)
                 ).json()["data"]
                 self.assertEqual(summary["totals"]["calls"], 5)
-                self.assertEqual(summary["totals"]["denied"], 2)
-                self.assertEqual(summary["totals"]["failed"], 1)
+                self.assertEqual(summary["totals"]["denied"], 1)
+                self.assertEqual(summary["totals"]["failed"], 2)
                 tools = {row["tool"]: row for row in summary["tools"]}
                 self.assertEqual(
                     (tools["get_issue"]["calls"], tools["get_issue"]["denied"]), (1, 1)
@@ -2131,6 +2227,139 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Rule two.", document["content"])
         self.assertNotIn("Rule one.", document["content"])
         self.assertIn("Second rule.", document["content"])
+
+    async def test_client_argument_mistakes_succeed_or_explain(self):
+        # Measured client mistakes (DTD-776): limits above the maximum, alias names, a dummy
+        # argument, create_issue without statusId and a stale expectedVersion.
+        # VI: Các lỗi client đã đo (DTD-776): limit vượt mức, tên alias, tham số giả,
+        # VI: create_issue thiếu statusId và expectedVersion cũ.
+        context = await self.call("get_issue_context", identifier=self.issue["identifier"], limit=50)
+        self.assertEqual(context["issue"]["id"], self.issue["id"])
+        self.assertEqual(
+            (await self.call("get_issue", issueKey=self.issue["identifier"]))["id"], self.issue["id"]
+        )
+        self.assertIn("scopes", await self.call("get_my_access", random_string="x"))
+        with self.assertRaises(ApiError) as low:
+            await self.call("get_issue_context", issueId=self.issue["id"], limit=0)
+        self.assertEqual(low.exception.status_code, 400)
+        with self.assertRaises(ApiError) as clash:
+            await self.call("get_issue", issueId=self.issue["id"], identifier="DTD-0")
+        self.assertIn("identifier: Extra inputs are not permitted", clash.exception.message)
+        comment = (
+            await self.call(
+                "add_comment", issueKey=self.issue["identifier"], body="Body alias",
+                idempotencyKey="alias-comment-key",
+            )
+        )["data"]
+        self.assertEqual(comment["issueId"], self.issue["id"])
+
+        created = (
+            await self.call(
+                "create_issue", teamId=self.team, projectId=self.project, title="No status given",
+                idempotencyKey="no-status-key",
+            )
+        )["data"]
+        async with self.factory() as db:
+            web = (
+                await create_issue(
+                    CreateIssueInput(workspaceId=self.workspace, teamId=self.team, title="Web default"),
+                    self.user,
+                    db,
+                )
+            )["data"]
+            await db.rollback()
+        self.assertEqual(created["status"]["id"], web["statusId"])
+
+        current = (await self.call("get_issue", issueId=self.issue["id"]))["version"]
+        with self.assertRaises(ApiError) as stale:
+            await self.call(
+                "update_issue", issueId=self.issue["id"], expectedVersion=current + 5,
+                title="Stale title", idempotencyKey="stale-version-key",
+            )
+        self.assertEqual(stale.exception.status_code, 409)
+        self.assertEqual(stale.exception.details, {"currentVersion": current})
+        self.assertIn(f"currentVersion is {current}", stale.exception.message)
+
+    async def test_handler_validation_errors_and_outcomes(self):
+        # Edits that push content past the document limit fail in the handler's own input
+        # model: that is a 400 with the field name, not a 500.
+        # VI: Edits làm nội dung vượt giới hạn tài liệu bị model input của handler từ chối: đó
+        # VI: là 400 nêu tên trường, không phải 500.
+        document = (
+            await self.call(
+                "create_document", projectId=self.project, title="Large",
+                content="start " + "x" * 99_980, idempotencyKey="large-doc-key",
+            )
+        )["data"]
+        with self.assertRaises(ApiError) as large:
+            await self.call(
+                "update_document", documentId=document["id"], expectedVersion=document["version"],
+                edits=[{"oldText": "start", "newText": "y" * 50}], idempotencyKey="large-edit-key",
+            )
+        self.assertEqual(large.exception.status_code, 400)
+        self.assertIn("content: String should have at most 100000 characters", large.exception.message)
+        with self.assertRaises(ApiError) as missing:
+            await self.call(
+                "upsert_feature_doc", issueId=self.issue["id"], module="Docs", feature="Outcome",
+                docType="TDS", edits=[{"oldText": "a", "newText": "b"}], changeSummary="Edit first.",
+                idempotencyKey="outcome-missing-key",
+            )
+        self.assertEqual(missing.exception.status_code, 404)
+        with self.assertRaises(ApiError):
+            await self.call("get_issue", issueId=self.other_issue["id"])
+        async with self.factory() as db:
+            actions = set(
+                (
+                    await db.execute(
+                        text("SELECT action FROM audit_logs WHERE workspace_id=:workspace"),
+                        {"workspace": self.workspace},
+                    )
+                ).scalars()
+            )
+        self.assertLessEqual(
+            {"mcp.update_document.failed", "mcp.upsert_feature_doc.failed", "mcp.get_issue.denied"},
+            actions,
+        )
+
+    async def test_documents_accept_an_issue_with_its_project(self):
+        both = (
+            await self.call(
+                "create_document", projectId=self.project, issueId=self.issue["id"], title="Both targets",
+                idempotencyKey="both-targets-key",
+            )
+        )["data"]
+        linked = await self.call("search_documents", issueId=self.issue["id"])
+        self.assertIn(both["id"], [item["id"] for item in linked["items"]])
+        plain = (
+            await self.call("create_document", projectId=self.project, title="Plain", idempotencyKey="plain-doc-key")
+        )["data"]
+        await self.call(
+            "link_document", documentId=plain["id"], projectId=self.project, issueId=self.issue["id"],
+            idempotencyKey="link-both-key",
+        )
+        linked = await self.call("search_documents", issueId=self.issue["id"])
+        self.assertIn(plain["id"], [item["id"] for item in linked["items"]])
+        with self.assertRaises(ApiError) as neither:
+            await self.call("link_document", documentId=plain["id"], idempotencyKey="link-none-key")
+        self.assertEqual(neither.exception.status_code, 400)
+        # The issue's project differs from projectId: rejected, nothing is linked.
+        # VI: Project của issue khác projectId: bị từ chối, không liên kết gì.
+        async with self.factory() as db:
+            wide = await create(
+                db, self.workspace, self.user, ConnectionInput(name="All projects", scopes=sorted(ALL_SCOPES))
+            )
+            wide_principal = await authenticate(db, wide["token"])
+            await db.commit()
+        with self.assertRaises(ApiError) as mismatch:
+            await self.application.call(
+                wide_principal, "link_document",
+                {
+                    "documentId": plain["id"], "projectId": self.other_project, "issueId": self.issue["id"],
+                    "idempotencyKey": "link-mismatch-key",
+                },
+            )
+        self.assertEqual(mismatch.exception.status_code, 400)
+        self.assertIn("The issue is not in projectId", mismatch.exception.message)
 
     async def test_start_and_finish_issue_in_one_call_each(self):
         # Each call writes the schedule or actual effort, the comment and the status together;

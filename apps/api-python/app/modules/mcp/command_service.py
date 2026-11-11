@@ -57,6 +57,19 @@ class CommandService:
                 self.parent_id = (await self.policy.issue(payload.parentIssueId))["id"]
             if name in {"transition_issue", "start_issue", "finish_issue"}:
                 self.status_id = payload.statusId or await self.status_by_name(payload.status)
+            # Comments nest one level, so a reply to a reply joins the thread of its top-level
+            # comment instead of failing. A parent on another issue is passed through for
+            # comments.create_comment to reject.
+            # VI: Comment chỉ lồng một cấp, nên trả lời một reply sẽ gắn vào thread của comment
+            # VI: gốc thay vì lỗi. Comment cha thuộc issue khác được giữ nguyên để
+            # VI: comments.create_comment từ chối.
+            if name == "add_comment" and payload.parentCommentId:
+                parent = await self.policy.comment(payload.parentCommentId)
+                self.parent_id = (
+                    parent["parent_comment_id"]
+                    if parent["parent_comment_id"] and parent["issue_id"] == self.target["id"]
+                    else parent["id"]
+                )
         elif name == "update_comment":
             self.target = await self.policy.comment(payload.commentId, lock=True)
             if self.target["author_id"] != self.principal.user["id"]:
@@ -71,7 +84,11 @@ class CommandService:
             await self.policy.destination(payload.projectId, payload.teamId)
             if payload.parentIssueId:
                 await self.policy.issue(payload.parentIssueId)
-            status = (
+            # Without statusId, issues.create_issue picks the team's first Unstarted status,
+            # which needs no transition scope.
+            # VI: Không có statusId thì issues.create_issue chọn trạng thái Unstarted đầu tiên
+            # VI: của team, không cần quyền chuyển trạng thái.
+            status = payload.statusId and (
                 await self.db.execute(
                     PREPARE_SELECT_ISSUE_STATUSES,
                     {
@@ -119,10 +136,24 @@ class CommandService:
         return matches[0]
 
     async def link_target(self, payload) -> tuple[str | None, str | None]:
+        """The link row's (issue id, project id). With both issueId and projectId the issue
+        wins, but only when it belongs to that project, so a mismatch is reported instead of
+        silently dropping one target.
+        VI: (issue id, project id) của dòng liên kết. Có cả issueId và projectId thì dùng issue,
+        VI: nhưng chỉ khi issue thuộc project đó, để báo lỗi khi lệch thay vì âm thầm bỏ một đích.
+        """
         issue_id, project_id = None, payload.projectId
         if payload.issueId:
             issue = await self.policy.issue(payload.issueId)
-            issue_id = issue["id"]
+            if payload.projectId and (
+                (await self.policy.project(payload.projectId))["id"] != issue["project_id"]
+            ):
+                raise ApiError(
+                    400,
+                    "The issue is not in projectId. Send only issueId to link the issue, or only projectId.",
+                    "Bad Request",
+                )
+            issue_id, project_id = issue["id"], None
             target_team = issue["team_id"]
         else:
             project = await self.policy.project(project_id)
@@ -135,12 +166,21 @@ class CommandService:
         return issue_id, project_id
 
     def check_version(self, payload) -> None:
-        if (
-            hasattr(payload, "expectedVersion")
-            and self.subject["version"] != payload.expectedVersion
-        ):
+        """Rejects a stale expectedVersion with the locked record's current version, so a
+        client whose change does not depend on what changed can retry without a read.
+        VI: Từ chối expectedVersion cũ kèm version hiện tại của bản ghi đã khoá, để client có
+        VI: thay đổi không phụ thuộc phần vừa đổi thử lại được mà không cần đọc lại.
+        """
+        if not hasattr(payload, "expectedVersion"):
+            return
+        current = self.subject["version"]
+        if current != payload.expectedVersion:
             raise ApiError(
-                409, "The record changed. Read it again before updating.", "Conflict"
+                409,
+                f"The record changed: currentVersion is {current}, expectedVersion was "
+                f"{payload.expectedVersion}. Read it again before updating.",
+                "Conflict",
+                {"currentVersion": current},
             )
 
     async def execute(self, name: str, payload) -> dict:
@@ -230,7 +270,7 @@ class CommandService:
                     CreateCommentInput(
                         workspaceId=workspace,
                         issueId=self.subject["id"],
-                        content=payload.content, parentCommentId=payload.parentCommentId, mentionIds=payload.mentionIds,
+                        content=payload.content, parentCommentId=self.parent_id, mentionIds=payload.mentionIds,
                     ),
                     actor,
                     self.db,

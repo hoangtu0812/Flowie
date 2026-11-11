@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
+from annotated_types import Le
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from ..work_items.bug_contracts import (
@@ -154,7 +155,9 @@ class CreateIssueTool(WriteInput, BugCreateFields):
     teamId: str = Field(min_length=1)
     projectId: str | None = None
     parentIssueId: str | None = None
-    statusId: str = Field(min_length=1)
+    # Omitted: the team's first Unstarted status, the same default as the web app.
+    # VI: Bỏ trống: trạng thái Unstarted đầu tiên của team, cùng mặc định với web.
+    statusId: str | None = Field(default=None, min_length=1)
     title: str = Field(min_length=2, max_length=500)
     description: str | None = Field(default=None, max_length=10000)
     priority: Literal["NONE", "LOW", "MEDIUM", "HIGH", "URGENT"] = "NONE"
@@ -262,16 +265,12 @@ class CreateDocumentTool(WriteInput):
     status: Literal["DRAFT", "IN_REVIEW"] | None = None
     teamId: str | None = None
     folderId: str | None = None
+    # Send one of them. With both, the issue must belong to that project and the document is
+    # linked to the issue (CommandService.link_target checks it).
+    # VI: Gửi một trong hai. Gửi cả hai thì issue phải thuộc project đó và tài liệu được liên
+    # VI: kết với issue (CommandService.link_target kiểm tra).
     projectId: str | None = None
     issueId: str | None = None
-
-    @model_validator(mode="after")
-    def one_target(self):
-        if self.projectId and self.issueId:
-            raise ValueError(
-                "Link a document to either a project or an issue per request."
-            )
-        return self
 
 
 class DocumentEdit(StrictInput):
@@ -328,10 +327,53 @@ class LinkDocumentTool(WriteInput, DocumentInput):
 
     @model_validator(mode="after")
     def one_target(self):
-        if bool(self.projectId) == bool(self.issueId):
-            raise ValueError("Exactly one projectId or issueId is required.")
+        # Both are accepted when the issue is in that project; see CreateDocumentTool.
+        # VI: Nhận cả hai khi issue thuộc project đó; xem CreateDocumentTool.
+        if not (self.projectId or self.issueId):
+            raise ValueError("Give projectId or issueId.")
         return self
 
 
 class RestoreDocumentTool(VersionInput, DocumentInput):
     revisionVersion: int = Field(ge=1)
+
+
+# Argument names that MCP clients were measured sending instead of the published ones (MCP
+# audit, Oct-Nov 2026). Only these exact names are mapped; models stay `extra="forbid"`, so any
+# other unknown argument is still rejected.
+# VI: Tên tham số mà client MCP đã được ghi nhận gửi thay cho tên công bố (audit MCP, 10-11/2026).
+# VI: Chỉ ánh xạ đúng các tên này; model vẫn `extra="forbid"` nên tham số lạ khác vẫn bị từ chối.
+ARGUMENT_ALIASES = {"issueId": ("identifier", "issueKey"), "content": ("body",)}
+# Placeholder that some clients send to tools without parameters.
+# VI: Tham số giả mà một số client gửi cho tool không có tham số.
+IGNORED_ARGUMENTS = frozenset({"random_string"})
+
+
+def normalize_arguments(model: type[BaseModel], arguments: dict) -> dict:
+    """Tolerates the measured client mistakes before strict validation: drops
+    `random_string`, maps an alias to its field when the field itself was not sent (a second
+    alias or a clash with the real name stays and fails validation), and lowers a `limit`
+    above the field's maximum to that maximum. A `limit` below 1 or of the wrong type is left
+    for validation to reject. Returns a new dict; the caller keeps the original for the audit.
+    VI: Bỏ qua các lỗi client đã đo trước khi kiểm tra chặt: bỏ `random_string`, đổi alias sang
+    VI: trường thật khi client chưa gửi trường đó (alias thứ hai hoặc trùng tên thật vẫn để lại
+    VI: và bị lỗi), và hạ `limit` vượt mức tối đa về mức tối đa. `limit` nhỏ hơn 1 hoặc sai kiểu
+    VI: để phần kiểm tra từ chối. Trả dict mới; bên gọi giữ bản gốc để ghi audit.
+    """
+    fields = model.model_fields
+    normalized = {
+        key: value
+        for key, value in arguments.items()
+        if key not in IGNORED_ARGUMENTS or key in fields
+    }
+    for target, aliases in ARGUMENT_ALIASES.items():
+        if target in fields and target not in normalized:
+            alias = next((name for name in aliases if name in normalized), None)
+            if alias and alias not in fields:
+                normalized[target] = normalized.pop(alias)
+    limit, field = normalized.get("limit"), fields.get("limit")
+    if field and isinstance(limit, int) and not isinstance(limit, bool):
+        maximum = next((item.le for item in field.metadata if isinstance(item, Le)), None)
+        if isinstance(maximum, int) and limit > maximum:
+            normalized["limit"] = maximum
+    return normalized
