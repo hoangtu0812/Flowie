@@ -71,7 +71,7 @@ const SETTINGS: Record<string, string> = {
    'pulse': 'Pulse',
    'emojis': 'Emojis',
    'ai': 'AI & Agents',
-   'ai-operations': 'AI operations',
+   'ai-operations': 'AI provider usage',
    'integrations': 'Integrations',
    'code-and-reviews': 'Code & reviews',
    'mcp-logs': 'MCP logs',

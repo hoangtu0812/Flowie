@@ -20,6 +20,7 @@ import { mcpEndpoint, type McpConnection } from '@/lib/mcp';
 import { useMcpSettings } from './use-mcp-settings';
 import { AgentConfiguration } from './agent-configuration';
 import { AgentInstructions } from './agent-instructions';
+import { McpLimitsForm } from './mcp-limits';
 import { SuccessMark } from './success-mark';
 import { ConnectionsTable } from './connections-table';
 import { McpLogo } from '@/features/ai/client-logos';
@@ -445,6 +446,7 @@ export function McpSettings() {
          {state.workspaceId && state.canManage && (
             <AgentInstructions workspaceId={state.workspaceId} />
          )}
+         {state.workspaceId && state.canManage && <McpLimitsForm workspaceId={state.workspaceId} />}
          {state.workspaceId && state.canManage && (
             <AgentConfiguration workspaceId={state.workspaceId} resources={state.resources} />
          )}

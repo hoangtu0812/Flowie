@@ -11,7 +11,12 @@ from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.core.identifiers import cuid
-from app.modules.agent_runs.operations import LimitsInput, overview, put_limits
+from app.modules.agent_runs.operations import (
+    LimitsInput,
+    get_limits,
+    overview,
+    put_limits,
+)
 from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.mcp.quotas import consume_quota, update_limits
 
@@ -82,10 +87,17 @@ def test_workspace_quota_is_atomic_and_management_is_restricted():
 
             assert sum(await asyncio.gather(*(attempt() for _ in range(12)))) == 3
             async with factory() as db:
-                data = await overview(
+                data = await get_limits(
                     workspaceId=seed["workspace_id"], user={"id": user}, db=db
                 )
                 assert data["data"]["usage"] == 3
+                assert data["data"]["perTool"] == {"get_issue": 3}
+                assert "get_issue" in data["data"]["tools"]
+                with pytest.raises(ApiError) as hidden:
+                    await get_limits(
+                        workspaceId=seed["workspace_id"], user={"id": member}, db=db
+                    )
+                assert hidden.value.status_code == 403
                 with pytest.raises(ApiError) as error:
                     await put_limits(
                         LimitsInput(totalPerMinute=100),

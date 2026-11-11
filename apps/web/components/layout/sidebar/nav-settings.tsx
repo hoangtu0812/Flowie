@@ -121,7 +121,7 @@ export const settingsNav: SettingsNavGroup[] = [
       label: 'AI & integrations',
       items: [
          { name: 'AI & Agents', url: '/settings/ai', icon: Sparkles },
-         { name: 'AI operations', url: '/settings/ai-operations', icon: Gauge },
+         { name: 'AI provider usage', url: '/settings/ai-operations', icon: Gauge },
          { name: 'Integrations', url: '/settings/integrations', icon: Blocks },
          { name: 'MCP logs', url: '/settings/mcp-logs', icon: ScrollText },
          { name: 'Code & reviews', url: '/settings/code-and-reviews', icon: Code },

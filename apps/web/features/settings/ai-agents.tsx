@@ -54,7 +54,7 @@ export default function AiAgents() {
          >
             <VStack as="main" gap={4} width="100%">
                <Link href={`/${orgId}/settings/ai-operations`}>
-                  AI operations (workspace administrators)
+                  AI provider usage (workspace administrators)
                </Link>
                {error ? (
                   <QueryState message={error} onRetry={() => setRefresh((value) => value + 1)} />

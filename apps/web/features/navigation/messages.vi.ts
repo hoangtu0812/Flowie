@@ -20,7 +20,7 @@ export const messages: Readonly<Record<string, string>> = {
    'Personal': 'Cá nhân',
    'Account': 'Tài khoản',
    'AI & integrations': 'AI & tích hợp',
-   'AI operations': 'Vận hành AI',
+   'AI provider usage': 'Mức dùng AI provider',
    'MCP logs': 'Nhật ký MCP',
    'Properties': 'Thuộc tính',
    'Preferences': 'Tùy chọn',
