@@ -22,6 +22,25 @@ RESOURCES_SELECT_LABELS = text(
 )
 
 
+# Error message of an audit row with the parts that change from call to call replaced
+# by placeholders, so the same mistake made on different records is one Top errors group
+# and the call log can filter by that group. Order matters: UUIDs and ISO dates go before
+# bare numbers, cuid-like ids before issue keys, quoted text before the numbers inside it.
+# The result is only compared for equality, so it needs no index.
+# VI: Thông báo lỗi của dòng audit với các phần thay đổi giữa các lời gọi được thay bằng
+# VI: ký hiệu, để cùng một lỗi trên các bản ghi khác nhau là một nhóm Top errors và Call log
+# VI: lọc được theo nhóm đó. Thứ tự quan trọng: UUID và ngày ISO trước số trần, id dạng cuid
+# VI: trước mã issue, chuỗi trong nháy trước số bên trong nó. Chỉ so sánh bằng nên không cần index.
+AUDIT_MESSAGE = r"""regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(
+        COALESCE(a.metadata->>'message',a.metadata->>'error',''),
+        '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}','<id>','g'),
+        '\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?)?','<date>','g'),
+        '\mc[a-z0-9]{20,31}\M','<id>','g'),
+        '\m[A-Z][A-Z0-9]*-\d+\M','<key>','g'),
+        '''[^'']*''|"[^"]*"','''…''','g'),
+        '\d+','<n>','g')"""
+
+
 def connection_audit_select_audit_logs_sql(AUDIT_CONNECTION, AUDIT_SCOPE, page) -> TextClause:
     return text(f"""SELECT a.id,a.action,a.entity_id AS "entityId",a.metadata,a.created_at AS "createdAt",
         {AUDIT_CONNECTION} AS "connectionId",c.name AS "connectionName",u.name AS "actorName"
@@ -30,10 +49,18 @@ def connection_audit_select_audit_logs_sql(AUDIT_CONNECTION, AUDIT_SCOPE, page) 
         WHERE {AUDIT_SCOPE}
         AND (CAST(:connection AS text) IS NULL OR {AUDIT_CONNECTION}=:connection)
         AND (CAST(:tool AS text) IS NULL OR a.metadata->>'tool'=:tool)
-        AND (CAST(:outcome AS text) IS NULL
-            OR (:outcome='succeeded' AND a.action LIKE '%.succeeded')
-            OR (:outcome='failed' AND (a.action LIKE '%.failed' OR a.action LIKE '%.denied')))
+        AND (CAST(:outcome AS text) IS NULL OR a.action LIKE '%.' || CAST(:outcome AS text))
+        AND (CAST(:status AS int) IS NULL OR (a.metadata->>'statusCode')::int=CAST(:status AS int))
+        AND (CAST(:message AS text) IS NULL OR {AUDIT_MESSAGE}=CAST(:message AS text))
         {page} ORDER BY a.created_at DESC,a.id DESC LIMIT :limit""")
+
+
+def connection_audit_errors_sql(scope) -> TextClause:
+    return text(f"""SELECT a.metadata->>'tool' AS tool,(a.metadata->>'statusCode')::int AS "statusCode",
+        a.metadata->>'outcome' AS outcome,{AUDIT_MESSAGE} AS message,count(*)::int AS count,
+        count(DISTINCT a.metadata->>'connectionId')::int AS connections,max(a.created_at) AS "lastAt"
+        {scope} AND a.metadata->>'outcome' IN ('failed','denied')
+        GROUP BY 1,2,3,4 ORDER BY count(*) DESC,max(a.created_at) DESC,1 LIMIT 20""")
 
 
 MUTATE_SELECT_MCP_REQUESTS = text("SELECT COUNT(*) FROM mcp_requests WHERE connection_id=:id")
@@ -235,7 +262,8 @@ def connection_audit_summary_totals_sql(counts, p95, scope) -> TextClause:
 def connection_audit_summary_tools_sql(counts, p95, scope) -> TextClause:
     return text(
         f"""SELECT a.metadata->>'tool' AS tool,{counts},{p95},
-        round(avg((a.metadata->>'resultBytes')::int))::int AS "avgResultBytes" {scope}
+        round(avg((a.metadata->>'resultBytes')::int))::int AS "avgResultBytes",
+        sum((a.metadata->>'resultBytes')::bigint)::bigint AS "totalResultBytes" {scope}
         GROUP BY a.metadata->>'tool' ORDER BY count(*) DESC,1 LIMIT 100"""
     )
 

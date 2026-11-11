@@ -20,19 +20,7 @@ REMOVE_REPOSITORY_SELECT_PROJECT_REPOSITORIES = text(
 )
 
 
-OVERVIEW_SELECT_AUDIT_LOGS = text("""SELECT metadata->>'tool' AS tool,count(*)::int AS calls,
-        count(*) FILTER(WHERE metadata->>'outcome'<>'succeeded')::int AS errors,
-        percentile_cont(0.95) WITHIN GROUP(ORDER BY (metadata->>'durationMs')::int) AS "p95Ms"
-        FROM audit_logs WHERE workspace_id=:workspace AND entity_type='mcp-tool' AND created_at>CAST(:now AS timestamp)-INTERVAL '24 hours'
-        GROUP BY metadata->>'tool' ORDER BY count(*) DESC LIMIT 100""")
-
-
-OVERVIEW_SELECT_AUDIT_LOGS_2 = text("""SELECT metadata->>'tool' AS tool,metadata->>'outcome' AS outcome,created_at AS "createdAt"
-        FROM audit_logs WHERE workspace_id=:workspace AND entity_type='mcp-tool' AND metadata->>'outcome'<>'succeeded'
-        ORDER BY created_at DESC LIMIT 25""")
-
-
-OVERVIEW_SELECT_AI_TOOL_WINDOWS = text(
+LIMITS_SELECT_AI_TOOL_WINDOWS = text(
     "SELECT used FROM ai_tool_windows WHERE workspace_id=:workspace AND tool='*' AND window_start=date_trunc('minute',CAST(:now AS timestamp))"
 )
 

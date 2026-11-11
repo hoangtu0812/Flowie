@@ -819,35 +819,44 @@ test('Vietnamese account locale applies to Inbox search and issue activity', asy
    }
 });
 
-test('AI operations budgets persist with real workspace administration', async ({
-   page,
-   context,
-}) => {
-   const endpoint = `${api}/ai-operations?workspaceId=${fixture.workspace_id}`;
-   const original = (await (await context.request.get(endpoint)).json()).data.limits;
+test('MCP tool call limits persist from the Integrations page', async ({ page, context }) => {
+   const endpoint = `${api}/ai-operations/limits?workspaceId=${fixture.workspace_id}`;
+   const original = (await (await context.request.get(endpoint)).json()).data as {
+      totalPerMinute: number;
+      perTool: Record<string, number>;
+   };
    try {
       await page.goto(`/${fixture.slug}/settings/ai-operations`);
       await expect(
-         page.getByRole('heading', { name: 'Workspace budget', exact: true })
+         page.getByRole('heading', { name: 'AI provider usage', level: 1 })
       ).toBeVisible();
       await expect(
          page.getByRole('heading', { name: 'AI provider usage (last 7 days)', exact: true })
       ).toBeVisible();
-      await page.getByLabel('Total tool calls per minute').fill('299');
-      await page.getByLabel('Per-tool budgets (JSON)').fill('{"get_issue": 50}');
-      await page.getByRole('button', { name: 'Save budgets', exact: true }).click();
+      await expect(page.getByRole('heading', { name: 'Tool calls', exact: true })).toHaveCount(0);
+
+      await page.goto(`/${fixture.slug}/settings/integrations`);
+      await expect(
+         page.getByRole('heading', { name: 'Tool call limits', exact: true })
+      ).toBeVisible();
+      await page.getByLabel('Calls per minute (workspace)').fill('299');
+      await page.getByRole('button', { name: /^Per-tool limits/ }).click();
+      await page.getByLabel('get_issue limit per minute', { exact: true }).fill('50');
+      await page.getByLabel('get_issue limit per minute', { exact: true }).blur();
+      await page.getByRole('button', { name: 'Save limits', exact: true }).click();
       await expect
-         .poll(
-            async () =>
-               (await (await context.request.get(endpoint)).json()).data.limits.totalPerMinute
-         )
-         .toBe(299);
+         .poll(async () => (await (await context.request.get(endpoint)).json()).data.perTool)
+         .toEqual({ ...original.perTool, get_issue: 50 });
+      expect((await (await context.request.get(endpoint)).json()).data.totalPerMinute).toBe(299);
       await page.reload();
-      await expect(page.getByLabel('Total tool calls per minute')).toHaveValue('299');
-      await expect(page.getByLabel('Per-tool budgets (JSON)')).toHaveValue(/"get_issue": 50/);
+      await expect(page.getByLabel('Calls per minute (workspace)')).toHaveValue(/299/);
+      await page.getByRole('button', { name: /^Per-tool limits/ }).click();
+      await expect(page.getByLabel('get_issue limit per minute', { exact: true })).toHaveValue(
+         '50'
+      );
    } finally {
-      await context.request.put(`${api}/ai-operations/limits?workspaceId=${fixture.workspace_id}`, {
-         data: original,
+      await context.request.put(endpoint, {
+         data: { totalPerMinute: original.totalPerMinute, perTool: original.perTool },
       });
    }
 });

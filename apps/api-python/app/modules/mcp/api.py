@@ -16,6 +16,7 @@ from .domain import ALL_SCOPES, Principal
 from .policy import AccessPolicy
 from .queries import (
     RESOURCES_SELECT_LABELS,
+    connection_audit_errors_sql,
     connection_audit_select_audit_logs_sql,
     connection_audit_summary_connections_sql,
     connection_audit_summary_tools_sql,
@@ -188,14 +189,18 @@ async def connection_audit(
     limit: int = Query(default=20, ge=1, le=100),
     cursor: str | None = Query(default=None, max_length=1000),
     connectionId: str | None = Query(default=None, min_length=1, max_length=100),
-    outcome: Literal["succeeded", "failed"] | None = None,
+    outcome: Literal["succeeded", "failed", "denied"] | None = None,
     tool: str | None = Query(default=None, min_length=1, max_length=100),
+    statusCode: int | None = Query(default=None, ge=100, le=599),
+    message: str | None = Query(default=None, min_length=1, max_length=1000),
     window: AuditWindow | None = None,
     user=Depends(current_user),
     db=Depends(get_session),
 ):
-    # "failed" also covers denied calls so every unsuccessful call is in one view.
-    # VI: "failed" gồm cả lời gọi bị từ chối để mọi lời gọi không thành công nằm chung một chỗ.
+    # Each outcome matches only its own calls, so the counts on the MCP logs tiles equal the
+    # filtered log. `statusCode` and `message` (normalized like Top errors) select one group.
+    # VI: Mỗi outcome chỉ khớp lời gọi của chính nó, để số trên các ô MCP logs bằng log đã
+    # VI: lọc. `statusCode` và `message` (chuẩn hoá như Top errors) chọn một nhóm lỗi.
     codec = CursorCodec(
         request.app.state.settings.auth_jwt_secret,
         user["id"],
@@ -205,6 +210,8 @@ async def connection_audit(
             "connection": connectionId,
             "outcome": outcome,
             "tool": tool,
+            "statusCode": statusCode,
+            "message": message,
             "window": window,
         },
     )
@@ -213,6 +220,8 @@ async def connection_audit(
         "connection": connectionId,
         "outcome": outcome,
         "tool": tool,
+        "status": statusCode,
+        "message": message,
         "limit": limit + 1,
     }
     page = ""
@@ -277,3 +286,24 @@ async def connection_audit_summary(
             "connections": by_connection,
         }
     }
+
+
+@router.get("/audit/errors")
+async def connection_audit_errors(
+    workspaceId: str = Query(min_length=1),
+    window: AuditWindow = "24h",
+    user=Depends(current_user),
+    db=Depends(get_session),
+):
+    """Top errors of MCP logs: failed and denied tool calls grouped by tool, HTTP status,
+    outcome and normalized message (`AUDIT_MESSAGE`), most frequent first, at most 20
+    groups, in the same scope as the log list. `message` of a group is the value the log
+    list accepts as its `message` filter.
+    VI: Top errors của MCP logs: lời gọi tool failed và denied gom theo tool, mã HTTP, kết
+    VI: quả và thông báo đã chuẩn hoá (`AUDIT_MESSAGE`), nhiều nhất trước, tối đa 20 nhóm,
+    VI: cùng phạm vi với danh sách log. `message` của nhóm là giá trị bộ lọc `message` của
+    VI: danh sách log nhận."""
+    params = await _audit_params(db, workspaceId, user, window)
+    scope = f"FROM audit_logs a WHERE {AUDIT_SCOPE} AND a.entity_type='mcp-tool'"
+    rows = (await db.execute(connection_audit_errors_sql(scope), params)).mappings()
+    return {"data": {"window": window, "groups": [dict(row) for row in rows]}}

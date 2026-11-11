@@ -1592,9 +1592,18 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                         "/api/v1/mcp/audit", params={**scope, "outcome": "failed"}
                     )
                 ).json()["data"]["items"]
-                by_tool = {item["metadata"]["tool"]: item for item in failed}
+                denied_items = (
+                    await client.get(
+                        "/api/v1/mcp/audit", params={**scope, "outcome": "denied"}
+                    )
+                ).json()["data"]["items"]
+                by_tool = {item["metadata"]["tool"]: item for item in failed + denied_items}
                 self.assertEqual(
-                    set(by_tool), {"get_issue", "add_comment", "no_such_tool"}
+                    [item["metadata"]["tool"] for item in denied_items], ["get_issue"]
+                )
+                self.assertEqual(
+                    {item["metadata"]["tool"] for item in failed},
+                    {"add_comment", "no_such_tool"},
                 )
                 denied = by_tool["get_issue"]
                 self.assertEqual(denied["actorName"], self.user["name"])
@@ -1634,6 +1643,49 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(
                     (tools["get_issue"]["calls"], tools["get_issue"]["denied"]), (1, 1)
                 )
+                self.assertGreater(tools["get_my_access"]["totalResultBytes"], 0)
+
+                # Top errors: one group per tool/status/outcome/message in the admin's
+                # scope; a group's statusCode + message filter the log to its calls.
+                # VI: Top errors: mỗi tool/mã/kết quả/thông báo một nhóm trong phạm vi
+                # VI: admin; statusCode + message của nhóm lọc log đúng các lời gọi đó.
+                groups = (
+                    await client.get("/api/v1/mcp/audit/errors", params=scope)
+                ).json()["data"]["groups"]
+                self.assertEqual(
+                    sorted((row["tool"], row["outcome"], row["count"]) for row in groups),
+                    [
+                        ("add_comment", "failed", 1),
+                        ("get_issue", "denied", 1),
+                        ("no_such_tool", "failed", 1),
+                    ],
+                )
+                group = next(row for row in groups if row["tool"] == "add_comment")
+                self.assertEqual((group["statusCode"], group["connections"]), (400, 1))
+                self.assertTrue(group["lastAt"])
+                in_group = (
+                    await client.get(
+                        "/api/v1/mcp/audit",
+                        params={
+                            **scope,
+                            "tool": group["tool"],
+                            "statusCode": group["statusCode"],
+                            "message": group["message"],
+                        },
+                    )
+                ).json()["data"]["items"]
+                self.assertEqual(
+                    [item["id"] for item in in_group], [by_tool["add_comment"]["id"]]
+                )
+                self.assertEqual(
+                    (
+                        await client.get(
+                            "/api/v1/mcp/audit",
+                            params={**scope, "statusCode": 500},
+                        )
+                    ).json()["data"]["items"],
+                    [],
+                )
                 connections = {row["connectionId"]: row for row in summary["connections"]}
                 self.assertEqual(connections[self.connection["id"]]["calls"], 4)
                 self.assertEqual(
@@ -1645,6 +1697,12 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                     await client.get("/api/v1/mcp/audit/summary", params=scope)
                 ).json()["data"]
                 self.assertEqual(mine["totals"]["calls"], 1)
+                self.assertEqual(
+                    (
+                        await client.get("/api/v1/mcp/audit/errors", params=scope)
+                    ).json()["data"]["groups"],
+                    [],
+                )
                 self.assertEqual(
                     [row["connectionId"] for row in mine["connections"]],
                     [member_connection["id"]],
@@ -1662,6 +1720,37 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                     text("DELETE FROM users WHERE id=:id"), {"id": member["id"]}
                 )
                 await db.commit()
+
+    async def test_audit_message_normalization_groups_varying_parts(self):
+        from app.modules.mcp.queries import AUDIT_MESSAGE
+
+        cases = {
+            "Issue cabc1234def5678ghi9012jkl not found in the allowed scope.": "Issue <id> not found in the allowed scope.",
+            "Document 3f2b8c1e-1d2a-4b3c-9d8e-123456789abc changed": "Document <id> changed",
+            "DTD-778 is due 2026-11-18T09:30:00Z": "<key> is due <date>",
+            'oldText not found; nearest line 12: "## Plan"': "oldText not found; nearest line <n>: '…'",
+            "Section 'Kế hoạch' not found": "Section '…' not found",
+            "limit: Input should be less than or equal to 10": "limit: Input should be less than or equal to <n>",
+        }
+        async with self.factory() as db:
+            for raw, expected in cases.items():
+                value = (
+                    await db.execute(
+                        text(
+                            f"SELECT {AUDIT_MESSAGE} FROM (SELECT jsonb_build_object('message',CAST(:m AS text)) AS metadata) a"
+                        ),
+                        {"m": raw},
+                    )
+                ).scalar_one()
+                self.assertEqual(value, expected, raw)
+            fallback = (
+                await db.execute(
+                    text(
+                        f"""SELECT {AUDIT_MESSAGE} FROM (SELECT '{{"error":"TimeoutError"}}'::jsonb AS metadata) a"""
+                    )
+                )
+            ).scalar_one()
+            self.assertEqual(fallback, "TimeoutError")
 
     async def test_audit_page_filters_and_repository_management(self):
         from starlette.requests import Request
@@ -1700,7 +1789,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                     "/api/v1/mcp/audit",
                     params={
                         **audit,
-                        "outcome": "failed",
+                        "outcome": "denied",
                         "connectionId": self.connection["id"],
                     },
                 )
@@ -1711,7 +1800,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsNone(failed["nextCursor"])
             reused = await client.get(
                 "/api/v1/mcp/audit",
-                params={**audit, "outcome": "failed", "cursor": first["nextCursor"]},
+                params={**audit, "outcome": "denied", "cursor": first["nextCursor"]},
             )
             self.assertEqual(reused.status_code, 400)
 

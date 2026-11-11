@@ -10,11 +10,9 @@ from ..mcp.quotas import limits, update_limits
 from ..mcp.registry import TOOLS
 from .audit import management_audit
 from .queries import (
+    LIMITS_SELECT_AI_TOOL_WINDOWS,
     OVERVIEW_SELECT_AI_PROVIDER_CALLS,
     OVERVIEW_SELECT_AI_PROVIDER_CALLS_2,
-    OVERVIEW_SELECT_AI_TOOL_WINDOWS,
-    OVERVIEW_SELECT_AUDIT_LOGS,
-    OVERVIEW_SELECT_AUDIT_LOGS_2,
 )
 
 router = UtcAPIRouter(prefix="/api/v1/ai-operations", tags=["ai-operations"])
@@ -51,50 +49,51 @@ async def put_limits(
     return {"data": payload.model_dump()}
 
 
+@router.get("/limits")
+async def get_limits(
+    workspaceId: str = Query(min_length=1),
+    user=Depends(current_user),
+    db=Depends(get_session),
+):
+    """MCP tool-call budgets for the limits form: the saved limits, the workspace calls
+    used in the current minute and every tool name a per-tool limit may use.
+    VI: Giới hạn lời gọi tool MCP cho form giới hạn: giới hạn đã lưu, số lời gọi của
+    VI: workspace trong phút hiện tại và mọi tên tool được đặt giới hạn riêng."""
+    await manager(db, workspaceId, user["id"])
+    usage = (
+        await db.execute(
+            LIMITS_SELECT_AI_TOOL_WINDOWS, {"workspace": workspaceId, "now": utcnow()}
+        )
+    ).scalar_one_or_none()
+    return {
+        "data": {
+            **await limits(db, workspaceId),
+            "usage": usage or 0,
+            "tools": sorted(TOOLS),
+        }
+    }
+
+
 @router.get("")
 async def overview(
     workspaceId: str = Query(min_length=1),
     user=Depends(current_user),
     db=Depends(get_session),
 ):
+    """AI provider usage of the last 7 days and its latest failures. MCP tool calls are
+    reported by Settings → MCP logs (`/mcp/audit/summary`), not here.
+    VI: Mức dùng AI provider 7 ngày qua và các lỗi gần nhất. Lời gọi tool MCP được báo cáo
+    VI: ở Settings → MCP logs (`/mcp/audit/summary`), không ở đây."""
     await manager(db, workspaceId, user["id"])
     params = {"workspace": workspaceId, "now": utcnow()}
-    tools = (
-        await db.execute(
-            OVERVIEW_SELECT_AUDIT_LOGS,
-            params,
-        )
-    ).mappings()
-    recent = (
-        await db.execute(
-            OVERVIEW_SELECT_AUDIT_LOGS_2,
-            params,
-        )
-    ).mappings()
-    usage = (
-        await db.execute(
-            OVERVIEW_SELECT_AI_TOOL_WINDOWS,
-            params,
-        )
-    ).scalar_one_or_none()
     provider_calls = (
-        await db.execute(
-            OVERVIEW_SELECT_AI_PROVIDER_CALLS,
-            params,
-        )
+        await db.execute(OVERVIEW_SELECT_AI_PROVIDER_CALLS, params)
     ).mappings()
     provider_errors = (
-        await db.execute(
-            OVERVIEW_SELECT_AI_PROVIDER_CALLS_2,
-            params,
-        )
+        await db.execute(OVERVIEW_SELECT_AI_PROVIDER_CALLS_2, params)
     ).mappings()
     return {
         "data": {
-            "limits": await limits(db, workspaceId),
-            "usage": usage or 0,
-            "tools": [dict(row) for row in tools],
-            "recentErrors": [dict(row) for row in recent],
             "providerCalls": [dict(row) for row in provider_calls],
             "recentProviderErrors": [dict(row) for row in provider_errors],
         }

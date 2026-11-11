@@ -1,8 +1,5 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { Button } from '@astryxdesign/core/Button';
-import { TextInput } from '@astryxdesign/core/TextInput';
-import { TextArea } from '@astryxdesign/core/TextArea';
 import { Text } from '@astryxdesign/core/Text';
 import { DesignSurface } from '@/components/common/design-surface';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
@@ -12,10 +9,6 @@ import { useParams } from 'next/navigation';
 import { SettingsSection, SettingsShell } from '@/features/settings/shared';
 import { RefreshIconButton } from '@/features/shared/refresh-icon-button';
 type Overview = {
-   limits: { totalPerMinute: number; perTool: Record<string, number> };
-   usage: number;
-   tools: { tool: string; calls: number; errors: number; p95Ms: number | null }[];
-   recentErrors: { tool: string; outcome: string; createdAt: string }[];
    providerCalls: {
       feature: string;
       calls: number;
@@ -38,13 +31,9 @@ export function OperationsPage() {
    const [data, setData] = useState<Overview>(),
       [error, setError] = useState<string>(),
       [refresh, setRefresh] = useState(0);
-   const [workspace, setWorkspace] = useState<string>(),
-      [total, setTotal] = useState('300'),
-      [perTool, setPerTool] = useState('{}');
    useEffect(() => {
       let active = true;
       setData(undefined);
-      setWorkspace(undefined);
       setError(undefined);
       void (async () => {
          try {
@@ -54,16 +43,12 @@ export function OperationsPage() {
                   `${api}/ai-operations?${new URLSearchParams({ workspaceId: ws.id })}`
                )
             );
-            if (active) {
-               setWorkspace(ws.id);
-               setData(overview);
-               setTotal(String(overview.limits.totalPerMinute));
-               setPerTool(JSON.stringify(overview.limits.perTool, null, 2));
-               setError(undefined);
-            }
+            if (active) setData(overview);
          } catch (reason) {
             if (active)
-               setError(reason instanceof Error ? reason.message : 'Could not load AI operations.');
+               setError(
+                  reason instanceof Error ? reason.message : 'Could not load AI provider usage.'
+               );
          }
       })();
       return () => {
@@ -75,91 +60,16 @@ export function OperationsPage() {
    return (
       <DesignSurface>
          <SettingsShell
-            title="AI operations"
-            description="Workspace administrators manage limits and review the last 24 hours of tool execution."
+            title="AI provider usage"
+            description="Calls Flowie made to AI providers for its own features, with tokens and failures. MCP tool calls are in MCP logs; tool call limits are on the Integrations page."
             action={
-               <RefreshIconButton
-                  label="Refresh operations"
-                  onClick={() => setRefresh((n) => n + 1)}
-               />
+               <RefreshIconButton label="Refresh usage" onClick={() => setRefresh((n) => n + 1)} />
             }
          >
             {error && <QueryState message={error} />}
-            {!data && !error && <Text role="status">Loading operations…</Text>}
+            {!data && !error && <Text role="status">Loading usage…</Text>}
             {data && (
                <>
-                  <SettingsSection
-                     title="Workspace budget"
-                     description={`${data.usage} / ${data.limits.totalPerMinute} tool attempts in this minute`}
-                  >
-                     <div className="flex flex-col gap-3 rounded-lg border bg-container px-4 py-3">
-                        <TextInput
-                           label="Total tool calls per minute"
-                           size="sm"
-                           width={200}
-                           value={total}
-                           onChange={setTotal}
-                        />
-                        <TextArea
-                           label="Per-tool budgets (JSON)"
-                           value={perTool}
-                           onChange={setPerTool}
-                           rows={4}
-                        />
-                        <div className="flex">
-                           <Button
-                              label="Save budgets"
-                              size="sm"
-                              clickAction={async () => {
-                                 try {
-                                    const parsed: unknown = JSON.parse(perTool);
-                                    if ((await loadCurrentWorkspace()).id !== workspace)
-                                       throw new Error('Workspace changed. Reload operations.');
-                                    if (
-                                       !parsed ||
-                                       typeof parsed !== 'object' ||
-                                       Array.isArray(parsed)
-                                    )
-                                       throw new Error(
-                                          'Use a JSON object of tool names and positive limits.'
-                                       );
-                                    await responseData(
-                                       await authenticatedFetch(
-                                          `${api}/ai-operations/limits?${new URLSearchParams({ workspaceId: workspace! })}`,
-                                          {
-                                             method: 'PUT',
-                                             headers: { 'content-type': 'application/json' },
-                                             body: JSON.stringify({
-                                                totalPerMinute: Number(total),
-                                                perTool: parsed,
-                                             }),
-                                          }
-                                       )
-                                    );
-                                    setRefresh((n) => n + 1);
-                                 } catch (reason) {
-                                    setError(
-                                       reason instanceof Error
-                                          ? reason.message
-                                          : 'Could not save limits.'
-                                    );
-                                 }
-                              }}
-                           />
-                        </div>
-                     </div>
-                  </SettingsSection>
-                  <SettingsSection title="Tool calls">
-                     <StatRows
-                        empty="No recorded tool calls in this period."
-                        rows={data.tools.map((tool) => ({
-                           key: tool.tool,
-                           name: tool.tool,
-                           detail: `${tool.calls} calls · ${tool.errors} errors · p95 ${ms(tool.p95Ms)}`,
-                           alert: tool.errors > 0,
-                        }))}
-                     />
-                  </SettingsSection>
                   <SettingsSection title="AI provider usage (last 7 days)">
                      <StatRows
                         empty="No AI provider calls in this period."
@@ -182,16 +92,6 @@ export function OperationsPage() {
                         />
                      </SettingsSection>
                   )}
-                  <SettingsSection title="Recent errors">
-                     <StatRows
-                        empty="No recent tool errors."
-                        rows={data.recentErrors.map((item, index) => ({
-                           key: String(index),
-                           name: `${item.tool} · ${item.outcome}`,
-                           detail: new Date(item.createdAt).toLocaleString(),
-                        }))}
-                     />
-                  </SettingsSection>
                </>
             )}
          </SettingsShell>
@@ -200,11 +100,11 @@ export function OperationsPage() {
 }
 
 /**
- * Bordered list of one-line rows (name left, measurements right) used by every AI operations
- * section; the right part wraps under the name on narrow screens. `alert` marks a row that
+ * Bordered list of one-line rows (name left, measurements right) used by every AI provider
+ * usage section; the right part wraps under the name on narrow screens. `alert` marks a row that
  * has errors so it stands out without changing its text.
  * VI: Danh sách có viền gồm các hàng một dòng (tên bên trái, số liệu bên phải) dùng cho mọi mục
- * AI operations; phần bên phải xuống dưới tên ở màn hình hẹp. `alert` đánh dấu hàng có lỗi để
+ * VI: AI provider usage; phần bên phải xuống dưới tên ở màn hình hẹp. `alert` đánh dấu hàng có lỗi để
  * nổi bật mà không đổi nội dung chữ.
  */
 function StatRows({
