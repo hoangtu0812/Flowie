@@ -73,6 +73,8 @@ pull request and commit references, which are for us.
 
 ### Changed
 
+- `verify-mcp.yml` keeps Next's build cache (`apps/web/.next/cache`) between runs in the web job and every browser shard, so building `web` reuses the modules that did not change since the last run. CI only; nothing to rebuild. (DTD-775)
+  VI: `verify-mcp.yml` giữ lại cache build của Next (`apps/web/.next/cache`) giữa các lần chạy ở job web và mọi shard trình duyệt, nên bước build `web` dùng lại các module không đổi kể từ lần chạy trước. Chỉ đổi CI; không cần build lại.
 - The browser checks in `verify-mcp.yml` allow 30 minutes instead of 15 to install browser dependencies, so a slow Ubuntu package mirror no longer fails a run whose tests never started. CI only; nothing to rebuild. (#276)
   VI: Các bài kiểm tra trình duyệt trong `verify-mcp.yml` được 30 phút thay vì 15 để cài dependency trình duyệt, nên mirror gói Ubuntu chậm không còn làm đỏ một lần chạy mà test chưa kịp bắt đầu. Chỉ đổi CI; không cần build lại.
 - The raw SQL of issues, documents, comments, workflow statuses, bulk changes and the rest of the work-item area now lives in `queries.py` (reads) or `commands.py` (writes) next to the code that runs it, so no `text(` SQL statement remains outside these files in the API. Every statement, its parameters and its transaction are unchanged; the route table is identical. Rebuild `api` and `worker`; no migration. (DTD-526, DTD-767, #274)
