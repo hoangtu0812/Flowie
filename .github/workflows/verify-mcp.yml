@@ -236,6 +236,34 @@ jobs:
         with:
           node-version: '20'
           cache: pnpm
+      # Next's incremental build cache. A warm cache rebuilt the app in about
+      # two thirds of a cold build locally, and unlike a whole-build cache it
+      # still helps when CHANGELOG.md, an input of every build, changes. The key
+      # is the lockfile plus every tracked source under apps/web and packages,
+      # so a commit that changes no source restores an exact match; any other
+      # commit falls back to the newest cache for the same lockfile and Next
+      # reuses the modules that did not change. The step runs before install
+      # and build, so the hash walks no node_modules or build output. All ten
+      # jobs that build web share one key: the first to finish saves it and the
+      # rest skip the save, so a commit adds one entry, which GitHub evicts
+      # oldest-first under the repository's 10 GB limit.
+      # VI: Cache build tăng dần của Next. Tại chỗ, cache ấm build lại app mất
+      # VI: khoảng hai phần ba thời gian build lạnh, và khác với cache cả bản
+      # VI: build, nó vẫn có ích khi CHANGELOG.md, một input của mọi bản build,
+      # VI: thay đổi. Key gồm lockfile và mọi mã nguồn được theo dõi trong
+      # VI: apps/web và packages, nên commit không đổi mã nguồn khôi phục đúng
+      # VI: key; commit khác lùi về cache mới nhất của cùng lockfile và Next dùng
+      # VI: lại các module không đổi. Bước này chạy trước install và build, nên
+      # VI: phép hash không duyệt node_modules hay đầu ra build. Cả mười job build
+      # VI: web dùng chung một key: job xong trước lưu, các job còn lại bỏ qua
+      # VI: bước lưu, nên mỗi commit thêm một mục, GitHub xoá mục cũ nhất trước
+      # VI: khi vượt hạn mức 10 GB của repository.
+      - name: Cache the Next.js build cache
+        uses: actions/cache@v4
+        with:
+          path: apps/web/.next/cache
+          key: next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/web/**', 'packages/**', '!**/node_modules/**', '!**/.next/**') }}
+          restore-keys: next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Build web and verify Compose dependencies
@@ -307,6 +335,14 @@ jobs:
         with:
           node-version: '20'
           cache: pnpm
+      # Same cache and key as the web job above, which explains them.
+      # VI: Cùng cache và key với job web ở trên, nơi giải thích chúng.
+      - name: Cache the Next.js build cache
+        uses: actions/cache@v4
+        with:
+          path: apps/web/.next/cache
+          key: next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/web/**', 'packages/**', '!**/node_modules/**', '!**/.next/**') }}
+          restore-keys: next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
       - name: Install dependencies
         run: |
           python -m pip install -r apps/api-python/requirements.txt
