@@ -312,6 +312,16 @@ jobs:
     name: browser regression
     needs: changes
     if: needs.changes.outputs.e2e == 'true'
+    # Runs on the runner, not in Playwright's image: that was tried in DTD-784
+    # and made each shard slower (pulling the image took 38-50 s against
+    # 27-45 s for setup plus the apt install here, a run 668 s against
+    # 568 s), and the loopback-only fixture guards needed a TCP relay to the
+    # Postgres service. Retry it only with numbers that beat these.
+    # VI: Chạy trên runner, không chạy trong image của Playwright: cách đó đã
+    # VI: thử ở DTD-784 và làm mỗi shard chậm hơn (kéo image mất 38-50 giây so
+    # VI: với 27-45 giây cho khởi tạo cộng cài apt ở đây, cả run 668 giây so với
+    # VI: 568 giây), và chốt chặn chỉ nhận loopback của dữ liệu mẫu phải cần
+    # VI: một relay TCP tới service Postgres. Chỉ thử lại khi có số đo tốt hơn.
     runs-on: ubuntu-24.04
     # One shard's share of a browser that took 12 minutes in a single job. The
     # ceiling allows for a slow runner, the retry a failing test gets, and the
@@ -320,26 +330,6 @@ jobs:
     # VI: job. Mức trần tính thêm cho máy chạy chậm, cho lần thử lại mà một test
     # VI: hỏng được cấp, và cho việc chạy hết thay vì dừng ở lỗi thứ năm.
     timeout-minutes: 25
-    # Playwright's own image for the exact @playwright/test version in
-    # apps/web/package.json, so the browsers and every system library they
-    # need are already there. Installing them on the runner pulled over a
-    # hundred apt packages per shard and took more than 15 minutes when the
-    # Ubuntu mirror was slow. The tag must change with that dependency: a
-    # mismatched image has no browser build the test runner accepts. User 1001
-    # is the runner's own uid, which owns the workspace and HOME; Firefox
-    # refuses to start as root in a HOME another user owns. ipc=host gives
-    # Chromium the shared memory the default 64 MB would starve.
-    # VI: Image chính thức của Playwright đúng phiên bản @playwright/test trong
-    # VI: apps/web/package.json, nên trình duyệt và mọi thư viện hệ thống chúng
-    # VI: cần đã có sẵn. Cài chúng trên runner kéo hơn trăm gói apt mỗi shard và
-    # VI: mất hơn 15 phút khi mirror Ubuntu chậm. Tag phải đổi theo dependency
-    # VI: đó: image lệch phiên bản không có bản trình duyệt nào mà test runner
-    # VI: chấp nhận. User 1001 là uid của chính runner, chủ của workspace và
-    # VI: HOME; Firefox từ chối chạy dưới root trong HOME của user khác.
-    # VI: ipc=host cho Chromium đủ bộ nhớ dùng chung mà mức mặc định 64 MB thiếu.
-    container:
-      image: mcr.microsoft.com/playwright:v1.64.0-noble
-      options: --user 1001 --ipc=host
     strategy:
       fail-fast: false
       matrix:
@@ -352,6 +342,8 @@ jobs:
           POSTGRES_USER: flowie_test
           POSTGRES_PASSWORD: test-only-password
           POSTGRES_DB: flowie_mcp_test
+        ports:
+          - 5432:5432
         options: >-
           --health-cmd "pg_isready -U flowie_test -d flowie_mcp_test"
           --health-interval 5s --health-timeout 5s --health-retries 12
@@ -363,20 +355,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      # setup-python's own pip cache builds its key with lsb_release, which
-      # the Playwright image does not ship, so the step failed before Python
-      # was used; the pip cache is kept by actions/cache instead.
-      # VI: Cache pip có sẵn của setup-python tạo key bằng lsb_release, mà
-      # VI: image Playwright không có, nên bước đó hỏng trước khi Python được
-      # VI: dùng; cache pip được giữ bằng actions/cache thay thế.
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Cache pip downloads
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: pip-noble-${{ hashFiles('apps/api-python/requirements.txt') }}
+          cache: pip
+          cache-dependency-path: apps/api-python/requirements.txt
       - uses: pnpm/action-setup@v4
         with:
           version: '9.15.9'
@@ -396,21 +379,6 @@ jobs:
         run: |
           python -m pip install -r apps/api-python/requirements.txt
           pnpm install --frozen-lockfile
-      # The fixture seeder and the UI harness refuse any database host that is
-      # not loopback, so they can never write to a real database, and inside
-      # this container the service is reachable only as postgres:5432. A
-      # plain TCP relay on 127.0.0.1:5432 keeps that guard untouched. It runs
-      # in the background until the job's container is removed.
-      # VI: Script seed dữ liệu mẫu và harness UI từ chối mọi host database
-      # VI: không phải loopback, để không bao giờ ghi vào database thật, mà
-      # VI: trong container này service chỉ truy cập được qua postgres:5432.
-      # VI: Một relay TCP đơn giản trên 127.0.0.1:5432 giữ nguyên chốt chặn
-      # VI: đó. Nó chạy nền cho tới khi container của job bị xoá.
-      - name: Relay the Postgres service to loopback
-        run: |
-          nohup node -e "const net = require('net'); net.createServer((c) => { const s = net.connect(5432, 'postgres'); c.pipe(s).pipe(c); c.on('error', () => s.destroy()); s.on('error', () => c.destroy()); }).listen(5432, '127.0.0.1')" > /dev/null 2>&1 &
-          for i in $(seq 1 20); do node -e "require('net').connect(5432, '127.0.0.1').on('connect', () => process.exit(0)).on('error', () => process.exit(1))" && exit 0; sleep 0.5; done
-          echo "Postgres relay did not start." >&2; exit 1
       - name: Migrate a clean database
         run: |
           pnpm --filter @flowie/database exec prisma migrate deploy --schema prisma/schema.prisma
@@ -419,6 +387,17 @@ jobs:
         run: |
           pnpm --filter @flowie/contracts build
           pnpm --filter @flowie/web build
+      # Only the browser this job runs. Installing all three cost every job
+      # three downloads for two it would never open.
+      # VI: Chỉ trình duyệt mà job này chạy. Cài cả ba khiến mỗi job tải về ba
+      # VI: bản cho hai bản nó không bao giờ mở tới.
+      # WebKit pulls well over a hundred apt packages; when the runner's Ubuntu mirror is slow
+      # that alone has taken more than 15 minutes, so allow 30 before calling it stuck.
+      # VI: WebKit kéo hơn một trăm gói apt; khi mirror Ubuntu của runner chậm, riêng bước này
+      # VI: đã mất hơn 15 phút, nên cho phép 30 phút trước khi coi là bị treo.
+      - name: Install browser test dependencies
+        timeout-minutes: 30
+        run: pnpm --filter @flowie/web exec playwright install --with-deps ${{ matrix.browser }}
       - name: Verify browser regression workflows
         run: |
           python scripts/seed-ui-regression.py
