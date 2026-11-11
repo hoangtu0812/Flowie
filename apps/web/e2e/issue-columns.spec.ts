@@ -42,7 +42,9 @@ const storedColumns = async (request: APIRequestContext) =>
 
 const headers = (page: Page) => page.locator('[data-issue-column]');
 const headerKeys = (page: Page) =>
-   headers(page).evaluateAll((cells) => cells.map((cell) => cell.getAttribute('data-issue-column')));
+   headers(page).evaluateAll((cells) =>
+      cells.map((cell) => cell.getAttribute('data-issue-column'))
+   );
 const width = async (locator: Locator) => (await locator.boundingBox())!.width;
 
 async function dragBy(page: Page, handle: Locator, dx: number) {
@@ -54,7 +56,7 @@ async function dragBy(page: Page, handle: Locator, dx: number) {
 }
 
 test.beforeEach(async ({ page, context }) => {
-   await page.setViewportSize({ width: 1600, height: 900 });
+   await page.setViewportSize({ width: 1920, height: 1000 });
    await page.goto('/auth/login');
    await page.getByLabel('Email', { exact: true }).fill(fixture.email);
    await page.getByLabel('Password', { exact: true }).fill(fixture.password);
@@ -93,28 +95,57 @@ test('issue columns resize, hide and reorder, persist per account and reset', as
    await page.locator('[data-issue-column="project"]').click({ button: 'right' });
    await page.getByRole('menuitem', { name: 'Hide column' }).click();
    await expect(page.locator('[data-issue-column="project"]')).toHaveCount(0);
+   // The menu blocks pointer events on the page until it has fully closed.
+   // VI: Menu chặn pointer event trên trang cho tới khi đóng hẳn.
+   await expect(page.getByRole('menu')).toHaveCount(0);
+   await expect(page.locator('body')).not.toHaveCSS('pointer-events', 'none');
 
    // Drag Assignee's header in front of Labels; a drag never toggles sorting.
    // VI: Kéo header Assignee lên trước Labels; thao tác kéo không đổi sort.
    const assignee = page.locator('[data-issue-column="assignee"]');
+   // The wider title pushed the last columns past the viewport's right edge.
+   // VI: Title rộng hơn đã đẩy các cột cuối ra ngoài mép phải viewport.
+   await assignee.scrollIntoViewIfNeeded();
+   let to = (await labels.boundingBox())!;
+   await expect
+      .poll(async () => {
+         const previous = to.x;
+         await page.waitForTimeout(100);
+         to = (await labels.boundingBox())!;
+         return to.x === previous;
+      })
+      .toBe(true);
    const from = (await assignee.boundingBox())!;
-   const to = (await labels.boundingBox())!;
    await page.mouse.move(from.x + 20, from.y + from.height / 2);
    await page.mouse.down();
    await page.mouse.move(from.x + 40, from.y + from.height / 2, { steps: 4 });
-   await expect(page.locator('[data-issue-column="assignee"]')).toHaveClass(/outline-dashed/);
+   await expect(assignee).toHaveClass(/outline-dashed/);
    await page.mouse.move(to.x + 10, to.y + to.height / 2, { steps: 20 });
+   // Like a hand, keep nudging until the placeholder reaches the first slot; the
+   // drop then lands exactly where the placeholder is.
+   // VI: Như tay người, tiếp tục nhích chuột cho tới khi placeholder tới vị trí
+   // đầu; khi thả, cột nằm đúng chỗ placeholder.
+   let nudge = 0;
+   await expect
+      .poll(async () => {
+         nudge = (nudge + 1) % 4;
+         await page.mouse.move(to.x + 4 + nudge * 2, to.y + to.height / 2);
+         return (await headerKeys(page))[0];
+      })
+      .toBe('assignee');
    await page.mouse.up();
-   await expect.poll(() => headerKeys(page)).toEqual([
-      'assignee',
-      'labels',
-      'startDate',
-      'targetDate',
-      'estimatedEffort',
-      'actualEffort',
-      'created',
-      'dueDate',
-   ]);
+   await expect
+      .poll(() => headerKeys(page))
+      .toEqual([
+         'assignee',
+         'labels',
+         'startDate',
+         'targetDate',
+         'estimatedEffort',
+         'actualEffort',
+         'created',
+         'dueDate',
+      ]);
    await expect(page.getByRole('button', { name: 'Assignee: default order' })).toBeVisible();
 
    // Saved on the account: a browser without the local copy gets the same columns.
@@ -127,16 +158,18 @@ test('issue columns resize, hide and reorder, persist per account and reset', as
       .toEqual(['assignee', false, 220]);
    await page.evaluate(() => localStorage.removeItem('ui-preferences'));
    await page.reload();
-   await expect.poll(() => headerKeys(page)).toEqual([
-      'assignee',
-      'labels',
-      'startDate',
-      'targetDate',
-      'estimatedEffort',
-      'actualEffort',
-      'created',
-      'dueDate',
-   ]);
+   await expect
+      .poll(() => headerKeys(page))
+      .toEqual([
+         'assignee',
+         'labels',
+         'startDate',
+         'targetDate',
+         'estimatedEffort',
+         'actualEffort',
+         'created',
+         'dueDate',
+      ]);
    expect(Math.round(await width(labels))).toBe(220);
 
    // Display → List options shows the same order; switches and the grip edit it.
@@ -153,17 +186,14 @@ test('issue columns resize, hide and reorder, persist per account and reset', as
    await page.keyboard.press('ArrowDown');
    await page.keyboard.press('Space');
    await expect(rows.first()).toHaveAttribute('data-issue-column-row', 'labels');
-   await expect.poll(async () => (await headerKeys(page)).slice(0, 2)).toEqual([
-      'labels',
-      'assignee',
-   ]);
+   await expect
+      .poll(async () => (await headerKeys(page)).slice(0, 2))
+      .toEqual(['labels', 'assignee']);
 
    // Reset restores the default columns everywhere.
    // VI: Reset khôi phục cột mặc định ở mọi nơi.
    await page.getByRole('button', { name: 'Reset', exact: true }).click();
    await expect.poll(() => headerKeys(page)).toEqual(DEFAULT_ORDER);
    await expect.poll(async () => Math.round(await width(labels))).toBe(160);
-   await expect
-      .poll(async () => (await storedColumns(context.request))?.order?.[0])
-      .toBe('labels');
+   await expect.poll(async () => (await storedColumns(context.request))?.order?.[0]).toBe('labels');
 });
