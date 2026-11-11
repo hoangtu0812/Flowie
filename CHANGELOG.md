@@ -37,6 +37,8 @@ pull request and commit references, which are for us.
 
 ### Fixed
 
+- The `storage and mail transports` job of `verify-mcp.yml` runs again: it failed before any test because the Ubuntu 26.04 runner image has no `postgresql-client-16`, so that job now runs on `ubuntu-24.04`. CI only; nothing to rebuild. (#279)
+  VI: Job `storage and mail transports` của `verify-mcp.yml` chạy lại được: trước đây job hỏng trước khi chạy test nào vì image runner Ubuntu 26.04 không có `postgresql-client-16`, nên job này nay chạy trên `ubuntu-24.04`. Chỉ đổi CI; không cần build lại gì.
 - Customize sidebar rows are all the same height, with "Only when badged" on the same line as the switch, and dragging a row now shows a floating copy, a dashed slot where it will land, and the other rows sliding out of the way and into place on drop (no motion when the system asks for reduced motion). A reorder saved before a newer item existed now moves the right item. Rebuild `web`; no migration. (DTD-584, #277)
   VI: Các dòng trong Customize sidebar nay cao bằng nhau, "Only when badged" nằm cùng hàng với công tắc, và khi kéo một dòng sẽ thấy bản nổi của dòng, ô trống viền nét đứt ở vị trí sẽ thả, các dòng khác trượt nhường chỗ và trượt về vị trí khi thả (không chuyển động khi hệ thống yêu cầu giảm chuyển động). Thứ tự đã lưu trước khi có mục mới nay di chuyển đúng mục. Build lại `web`; không có migration. (DTD-584)
 - The browser regression check for Customize sidebar no longer fails when a team row is in the sidebar: it now opens the Workspace "More" menu instead of matching the team row's hidden "More" label. No app change; nothing to rebuild. (DTD-584, #255)

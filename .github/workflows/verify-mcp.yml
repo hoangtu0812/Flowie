@@ -157,7 +157,13 @@ jobs:
     name: storage and mail transports
     needs: changes
     if: needs.changes.outputs.storage == 'true'
-    runs-on: ubuntu-latest
+    # Pinned because the backup rehearsal needs a host pg_dump 16 at
+    # /usr/lib/postgresql/16/bin to match the postgres:16 service, and the
+    # Ubuntu 26.04 image behind ubuntu-latest has no postgresql-client-16.
+    # VI: Ghim image vì bài diễn tập sao lưu cần pg_dump 16 trên máy chạy, tại
+    # /usr/lib/postgresql/16/bin, khớp với service postgres:16, mà image
+    # Ubuntu 26.04 của ubuntu-latest không có gói postgresql-client-16.
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     services:
       postgres:
