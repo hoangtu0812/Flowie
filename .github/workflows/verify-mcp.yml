@@ -355,27 +355,28 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U flowie_test -d flowie_mcp_test"
           --health-interval 5s --health-timeout 5s --health-retries 12
-    # From inside the job container the service is reached by its name on the
-    # job's network, so no port is published on the runner.
-    # VI: Từ trong container của job, service được gọi bằng tên của nó trên
-    # VI: mạng của job, nên không cần mở cổng nào trên runner.
     env:
       PYTHONPATH: apps/api-python
-      DATABASE_URL: postgresql://flowie_test:test-only-password@postgres:5432/flowie_mcp_test
-      FLOWIE_E2E_DATABASE_URL: postgresql://flowie_test:test-only-password@postgres:5432/flowie_mcp_test
+      DATABASE_URL: postgresql://flowie_test:test-only-password@localhost:5432/flowie_mcp_test
+      FLOWIE_E2E_DATABASE_URL: postgresql://flowie_test:test-only-password@localhost:5432/flowie_mcp_test
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      # No pip cache here: setup-python builds its key with lsb_release, which
-      # the Playwright image does not ship, and the step fails before Python
-      # is used. The wheels download from PyPI instead.
-      # VI: Không dùng cache pip ở đây: setup-python tạo key bằng lsb_release,
-      # VI: mà image Playwright không có, nên bước này hỏng trước khi Python
-      # VI: được dùng. Các wheel được tải thẳng từ PyPI.
+      # setup-python's own pip cache builds its key with lsb_release, which
+      # the Playwright image does not ship, so the step failed before Python
+      # was used; the pip cache is kept by actions/cache instead.
+      # VI: Cache pip có sẵn của setup-python tạo key bằng lsb_release, mà
+      # VI: image Playwright không có, nên bước đó hỏng trước khi Python được
+      # VI: dùng; cache pip được giữ bằng actions/cache thay thế.
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Cache pip downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-noble-${{ hashFiles('apps/api-python/requirements.txt') }}
       - uses: pnpm/action-setup@v4
         with:
           version: '9.15.9'
@@ -395,6 +396,21 @@ jobs:
         run: |
           python -m pip install -r apps/api-python/requirements.txt
           pnpm install --frozen-lockfile
+      # The fixture seeder and the UI harness refuse any database host that is
+      # not loopback, so they can never write to a real database, and inside
+      # this container the service is reachable only as postgres:5432. A
+      # plain TCP relay on 127.0.0.1:5432 keeps that guard untouched. It runs
+      # in the background until the job's container is removed.
+      # VI: Script seed dữ liệu mẫu và harness UI từ chối mọi host database
+      # VI: không phải loopback, để không bao giờ ghi vào database thật, mà
+      # VI: trong container này service chỉ truy cập được qua postgres:5432.
+      # VI: Một relay TCP đơn giản trên 127.0.0.1:5432 giữ nguyên chốt chặn
+      # VI: đó. Nó chạy nền cho tới khi container của job bị xoá.
+      - name: Relay the Postgres service to loopback
+        run: |
+          nohup node -e "const net = require('net'); net.createServer((c) => { const s = net.connect(5432, 'postgres'); c.pipe(s).pipe(c); c.on('error', () => s.destroy()); s.on('error', () => c.destroy()); }).listen(5432, '127.0.0.1')" > /dev/null 2>&1 &
+          for i in $(seq 1 20); do node -e "require('net').connect(5432, '127.0.0.1').on('connect', () => process.exit(0)).on('error', () => process.exit(1))" && exit 0; sleep 0.5; done
+          echo "Postgres relay did not start." >&2; exit 1
       - name: Migrate a clean database
         run: |
           pnpm --filter @flowie/database exec prisma migrate deploy --schema prisma/schema.prisma
