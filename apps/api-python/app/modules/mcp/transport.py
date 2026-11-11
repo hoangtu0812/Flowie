@@ -169,7 +169,10 @@ def build_server(host_app):
                 )
             return CallToolResult(content=content, structured_content=result)
         except ApiError as error:
+            # Details first so they can never replace the standard error fields.
+            # VI: Đặt details trước để chúng không thể ghi đè các trường lỗi chuẩn.
             result = {
+                **error.details,
                 "error": error.error,
                 "message": error.message,
                 "statusCode": error.status_code,

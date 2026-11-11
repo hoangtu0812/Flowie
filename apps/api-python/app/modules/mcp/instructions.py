@@ -26,6 +26,7 @@ DEFAULT_WORKFLOW = """When asked to handle a task (for example "xử lý DTD-12"
 4. Code, then open a pull request whose title or branch contains the task identifier. Attach screenshots or logs that show the result with `create_attachment_upload`.
 5. After the pull request is merged: `finish_issue` with the result (pull request link, what changed, what was tested and how, what is not verified yet, actual effort against the estimate) and `actualEffort` in man-days. It posts the result and moves the task to Technical Review. Move to Done only when the change is verified in the deployed app or a person asks.
 When creating a task, set `dueDate` (ask when the requester gives none) and the plan fields you already know. Issue writes return `planningWarnings`: fix them with `update_issue`, or say in a comment why they stay. Status changes take the status name (status "In Progress").
+A 409 version conflict returns currentVersion: retry with it only when your change does not depend on what changed (a status, a comment, exact-text edits); re-read before sending whole content or fields someone else may have changed.
 When someone adds a new comment to a task you handled, read it (and its screenshots), answer with `add_comment` using `parentCommentId`, move the task back to In Progress with `transition_issue` if it needs more work, and repeat steps 2-5.
 Write comments in the language the task is written in."""
 

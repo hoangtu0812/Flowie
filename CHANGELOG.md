@@ -19,6 +19,16 @@ pull request and commit references, which are for us.
 
 ## Unreleased
 
+### Changed
+
+- AI clients connected over MCP fail less often on common argument mistakes: a `limit` above a tool's maximum is lowered to the maximum, `identifier` or `issueKey` is read as `issueId` and `body` as `content`, a dummy `random_string` argument is ignored, `create_issue` without `statusId` uses the team's default status like the web app, a reply to a reply joins the thread's top-level comment, and documents accept `projectId` with an issue of that project (the link goes to the issue). A version conflict (409) now states `currentVersion`, and an `oldText` that does not match points at the nearest line. No migration; rebuild `api`. (DTD-776)
+  VI: AI client kết nối qua MCP ít lỗi hơn khi gửi tham số sai thường gặp: `limit` vượt mức tối đa của tool được hạ về mức tối đa, `identifier` hoặc `issueKey` được hiểu là `issueId` và `body` là `content`, tham số giả `random_string` bị bỏ qua, `create_issue` thiếu `statusId` dùng trạng thái mặc định của team như trên web, trả lời một reply được gắn vào comment gốc của thread, và tài liệu nhận `projectId` kèm một issue của project đó (liên kết vào issue). Xung đột version (409) nay nêu `currentVersion`, và `oldText` không khớp chỉ ra dòng gần giống nhất. Không có migration; build lại `api`. (DTD-776)
+
+### Fixed
+
+- MCP tool calls whose arguments fail a check inside the tool (for example document edits that make the content too long) return 400 naming the field instead of 500 "Tool execution failed.", and MCP logs count a call as denied only when access was refused; a 404 for data that does not exist yet, or an unknown tool name, is counted as failed. (DTD-776)
+  VI: Lời gọi tool MCP có tham số bị kiểm tra bên trong tool từ chối (ví dụ edits làm nội dung tài liệu quá dài) trả 400 nêu tên trường thay vì 500 "Tool execution failed.", và MCP logs chỉ tính lời gọi là bị từ chối khi bị từ chối truy cập; 404 vì dữ liệu chưa có, hoặc tên tool không tồn tại, được tính là lỗi. (DTD-776)
+
 ## [0.19.0] — 2026-11-11 12:17 +07
 
 ### Added
