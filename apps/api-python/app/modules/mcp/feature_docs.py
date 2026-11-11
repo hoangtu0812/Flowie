@@ -18,6 +18,7 @@ from ..work_items.document_tree import create_folder, scaffold_project_tree
 from .commands import (
     UPSERT_FEATURE_DOC_INSERT_DOCUMENT_LINKS,
 )
+from .outline import find_section, outline
 from .queries import (
     CHILD_FOLDER_SELECT_DOCUMENT_FOLDERS,
     READ_FEATURE_DOCS_SELECT_DOCUMENT_FOLDERS,
@@ -29,10 +30,10 @@ from .queries import (
 )
 
 CHANGE_LOG_HEADING = "## Lịch sử thay đổi"
-# Linked documents are returned with content so an agent can edit them in one step; longer
-# documents are cut here and read in full through get_document.
-# VI: Tài liệu liên kết được trả kèm nội dung để agent sửa ngay; tài liệu dài hơn bị cắt ở
-# VI: mức này và đọc đầy đủ qua get_document.
+# Text returned for a linked document (includeContent or one section) is cut here; the rest is
+# read with get_document.
+# VI: Văn bản trả cho tài liệu liên kết (includeContent hoặc một phần) bị cắt ở mức này; phần
+# VI: còn lại đọc bằng get_document.
 CONTENT_LIMIT = 20000
 MISSING_WARNING = (
     "No FDS/TDS is linked to this task. Before coding, write or update the feature's "
@@ -58,8 +59,8 @@ def with_change_entry(content: str, task: str, summary: str, day: date) -> str:
     return f"{body}\n| {day.isoformat()} | {task} | {cleaned} |\n"
 
 
-def _summary(row: Any, *, content: bool = False) -> dict[str, Any]:
-    result = {
+def _summary(row: Any) -> dict[str, Any]:
+    return {
         "id": row["id"],
         "title": row["title"],
         "docType": row["doc_type"],
@@ -68,19 +69,38 @@ def _summary(row: Any, *, content: bool = False) -> dict[str, Any]:
         "folderId": row["folder_id"],
         "updatedAt": row["updated_at"],
     }
-    if content:
-        result["content"] = row["content"][:CONTENT_LIMIT]
-        result["truncated"] = len(row["content"]) > CONTENT_LIMIT
-    return result
 
 
-async def read_feature_docs(db, policy, issue_id: str) -> dict[str, Any]:
-    """FDS/TDS linked to an issue (with content) and the feature folders of its project.
+def _linked(row: Any, include_content: bool, section: str | None) -> dict[str, Any]:
+    """A linked FDS/TDS with its length and full outline; the text (cut at CONTENT_LIMIT) only
+    with `include_content`, or one section's text. A document without that section, or with it
+    twice, gets `sectionError` instead, so one document does not fail the whole read.
+    VI: Một FDS/TDS liên kết kèm độ dài và mục lục đầy đủ; văn bản (cắt ở CONTENT_LIMIT) chỉ khi
+    VI: `include_content`, hoặc văn bản của một phần. Tài liệu không có phần đó, hoặc có hai lần,
+    VI: nhận `sectionError` thay vào, để một tài liệu không làm hỏng cả lần đọc.
+    """
+    content = row["content"]
+    result = {**_summary(row), "length": len(content), "outline": outline(content)}
+    if section:
+        try:
+            part = find_section(content, section)
+        except ApiError as error:
+            return result | {"sectionError": error.message}
+        content = content[part["offset"] : part["offset"] + part["length"]]
+    elif not include_content:
+        return result
+    return result | {"content": content[:CONTENT_LIMIT], "truncated": len(content) > CONTENT_LIMIT}
+
+
+async def read_feature_docs(
+    db, policy, issue_id: str, include_content: bool = False, section: str | None = None
+) -> dict[str, Any]:
+    """FDS/TDS linked to an issue (with outline) and the feature folders of its project.
 
     `features` lists every `module / feature` folder with its FDS/TDS (without content) so
     the agent can pick the right place; `warning` is set when the issue has no FDS/TDS yet.
     Documents outside the connection's scope are left out, like every other read.
-    VI: FDS/TDS liên kết với issue (kèm nội dung) và các thư mục tính năng của dự án. `features`
+    VI: FDS/TDS liên kết với issue (kèm mục lục) và các thư mục tính năng của dự án. `features`
     VI: liệt kê mọi thư mục `module / tính năng` cùng FDS/TDS của nó (không kèm nội dung) để
     VI: agent chọn đúng chỗ; `warning` có giá trị khi issue chưa có FDS/TDS. Tài liệu ngoài
     VI: phạm vi của kết nối bị loại ra như mọi thao tác đọc khác.
@@ -120,7 +140,7 @@ async def read_feature_docs(db, policy, issue_id: str) -> dict[str, Any]:
         "issueId": issue["id"],
         "identifier": issue["identifier"],
         "projectId": issue["project_id"],
-        "linked": [_summary(row, content=True) for row in linked],
+        "linked": [_linked(row, include_content, section) for row in linked],
         "features": features,
         "warning": None if linked else MISSING_WARNING,
     }

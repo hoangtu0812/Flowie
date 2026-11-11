@@ -163,8 +163,15 @@ server in the client after a change.
   preserved; `restore_document` creates a new revision rather than removing old
   ones. `get_document_revision` and `get_document_diff` support review before restoring.
   Current and historical reads expose character offsets for bounded text pages.
-  Partial section editing is not a separate tool in this version.
-- `get_feature_docs` returns the FDS/TDS linked to an issue with their content,
+  `update_document` also takes exact-text `edits`. Document writes return the
+  new version, length and a level 1-2 outline, not the text, unless
+  `includeContent` is true.
+- `get_document` with `outline` returns the headings with line, offset and
+  section length and no text; with `section` (a heading title) it returns that
+  part, with `offset`/`limit` counted inside it. Without either it returns the
+  full text page as before.
+- `get_feature_docs` returns the FDS/TDS linked to an issue with their version
+  and outline (text only with `includeContent` or for one `section`),
   the project's `module / feature` folders with their FDS/TDS, and a `warning`
   while the issue has none. `upsert_feature_doc` creates missing project,
   module and feature folders, creates or updates the feature's FDS or TDS (a new

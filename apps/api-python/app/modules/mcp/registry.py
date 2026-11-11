@@ -28,8 +28,8 @@ DEFINITIONS = (
     ),
     ToolDefinition(
         "get_feature_docs",
-        "Read the FDS/TDS linked to an issue (with content), the module/feature folders of its project with their FDS/TDS, and a warning when the issue has no FDS/TDS yet.",
-        c.IssueInput,
+        "Read the FDS/TDS linked to an issue with their version and outline (headings with offsets and section sizes), the module/feature folders of its project with their FDS/TDS, and a warning when the issue has no FDS/TDS yet. Text only with includeContent=true, or one part with section=\"<heading>\"; otherwise read parts with get_document.",
+        c.FeatureDocsInput,
         "documents:read",
         "feature_docs",
         extra_scopes=("issues:read",),
@@ -148,8 +148,8 @@ DEFINITIONS = (
     ),
     ToolDefinition(
         "get_document",
-        "Read document content and current version.",
-        c.DocumentReadInput,
+        "Read a document and its current version. For a long document call it with outline=true first (headings with line, offset and section length, no text), then read one part with section=\"<heading>\" or offset/limit. Without outline or section it returns the text from offset (default 20000 characters).",
+        c.DocumentPartInput,
         "documents:read",
         "document",
     ),
@@ -248,7 +248,7 @@ DEFINITIONS = (
     ),
     ToolDefinition(
         "create_document",
-        "Create a Markdown document, optionally linked to one project or one issue: send projectId or issueId. With both, the issue must belong to that project and the document is linked to the issue.",
+        "Create a Markdown document, optionally linked to one project or one issue: send projectId or issueId. With both, the issue must belong to that project and the document is linked to the issue. Returns id, version, length and outline, not the content (includeContent=true adds it).",
         c.CreateDocumentTool,
         "documents:write",
         "create_document",
@@ -257,7 +257,7 @@ DEFINITIONS = (
     ),
     ToolDefinition(
         "update_document",
-        "Replace document title/content with version precondition and revision history.",
+        "Update a document's title, status, docType or content with version precondition and revision history. Prefer edits (exact oldText replaced by newText) over resending content. Returns id, version, length and outline, not the content (includeContent=true adds it).",
         c.UpdateDocumentTool,
         "documents:write",
         "update_document",
@@ -266,7 +266,7 @@ DEFINITIONS = (
     ),
     ToolDefinition(
         "upsert_feature_doc",
-        "Create or update the FDS or TDS of a module/feature in the issue's project document tree (missing folders are created), add a change-log row for the issue and link the document to it. Call get_feature_docs first and send the full updated content.",
+        "Create or update the FDS or TDS of a module/feature in the issue's project document tree (missing folders are created), add a change-log row for the issue and link the document to it. Call get_feature_docs first; for an existing document send edits (exact oldText replaced by newText), otherwise the full content.",
         c.UpsertFeatureDocTool,
         "documents:write",
         "upsert_feature_doc",
@@ -284,7 +284,7 @@ DEFINITIONS = (
     ),
     ToolDefinition(
         "restore_document",
-        "Restore historical content as a new revision without deleting history.",
+        "Restore historical content as a new revision without deleting history. Returns id, version, length and outline, not the content (includeContent=true adds it).",
         c.RestoreDocumentTool,
         "documents:write",
         "restore_document",

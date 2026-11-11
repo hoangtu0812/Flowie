@@ -194,6 +194,7 @@ class CommandService:
                 "issueId",
                 "documentId",
                 "commentId",
+                "includeContent",
             },
         )
         if name == "create_issue":

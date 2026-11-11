@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .outline import outline
+
 ISSUE_FIELDS = (
     "id", "identifier", "title", "version",
     "startDate", "targetDate", "dueDate", "estimatedEffort", "actualEffort",
@@ -22,6 +24,7 @@ LONG_TEXT = {
 # VI: Trường gửi lên có tên khác trong bản ghi issue.
 RENAMED = {"assigneeId": "assignee", "reporterId": "reporter", "projectId": "project", "labelIds": "labelLinks"}
 COMMENT_FIELDS = ("id", "issueId", "parentCommentId", "version", "createdAt")
+DOCUMENT_FIELDS = ("id", "title", "version", "docType", "status", "teamId", "folderId", "updatedAt")
 
 
 def _person(value: Any) -> Any:
@@ -48,3 +51,17 @@ def compact_issue(data: dict[str, Any], sent: set[str]) -> dict[str, Any]:
 
 def compact_comment(data: dict[str, Any]) -> dict[str, Any]:
     return {key: data.get(key) for key in COMMENT_FIELDS}
+
+
+def compact_document(data: dict[str, Any], include_content: bool) -> dict[str, Any]:
+    """A document write result without the text the agent just sent: identity, the new version,
+    the text length and a short outline (levels 1-2) to confirm the structure. The content is
+    added only when the caller asked for it with `includeContent`.
+    VI: Kết quả ghi tài liệu không kèm văn bản agent vừa gửi: định danh, version mới, độ dài và
+    VI: mục lục ngắn (cấp 1-2) để xác nhận cấu trúc. Nội dung chỉ thêm khi bên gọi yêu cầu bằng
+    VI: `includeContent`.
+    """
+    content = data.get("content") or ""
+    result = {key: data.get(key) for key in DOCUMENT_FIELDS}
+    result |= {"length": len(content), "outline": outline(content, max_level=2, positions=False)}
+    return result | ({"content": content} if include_content else {})
