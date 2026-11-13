@@ -279,13 +279,36 @@ async def verify_deadlines(db, owner, seed):
                 'n': number, 'title': f'Issue {number}', 'u': owner, 'due': today + timedelta(days=offset), 'archived': archived, 'now': now,
             },
         )
+    # A second team of the owner, with one issue due today, to check narrowing by team name.
+    # VI: Team thứ hai của owner, có một issue hạn hôm nay, để kiểm tra việc thu hẹp theo tên team.
+    ops_key = 'O' + cuid()[:5].upper()
+    ops = cuid()
+    await db.execute(
+        text("INSERT INTO teams(id,workspace_id,name,identifier,created_at,updated_at) VALUES (:id,:w,'Ops',:key,:now,:now)"),
+        {'id': ops, 'w': workspace, 'key': ops_key, 'now': now},
+    )
+    await db.execute(text('INSERT INTO team_members(team_id,user_id) VALUES (:t,:u)'), {'t': ops, 'u': owner})
+    await db.execute(
+        text(
+            """INSERT INTO issues(id,workspace_id,team_id,status_id,identifier,number,title,creator_id,due_date,created_at,updated_at)
+               VALUES (:id,:w,:t,:s,:identifier,1,'Ops issue',:u,:due,:now,:now)"""
+        ),
+        {'id': cuid(), 'w': workspace, 't': ops, 's': open_status, 'identifier': f'{ops_key}-1', 'u': owner, 'due': today, 'now': now},
+    )
+    seed_key = (await db.execute(text('SELECT identifier FROM teams WHERE id = :id'), {'id': seed['team_id']})).scalar_one()
     outsider = await _user(db, now)
     await _member(db, workspace, outsider, now)
     await db.commit()
 
     insight = await agent._deadline_insight(db, workspace, owner)
-    assert (insight['data']['dueToday'], insight['data']['dueSoon'], insight['data']['overdue']) == (1, 1, 1)
-    assert [row['identifier'] for row in insight['data']['issues']] == [f'{prefix}-1', f'{prefix}-2']
-    assert f'{prefix}-1 Issue 1' in insight['content']
-    hidden = await agent._deadline_insight(db, workspace, outsider)
-    assert hidden['data']['issues'] == [] and hidden['data']['teams'] == []
+    assert (insight['data']['dueToday'], insight['data']['dueSoon'], insight['data']['overdue']) == (2, 1, 1)
+    assert insight['data']['teamScope'] == []
+    seed_only = await agent._deadline_insight(db, workspace, owner, f'có bao nhiêu deadline hôm nay ?\n{seed_key.lower()}')
+    assert (seed_only['data']['dueToday'], seed_only['data']['dueSoon'], seed_only['data']['overdue']) == (1, 1, 1)
+    assert [row['identifier'] for row in seed_only['data']['issues']] == [f'{prefix}-1', f'{prefix}-2']
+    assert f'{prefix}-1 Issue 1' in seed_only['content'] and 'Ops issue' not in seed_only['content']
+    ops_only = await agent._deadline_insight(db, workspace, owner, 'deadline hôm nay của team Ops')
+    assert [row['identifier'] for row in ops_only['data']['issues']] == [f'{ops_key}-1']
+    assert ops_only['content'].startswith(f'Hôm nay ({today.date().isoformat()}) team Ops có 1 issue')
+    hidden = await agent._deadline_insight(db, workspace, outsider, f'deadline {ops_key}')
+    assert hidden['data']['issues'] == [] and hidden['data']['teams'] == [] and hidden['data']['teamScope'] == []

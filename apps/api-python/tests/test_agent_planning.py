@@ -37,6 +37,7 @@ from app.modules.agent.api import (
     _is_report_request,
     _is_stale_issue_question,
     _matching_read_only_capability,
+    _named_teams,
     _parse_agent_proposal,
     _parse_schedule_proposal,
     _source_text,
@@ -247,6 +248,13 @@ class AgentPlanningTests(unittest.TestCase):
         for rows, expected in cases:
             with self.subTest(rows=rows):
                 self.assertEqual(asyncio.run(_follow_up_question(stub(rows), 'conversation-1')), expected)  # type: ignore[arg-type]  # a stub stands in for AsyncSession / VI: stub thay cho AsyncSession
+
+    def test_finds_teams_named_by_identifier_or_name_as_whole_words(self) -> None:
+        teams = [{'id': 'a', 'identifier': 'DTD', 'name': 'Digital'}, {'id': 'b', 'identifier': 'TEST', 'name': 'QA Team'}]
+        self.assertEqual([team['id'] for team in _named_teams(teams, 'deadline hôm nay\ndtd')], ['a'])
+        self.assertEqual([team['id'] for team in _named_teams(teams, 'deadline của qa team và DTD?')], ['a', 'b'])
+        self.assertEqual(_named_teams(teams, 'deadline hôm nay, tất cả issue'), [])
+        self.assertEqual(_named_teams(teams, 'deadline testing DTDX'), [])
 
     def test_matches_the_general_issue_count_tool(self) -> None:
         capability = _matching_read_only_capability('Team tôi đang có bao nhiêu issue?')
