@@ -21,17 +21,17 @@ pull request and commit references, which are for us.
 
 ### Changed
 
-- Agent chat answers free-form questions from your live workspace data: the AI looks up what it needs itself — deadlines, overdue and stale issues, workload, project health, issue details and comments, a person's or a team's work — with read-only tools limited to the teams you belong to, shows each lookup as a step with its arguments, and answers in your language citing issue and project identifiers. Short follow-ups such as "DTD" or "tất cả issue" narrow the previous question. It is on by default without installing "Progress Q&A and reports"; requests to create or plan work still go to the planner, and a workspace without an AI provider, or with a model that does not support tools, gets the fixed reports as before. Leadership reports are unchanged. Rebuild `api` and `web`; no migration. (DTD-871)
+- Agent chat answers free-form questions from your live workspace data: the AI looks up what it needs itself — deadlines, overdue and stale issues, workload, project health, issue details and comments, a person's or a team's work — with read-only tools limited to the teams you belong to, shows each lookup as a step with its arguments, and answers in your language citing issue and project identifiers. Short follow-ups such as "DTD" or "tất cả issue" narrow the previous question. It is on by default without installing "Progress Q&A and reports"; requests to create or plan work still go to the planner, and a workspace without an AI provider, or with a model that does not support tools, gets the fixed reports as before. Leadership reports are unchanged. Rebuild `api` and `web`; no migration. (DTD-871, #291)
   VI: Agent chat trả lời câu hỏi tự do từ dữ liệu thật của workspace: AI tự tra những gì cần — deadline, issue quá hạn và treo, workload, tình hình dự án, chi tiết và bình luận của issue, việc của một người hay một team — bằng các tool chỉ đọc giới hạn trong các team bạn là thành viên, hiển thị mỗi lần tra cứu là một bước kèm tham số, và trả lời bằng ngôn ngữ của bạn kèm mã issue, mã dự án. Câu nối tiếp ngắn như "DTD" hay "tất cả issue" thu hẹp câu hỏi trước. Tính năng bật mặc định, không cần cài "Progress Q&A and reports"; yêu cầu tạo hay lập kế hoạch công việc vẫn đi vào planner, và workspace chưa có provider AI hoặc dùng model không hỗ trợ tools vẫn nhận báo cáo cố định như trước. Báo cáo lãnh đạo không đổi. Build lại `api` và `web`; không có migration. (DTD-871)
 
 ### Fixed
 
-- MCP `search_issues` with `overdue=true` no longer counts issues due today as overdue; it compares the due date with today in Vietnam time. Rebuild `api`. (DTD-871)
+- MCP `search_issues` with `overdue=true` no longer counts issues due today as overdue; it compares the due date with today in Vietnam time. Rebuild `api`. (DTD-871, #291)
   VI: MCP `search_issues` với `overdue=true` không còn tính issue hạn hôm nay là quá hạn; hạn được so với ngày hôm nay theo giờ Việt Nam. Build lại `api`. (DTD-871)
 
 ### Security
 
-- MCP `list_teams` and `list_issue_options` no longer reveal teams the connection's user is not a member of (their names, statuses and members); a team check in the access policy matched any team of the workspace as soon as the user belonged to one. Rebuild `api`. (DTD-871)
+- MCP `list_teams` and `list_issue_options` no longer reveal teams the connection's user is not a member of (their names, statuses and members); a team check in the access policy matched any team of the workspace as soon as the user belonged to one. Rebuild `api`. (DTD-871, #291)
   VI: MCP `list_teams` và `list_issue_options` không còn lộ team mà người dùng của kết nối không phải thành viên (tên, trạng thái và thành viên); bước kiểm tra team trong chính sách truy cập khớp mọi team của workspace chỉ cần người dùng thuộc một team. Build lại `api`. (DTD-871)
 
 ## [0.20.0] — 2026-11-13 09:53 +07
