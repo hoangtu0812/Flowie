@@ -86,7 +86,8 @@ def test_planner_turns_a_second_malformed_reply_into_a_clarification(monkeypatch
 
 def _request():
     settings = SimpleNamespace(
-        auth_jwt_secret='test-secret', agent_provider_allowed_hosts=(), agent_secrets_encryption_key=KEY
+        auth_jwt_secret='test-secret', agent_provider_allowed_hosts=(), agent_secrets_encryption_key=KEY,
+        mcp_tool_timeout_seconds=30,
     )
     return SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(settings=settings)))
 
@@ -376,14 +377,16 @@ def test_questions_never_reach_the_planner_without_the_q_and_a_tool():
 
 
 async def verify_question_routing(db, owner, seed):
-    # A new workspace has the fixed reports but not the Q&A tool, as in the reported conversation.
-    # VI: Workspace mới có các báo cáo cố định nhưng chưa có tool hỏi đáp, đúng như hội thoại được báo lỗi.
+    # Without an AI provider the tool loop cannot run, so the keyword-routed fixed reports still answer
+    # and a question never reaches the planner.
+    # VI: Khi chưa có provider AI, vòng lặp tool không chạy được nên các báo cáo cố định định tuyến theo
+    # VI: từ khoá vẫn trả lời, và câu hỏi không bao giờ tới planner.
     workspace = seed['workspace_id']
     team_key = (await db.execute(text('SELECT identifier FROM teams WHERE id = :id'), {'id': seed['team_id']})).scalar_one()
     user = {'id': owner}
 
     async def send(message, conversation_id=None):
-        return await agent._process_message(None, workspace, message, conversation_id, [], user, db, agent._ignore_progress)
+        return await agent._process_message(_request(), workspace, message, conversation_id, [], user, db, agent._ignore_progress)
 
     first = await send('có bao nhiêu deadline hôm nay ?')
     assert first['responseType'] == 'INSIGHT' and first['insight']['capability'] == 'issues.overdue'

@@ -227,3 +227,83 @@ def test_planner_graph_carries_the_usage_engine_to_the_call(monkeypatch):
     )
     assert result['proposal']['summary'] == 'Xong'
     assert seen == {'engine': engine, 'feature': 'agent.plan'}
+
+
+TOOLS = [{'name': 'get_issue', 'description': 'Read an issue.', 'parameters': {'type': 'object', 'properties': {'issueId': {'type': 'string'}}}}]
+TOOL_HISTORY = [
+    {'role': 'user', 'content': 'DTD-4 thế nào?'},
+    {'role': 'assistant', 'content': '', 'toolCalls': [
+        {'id': 'a', 'name': 'get_issue', 'arguments': {'issueId': 'DTD-4'}, 'signature': 'sig-1'},
+        {'id': 'b', 'name': 'get_issue', 'arguments': None},
+    ]},
+    {'role': 'tool', 'id': 'a', 'name': 'get_issue', 'content': '{"identifier":"DTD-4"}'},
+    {'role': 'tool', 'id': 'b', 'name': 'get_issue', 'content': '{"error":"bad"}'},
+]
+
+
+def call_tools(provider=OPENAI):
+    return asyncio.run(ai_calls.call_provider_with_tools(provider, 'agent.ask', 'system', TOOL_HISTORY, TOOLS))
+
+
+def test_openai_tool_calls_round_trip(provider_calls):
+    provider_calls['responses'] = [httpx.Response(200, json={'choices': [{'message': {'content': None, 'tool_calls': [
+        {'id': 'c1', 'type': 'function', 'function': {'name': 'get_issue', 'arguments': '{"issueId":"DTD-5"}'}},
+        {'id': 'c2', 'type': 'function', 'function': {'name': 'get_issue', 'arguments': '{not json'}},
+    ]}, 'finish_reason': 'tool_calls'}]})]
+    reply = call_tools()
+    assert reply == {'text': '', 'toolCalls': [
+        {'id': 'c1', 'name': 'get_issue', 'arguments': {'issueId': 'DTD-5'}},
+        {'id': 'c2', 'name': 'get_issue', 'arguments': None},
+    ]}
+    body = provider_calls['requests'][0]
+    assert 'response_format' not in body and body['tools'] == [{'type': 'function', 'function': TOOLS[0]}]
+    assert body['messages'][2]['tool_calls'][0] == {
+        'id': 'a', 'type': 'function', 'function': {'name': 'get_issue', 'arguments': '{"issueId": "DTD-4"}'},
+    }
+    assert body['messages'][2]['tool_calls'][1]['function']['arguments'] == '{}'
+    assert body['messages'][3:] == [
+        {'role': 'tool', 'tool_call_id': 'a', 'content': '{"identifier":"DTD-4"}'},
+        {'role': 'tool', 'tool_call_id': 'b', 'content': '{"error":"bad"}'},
+    ]
+
+
+def test_google_tool_calls_round_trip(provider_calls):
+    provider_calls['responses'] = [httpx.Response(200, json={'candidates': [{'content': {'parts': [
+        {'text': 'thinking', 'thought': True},
+        {'functionCall': {'name': 'get_issue', 'args': {'issueId': 'DTD-5'}}, 'thoughtSignature': 'sig-2'},
+    ]}, 'finishReason': 'STOP'}]})]
+    reply = call_tools(GOOGLE)
+    assert reply == {'text': '', 'toolCalls': [{'id': 'call_1', 'name': 'get_issue', 'arguments': {'issueId': 'DTD-5'}, 'signature': 'sig-2'}]}
+    body = provider_calls['requests'][0]
+    assert 'responseMimeType' not in body['generationConfig']
+    assert body['tools'] == [{'functionDeclarations': [
+        {'name': 'get_issue', 'description': 'Read an issue.', 'parametersJsonSchema': TOOLS[0]['parameters']},
+    ]}]
+    assert body['contents'][1] == {'role': 'model', 'parts': [
+        {'functionCall': {'name': 'get_issue', 'args': {'issueId': 'DTD-4'}}, 'thoughtSignature': 'sig-1'},
+        {'functionCall': {'name': 'get_issue', 'args': {}}},
+    ]}
+    # Both results of one round share one user turn.
+    # VI: Hai kết quả của một vòng gọi chung một lượt user.
+    assert body['contents'][2] == {'role': 'user', 'parts': [
+        {'functionResponse': {'name': 'get_issue', 'response': {'content': '{"identifier":"DTD-4"}'}}},
+        {'functionResponse': {'name': 'get_issue', 'response': {'content': '{"error":"bad"}'}}},
+    ]}
+    provider_calls['responses'] = [httpx.Response(200, json={'candidates': [{'content': {'parts': [{'text': 'Xong'}]}, 'finishReason': 'STOP'}]})]
+    assert call_tools(GOOGLE) == {'text': 'Xong', 'toolCalls': []}
+
+
+def test_a_model_without_tools_is_reported_apart_from_other_rejections(provider_calls):
+    provider_calls['responses'] = [httpx.Response(400, text='{"error":"tools is not supported for this model"}')]
+    with pytest.raises(ai_calls.ToolsUnsupported):
+        call_tools()
+    provider_calls['responses'] = [httpx.Response(400, text='{"error":"bad request"}')]
+    with pytest.raises(ApiError, match='HTTP 400') as error:
+        call_tools()
+    assert not isinstance(error.value, ai_calls.ToolsUnsupported)
+    # The text-only path never reports tools as unsupported.
+    # VI: Luồng chỉ văn bản không bao giờ báo tools không được hỗ trợ.
+    provider_calls['responses'] = [httpx.Response(400, text='{"error":"tools is not supported"}')]
+    with pytest.raises(ApiError) as error:
+        call()
+    assert not isinstance(error.value, ai_calls.ToolsUnsupported)

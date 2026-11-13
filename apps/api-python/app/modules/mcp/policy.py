@@ -32,9 +32,13 @@ class AccessPolicy:
         }
 
     def team_clause(self, column: str, *, shared: bool = False) -> str:
-        member = f"""EXISTS (SELECT 1 FROM team_members tm JOIN teams t ON t.id=tm.team_id
-            WHERE tm.team_id={column} AND tm.user_id=:user AND t.workspace_id=:workspace
-            AND t.archived_at IS NULL)"""
+        # The inner aliases (member_team, member) must not be ones callers use for ``column``:
+        # with "teams t" inside, "t.id" bound to the inner row and every team of the workspace passed.
+        # VI: Alias bên trong (member_team, member) không được trùng alias nơi gọi dùng cho ``column``:
+        # VI: khi bên trong là "teams t", "t.id" trỏ vào dòng bên trong và mọi team của workspace đều lọt.
+        member = f"""EXISTS (SELECT 1 FROM team_members member JOIN teams member_team ON member_team.id=member.team_id
+            WHERE member.team_id={column} AND member.user_id=:user AND member_team.workspace_id=:workspace
+            AND member_team.archived_at IS NULL)"""
         bound = f"(:all_teams OR {column}=ANY(CAST(:teams AS text[])))"
         shared_clause = f" OR ({column} IS NULL AND :all_teams)" if shared else ""
         return f"(({member} AND {bound}){shared_clause})"

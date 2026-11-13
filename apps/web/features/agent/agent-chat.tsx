@@ -105,6 +105,8 @@ type AgentProgress = {
    label: string;
    state: 'running' | 'completed';
    orb: OrbState;
+   /** Tool arguments as JSON on a tool-call step. VI: Tham số tool dạng JSON ở bước gọi tool. */
+   detail?: string;
 };
 
 type AgentFailure = { message: string; steps: AgentProgress[] };
@@ -147,11 +149,11 @@ const SUMMARY =
 
 /**
  * One Agent step shown as a tool call: an icon for its state, its label, and a body with the
- * step id and state. The SSE `progress` event carries no input or output, so the id is the
- * only detail there is. A failed step is red.
+ * step id and state, plus the tool arguments when the Q&A loop sent them in `detail`. A failed
+ * step is red.
  * VI: Một bước của Agent hiển thị như một lần gọi công cụ: icon trạng thái, nhãn, và phần mở
- * VI: rộng có mã bước và trạng thái. Sự kiện SSE `progress` không có input/output nên mã bước là
- * VI: chi tiết duy nhất. Bước bị lỗi hiện màu đỏ.
+ * VI: rộng có mã bước và trạng thái, kèm tham số tool khi vòng lặp hỏi đáp gửi trong `detail`.
+ * VI: Bước bị lỗi hiện màu đỏ.
  */
 function ToolStep({ step, failed = false }: { step: AgentProgress; failed?: boolean }) {
    const state = failed ? 'failed' : step.state;
@@ -171,6 +173,7 @@ function ToolStep({ step, failed = false }: { step: AgentProgress; failed?: bool
          <div className="ml-2 mt-1.5 border-l pl-4">
             <code className="block rounded-lg bg-muted px-3 py-2 text-xs">
                {step.id} · {state}
+               {step.detail && <span className="mt-1 block break-all">{step.detail}</span>}
             </code>
          </div>
       </details>
