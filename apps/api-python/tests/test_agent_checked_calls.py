@@ -246,3 +246,46 @@ async def verify_mentions(db, owner, seed):
     assert found[0]['title'] == 'Issue 1' and len(found[0]['description']) == agent.MENTIONED_ISSUE_DESCRIPTION_CHARS
     assert await agent._mentioned_issues(db, workspace, outsider, message) == []
     assert await agent._mentioned_issues(db, workspace, owner, 'Tình hình chung thế nào?') == []
+
+
+def test_deadline_report_counts_open_issues_in_the_askers_teams():
+    asyncio.run(_with_workspace(verify_deadlines)())
+
+
+async def verify_deadlines(db, owner, seed):
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    workspace = seed['workspace_id']
+    now = utcnow()
+    today = datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
+    statuses = (
+        await db.execute(text('SELECT id, category FROM issue_statuses WHERE workspace_id = :w'), {'w': workspace})
+    ).mappings().all()
+    open_status = next(row['id'] for row in statuses if row['category'] not in ('COMPLETED', 'CANCELED'))
+    done_status = next(row['id'] for row in statuses if row['category'] == 'COMPLETED')
+    prefix = 'D' + cuid()[:6].upper().replace('-', 'X')
+    # Counted: due today, in 3 days, 2 days late. Not counted: done, archived, beyond the window.
+    # VI: Được đếm: hạn hôm nay, sau 3 ngày, trễ 2 ngày. Không đếm: đã xong, đã lưu trữ, ngoài khoảng.
+    cases = ((0, open_status, None), (3, open_status, None), (-2, open_status, None), (0, done_status, None), (0, open_status, now), (9, open_status, None))
+    for number, (offset, status, archived) in enumerate(cases, start=1):
+        await db.execute(
+            text(
+                """INSERT INTO issues(id,workspace_id,team_id,status_id,identifier,number,title,creator_id,due_date,archived_at,created_at,updated_at)
+                   VALUES (:id,:w,:t,:s,:identifier,:n,:title,:u,:due,:archived,:now,:now)"""
+            ),
+            {
+                'id': cuid(), 'w': workspace, 't': seed['team_id'], 's': status, 'identifier': f'{prefix}-{number}',
+                'n': number, 'title': f'Issue {number}', 'u': owner, 'due': today + timedelta(days=offset), 'archived': archived, 'now': now,
+            },
+        )
+    outsider = await _user(db, now)
+    await _member(db, workspace, outsider, now)
+    await db.commit()
+
+    insight = await agent._deadline_insight(db, workspace, owner)
+    assert (insight['data']['dueToday'], insight['data']['dueSoon'], insight['data']['overdue']) == (1, 1, 1)
+    assert [row['identifier'] for row in insight['data']['issues']] == [f'{prefix}-1', f'{prefix}-2']
+    assert f'{prefix}-1 Issue 1' in insight['content']
+    hidden = await agent._deadline_insight(db, workspace, outsider)
+    assert hidden['data']['issues'] == [] and hidden['data']['teams'] == []

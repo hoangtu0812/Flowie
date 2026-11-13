@@ -92,6 +92,8 @@ from .queries import (
     CONFIGURED_PROVIDER_SELECT_WORKSPACE_AGENT_PROVIDERS,
     CONVERSATION_SOURCE_TEXT_SELECT_AGENT_MESSAGES,
     CYCLE_PROGRESS_INSIGHT_SELECT_CYCLES,
+    DEADLINE_INSIGHT_SELECT_ISSUES,
+    DEADLINE_INSIGHT_SELECT_TEAMS,
     GET_CONVERSATION_SELECT_AGENT_CONVERSATIONS,
     GET_CONVERSATION_SELECT_AGENT_MESSAGES,
     INITIATIVE_DELIVERY_INSIGHT_SELECT_INITIATIVES,
@@ -381,6 +383,32 @@ def _is_overdue_issue_question(message: str) -> bool:
     )
 
 
+DEADLINE_TERMS = (
+    'deadline', 'đến hạn', 'den han', 'hạn chót', 'han chot', 'hết hạn', 'het han',
+    'due today', 'due tomorrow', 'due this week', 'due soon', 'due date',
+)
+DEADLINE_WINDOW_DAYS = 7
+DEADLINE_LISTED_ISSUES = 10
+
+
+def _is_deadline_question(message: str) -> bool:
+    """Detect a question about deadlines: due today, this week or soon.
+
+    Such a question used to reach the planner, which cannot read issues and kept asking for the
+    team and scope. Requests to create work stay with the planner, and a message naming an issue
+    identifier is left to the analyst, which reads that issue.
+    VI: Nhận diện câu hỏi về deadline: đến hạn hôm nay, tuần này hoặc sắp tới. Trước đây câu hỏi
+    VI: này rơi vào planner, vốn không đọc được issue và cứ hỏi lại team, phạm vi. Yêu cầu tạo việc
+    VI: vẫn thuộc planner, và tin nhắn nêu mã issue để analyst trả lời vì analyst đọc được issue đó.
+    """
+    normalized = message.casefold()
+    return (
+        any(term in normalized for term in DEADLINE_TERMS)
+        and not WORK_REQUEST.search(normalized)
+        and ISSUE_MENTION.search(normalized) is None
+    )
+
+
 def _is_issue_count_question(message: str) -> bool:
     normalized = message.casefold()
     count_terms = ('bao nhiêu', 'số lượng', 'how many', 'count', 'tổng số', 'thống kê')
@@ -591,6 +619,54 @@ async def _overdue_issue_insight(
         'capability': 'issues.overdue',
         'content': content,
         'data': {'asOfDate': today.isoformat(), 'total': totals['total'], 'teamCount': totals['team_count'], 'longestDays': totals['longest_days'], 'teams': teams},
+    }
+
+
+async def _deadline_insight(db: AsyncSession, workspace_id: str, user_id: str) -> ReadOnlyInsight:
+    """Open issues due today, due within the next week and overdue, per team the user belongs to.
+
+    Counts come from SQL so the answer never depends on the provider; the listed issues are the
+    ones due today, capped so the reply stays readable.
+    VI: Issue chưa xong đến hạn hôm nay, trong tuần tới và đã quá hạn, theo từng team người dùng
+    VI: là thành viên. Số liệu lấy từ SQL nên câu trả lời không phụ thuộc provider; danh sách chỉ
+    VI: nêu issue đến hạn hôm nay, có giới hạn để câu trả lời dễ đọc.
+    """
+    today = datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).date()
+    window_end = today + timedelta(days=DEADLINE_WINDOW_DAYS)
+    params = {'workspace_id': workspace_id, 'user_id': user_id, 'today': today, 'window_end': window_end}
+    teams = [dict(row) for row in (await db.execute(DEADLINE_INSIGHT_SELECT_TEAMS, params)).mappings().all()]
+    issues = [
+        {**row, 'due_date': row['due_date'].isoformat()}
+        for row in (dict(item) for item in (await db.execute(DEADLINE_INSIGHT_SELECT_ISSUES, params)).mappings().all())
+    ]
+    due_today = sum(team['due_today'] for team in teams)
+    due_soon = sum(team['due_soon'] for team in teams)
+    overdue = sum(team['overdue'] for team in teams)
+    today_issues = [issue for issue in issues if issue['due_date'] == today.isoformat()][:DEADLINE_LISTED_ISSUES]
+    if due_today:
+        listed = '; '.join(
+            f"{issue['identifier']} {issue['title']} ({issue['assignee'] or 'chưa phân công'})" for issue in today_issues
+        )
+        content = f'Hôm nay ({today.isoformat()}) có {due_today} issue chưa hoàn thành đến hạn: {listed}'
+        content += f' và {due_today - len(today_issues)} issue khác.' if due_today > len(today_issues) else '.'
+    else:
+        content = f'Hôm nay ({today.isoformat()}) không có issue nào đến hạn trong các team bạn có quyền xem.'
+    content += (
+        f' Trong {DEADLINE_WINDOW_DAYS} ngày tới (đến {window_end.isoformat()}) còn {due_soon} issue đến hạn;'
+        f' {overdue} issue đã quá hạn.'
+    )
+    if teams:
+        content += ' Theo team: ' + '; '.join(
+            f"{team['name']}: {team['due_today']} hôm nay, {team['due_soon']} sắp tới, {team['overdue']} quá hạn"
+            for team in teams
+        ) + '.'
+    return {
+        'capability': 'issues.overdue',
+        'content': content,
+        'data': {
+            'asOfDate': today.isoformat(), 'windowEnd': window_end.isoformat(),
+            'dueToday': due_today, 'dueSoon': due_soon, 'overdue': overdue, 'teams': teams, 'issues': issues,
+        },
     }
 
 
@@ -920,6 +996,9 @@ READ_ONLY_CAPABILITIES: tuple[ReadOnlyCapability, ...] = (
     ('issues.stale', _is_stale_issue_question, _stale_issue_insight),
     ('initiatives.delivery', _is_initiative_delivery_question, _initiative_delivery_insight),
     ('issues.overdue', _is_overdue_issue_question, _overdue_issue_insight),
+    # Deadlines share the overdue tool so workspaces that installed it get them without a migration.
+    # VI: Deadline dùng chung tool quá hạn để workspace đã cài tool đó có ngay, không cần migration.
+    ('issues.overdue', _is_deadline_question, _deadline_insight),
     ('issues.by_status', _is_issue_status_question, _issue_status_insight),
     ('issues.by_assignee', _is_issue_assignee_question, _issue_assignee_insight),
     ('projects.progress', _is_project_progress_question, _project_progress_insight),
@@ -930,7 +1009,7 @@ READ_ONLY_CAPABILITIES: tuple[ReadOnlyCapability, ...] = (
 TOOL_DETAILS = {
     'team.workload': ('Team workload', 'Summarize deterministic workload scores per team: most loaded member, average load and unassigned issues.'),
     'issues.count': ('Issue count', 'Count accessible issues, including open and completed totals.'),
-    'issues.overdue': ('Overdue issues', 'Report accessible issues whose due date has passed.'),
+    'issues.overdue': ('Deadlines and overdue issues', 'Report accessible open issues due today, due within the next 7 days, or past their due date.'),
     'issues.by_status': ('Issues by status', 'Break down accessible issues by workflow status.'),
     'issues.by_assignee': ('Issues by assignee', 'Break down accessible issues by assigned person.'),
     'projects.progress': ('Project progress', 'Show completion progress for accessible projects.'),
@@ -2091,6 +2170,7 @@ async def _portfolio_facts(db: AsyncSession, workspace_id: str, user_id: str) ->
     overdue = await _overdue_issue_insight(db, workspace_id, user_id)
     workload = await _workload_insight(db, workspace_id, user_id)
     stale = await _stale_issue_insight(db, workspace_id, user_id)
+    deadlines = await _deadline_insight(db, workspace_id, user_id)
     overdue_rows = await db.execute(
         PORTFOLIO_FACTS_SELECT_ISSUES,
         {'workspace_id': workspace_id, 'user_id': user_id, 'today': today},
@@ -2102,6 +2182,7 @@ async def _portfolio_facts(db: AsyncSession, workspace_id: str, user_id: str) ->
         'overdue': {**overdue['data'], 'issues': [dict(row) for row in overdue_rows.mappings().all()]},
         'workloadByTeam': workload['data']['teams'],
         'staleIssues': stale['data'],
+        'deadlines': deadlines['data'],
     }
 
 

@@ -25,7 +25,9 @@ from app.modules.agent.api import (
     ProjectScheduleProposal,
     _apply_personal_skill_defaults,
     _assignment_explainer_prompt,
+    _deadline_insight,
     _is_bare_creation_request,
+    _is_deadline_question,
     _is_initiative_delivery_question,
     _is_open_question,
     _is_overdue_issue_question,
@@ -176,6 +178,45 @@ class AgentPlanningTests(unittest.TestCase):
 
         self.assertIsNotNone(capability)
         self.assertEqual(capability[0], 'issues.overdue')
+
+    def test_recognizes_deadline_questions_but_not_requests_to_create_work(self) -> None:
+        for message in ('có bao nhiêu deadline hôm nay ?', 'Issue nào đến hạn tuần này?', 'What is due today? due today'):
+            with self.subTest(message=message):
+                self.assertTrue(_is_deadline_question(message))
+        for message in ('Tạo issue có deadline ngày mai', 'Deadline của FL-12 là khi nào?', 'Dự án nào đang chậm?'):
+            with self.subTest(message=message):
+                self.assertFalse(_is_deadline_question(message))
+
+    def test_routes_deadline_questions_to_the_deadline_report(self) -> None:
+        for message in ('có bao nhiêu deadline hôm nay ?', 'Có bao nhiêu task đến hạn hôm nay?'):
+            with self.subTest(message=message):
+                capability = _matching_read_only_capability(message)
+                self.assertIsNotNone(capability)
+                assert capability is not None
+                self.assertEqual(capability[0], 'issues.overdue')
+                self.assertIs(capability[2], _deadline_insight)
+
+    def test_deadline_report_counts_per_team_and_lists_issues_due_today(self) -> None:
+        from datetime import datetime, timedelta
+        from zoneinfo import ZoneInfo
+
+        today = datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).date()
+        teams = [{'name': 'DTD', 'overdue': 1, 'due_today': 2, 'due_soon': 3}]
+        issues = [
+            {'identifier': 'DTD-1', 'title': 'A', 'team': 'DTD', 'project': None, 'assignee': 'Lan', 'status': 'Todo', 'priority': 'HIGH', 'due_date': today},
+            {'identifier': 'DTD-2', 'title': 'B', 'team': 'DTD', 'project': None, 'assignee': None, 'status': 'Todo', 'priority': 'NONE', 'due_date': today},
+            {'identifier': 'DTD-3', 'title': 'C', 'team': 'DTD', 'project': None, 'assignee': None, 'status': 'Todo', 'priority': 'NONE', 'due_date': today + timedelta(days=2)},
+        ]
+        results = [SimpleNamespace(mappings=lambda rows=rows: SimpleNamespace(all=lambda: rows)) for rows in (teams, issues)]
+        db = SimpleNamespace(execute=AsyncMock(side_effect=results))
+
+        insight = asyncio.run(_deadline_insight(db, 'workspace-1', 'user-1'))  # type: ignore[arg-type]  # a stub stands in for AsyncSession / VI: stub thay cho AsyncSession
+
+        self.assertEqual(insight['capability'], 'issues.overdue')
+        self.assertEqual((insight['data']['dueToday'], insight['data']['dueSoon'], insight['data']['overdue']), (2, 3, 1))
+        self.assertIn('có 2 issue chưa hoàn thành đến hạn: DTD-1 A (Lan); DTD-2 B (chưa phân công).', insight['content'])
+        self.assertNotIn('DTD-3', insight['content'])
+        self.assertIn('DTD: 2 hôm nay, 3 sắp tới, 1 quá hạn', insight['content'])
 
     def test_matches_the_general_issue_count_tool(self) -> None:
         capability = _matching_read_only_capability('Team tôi đang có bao nhiêu issue?')

@@ -52,6 +52,47 @@ OVERDUE_ISSUE_INSIGHT_SELECT_ISSUES_2 = text('''SELECT team.name, COUNT(*)::int 
                 LIMIT 5''')
 
 
+# Open issues per visible team that are overdue, due today or due within the window ending :window_end.
+# VI: Issue chưa xong theo từng team được xem: quá hạn, đến hạn hôm nay, hoặc đến hạn trước :window_end.
+DEADLINE_INSIGHT_SELECT_TEAMS = text('''SELECT team.name,
+                       COUNT(*) FILTER (WHERE issue.due_date::date < :today)::int AS overdue,
+                       COUNT(*) FILTER (WHERE issue.due_date::date = :today)::int AS due_today,
+                       COUNT(*) FILTER (WHERE issue.due_date::date > :today)::int AS due_soon
+                FROM issues issue
+                JOIN teams team ON team.id = issue.team_id
+                JOIN issue_statuses status ON status.id = issue.status_id
+                WHERE issue.workspace_id = :workspace_id
+                  AND issue.archived_at IS NULL
+                  AND issue.due_date::date <= :window_end
+                  AND status.category NOT IN ('COMPLETED', 'CANCELED')
+                  AND EXISTS(
+                      SELECT 1 FROM team_members member
+                      WHERE member.team_id = issue.team_id AND member.user_id = :user_id
+                  )
+                GROUP BY team.id, team.name
+                ORDER BY due_today DESC, due_soon DESC, team.name ASC''')
+
+
+# Open visible issues due from today up to :window_end, soonest first, for the answer and analyst facts.
+# VI: Issue chưa xong được xem, đến hạn từ hôm nay đến :window_end, gần nhất trước, cho câu trả lời và dữ liệu hỏi đáp.
+DEADLINE_INSIGHT_SELECT_ISSUES = text('''SELECT issue.identifier, issue.title, team.name AS team, project.identifier AS project,
+                       assignee.name AS assignee, status.name AS status, issue.priority,
+                       issue.due_date::date AS due_date
+                FROM issues issue
+                JOIN teams team ON team.id = issue.team_id
+                JOIN issue_statuses status ON status.id = issue.status_id
+                LEFT JOIN projects project ON project.id = issue.project_id
+                LEFT JOIN users assignee ON assignee.id = issue.assignee_id
+                WHERE issue.workspace_id = :workspace_id
+                  AND issue.archived_at IS NULL
+                  AND issue.due_date::date BETWEEN :today AND :window_end
+                  AND status.category NOT IN ('COMPLETED', 'CANCELED')
+                  AND EXISTS (SELECT 1 FROM team_members member
+                              WHERE member.team_id = issue.team_id AND member.user_id = :user_id)
+                ORDER BY issue.due_date ASC, issue.identifier ASC
+                LIMIT 30''')
+
+
 ISSUE_COUNT_INSIGHT_SELECT_ISSUES = text('''SELECT COUNT(*)::int AS total,
                     COUNT(*) FILTER (WHERE status.category = 'COMPLETED')::int AS completed,
                     COUNT(*) FILTER (WHERE status.category NOT IN ('COMPLETED', 'CANCELED'))::int AS open
