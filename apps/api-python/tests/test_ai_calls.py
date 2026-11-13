@@ -297,6 +297,11 @@ def test_a_model_without_tools_is_reported_apart_from_other_rejections(provider_
     provider_calls['responses'] = [httpx.Response(400, text='{"error":"tools is not supported for this model"}')]
     with pytest.raises(ai_calls.ToolsUnsupported):
         call_tools()
+    # LiteLLM before an Azure deployment answers a tools request with a bare 404.
+    # VI: LiteLLM trước deployment Azure trả 404 trống cho request có tools.
+    provider_calls['responses'] = [httpx.Response(404, text='{"error":{"message":"litellm.NotFoundError: AzureException NotFoundError - Resource not found"}}')]
+    with pytest.raises(ai_calls.ToolsUnsupported):
+        call_tools()
     provider_calls['responses'] = [httpx.Response(400, text='{"error":"bad request"}')]
     with pytest.raises(ApiError, match='HTTP 400') as error:
         call_tools()

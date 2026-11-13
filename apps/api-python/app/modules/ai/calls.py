@@ -334,9 +334,18 @@ async def _complete(
                 feature, provider['provider'], provider['model'], response.status_code,
                 _excerpt(response.text, provider['apiKey']),
             )
-            # A model or gateway without function calling answers 400/404/422 naming tools or functions.
-            # VI: Model hoặc gateway không hỗ trợ function calling trả 400/404/422 có nhắc tới tools/functions.
-            if tools and response.status_code in {400, 404, 422} and re.search(r'tool|function', response.text, re.IGNORECASE):
+            # A model or gateway without function calling answers 400/422 naming tools or functions, or a
+            # bare 404: LiteLLM in front of an Azure deployment returns "Resource not found" for a request
+            # with tools while the same model answers text calls, so a 404 here is never a reason to fail.
+            # If the model itself is missing, the text fallback then reports the 404 on its own call.
+            # VI: Model hoặc gateway không hỗ trợ function calling trả 400/422 có nhắc tới tools/functions,
+            # VI: hoặc chỉ trả 404: LiteLLM trước deployment Azure trả "Resource not found" cho request có
+            # VI: tools trong khi cùng model vẫn trả lời lời gọi văn bản, nên 404 ở đây không làm hỏng lượt hỏi.
+            # VI: Nếu chính model không tồn tại, lời gọi văn bản dự phòng sẽ tự báo 404 của nó.
+            if tools and (
+                response.status_code == 404
+                or (response.status_code in {400, 422} and re.search(r'tool|function', response.text, re.IGNORECASE))
+            ):
                 raise ToolsUnsupported(502, f'The {label} model does not accept tools.', 'Bad Gateway')
             raise ApiError(502, f'The {label} provider rejected the request (HTTP {response.status_code}).', 'Bad Gateway')
         try:

@@ -376,6 +376,18 @@ async def _routing(monkeypatch, db, ctx, user, model):
     assert fallback['responseType'] == 'INSIGHT' and fallback['insight']['capability'] == 'issues.overdue'
     assert fallback['insight']['data']['dueToday'] == 3
 
+    # A question about the Agent itself ends every step it started.
+    # VI: Câu hỏi về chính Agent kết thúc mọi bước nó đã bắt đầu.
+    states: dict[str, str] = {}
+
+    async def record(step):
+        states[step['id']] = step['state']
+
+    capability = await agent._process_message(_request(), ctx['workspace'], 'Bạn giúp gì được cho tôi', None, [], user, db, record)
+    await db.commit()
+    assert capability['responseType'] == 'CHAT' and states['conversation.reply'] == 'completed'
+    assert 'running' not in states.values()
+
     # A model that keeps calling tools stops after the step limit.
     # VI: Model gọi tool mãi thì dừng sau giới hạn số bước.
     monkeypatch.setattr(ask, 'call_provider_with_tools', model)
