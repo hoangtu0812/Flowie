@@ -8,6 +8,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
+from collections.abc import Callable
 from time import monotonic
 from typing import Any
 from urllib.parse import urlsplit
@@ -40,6 +42,7 @@ OPTIONAL_FIELDS = ('temperature', 'max_completion_tokens', 'max_tokens', 'maxOut
 # VI: reasoning cũng bị tính ở một số model; mục tiêu là chặn câu trả lời mất kiểm soát.
 CALL_LIMITS = {
     'agent.answer': (90, 4_000),
+    'agent.ask': (90, 4_000),
     'agent.assignment': (30, 2_000),
     'agent.compose': (60, 4_000),
     'agent.plan': (120, 16_000),
@@ -104,6 +107,117 @@ def _google_reply(payload: dict[str, Any]) -> tuple[str, bool, int | None, int |
     if not text_value and not truncated:
         raise KeyError('text')
     return text_value, truncated, usage.get('promptTokenCount'), usage.get('candidatesTokenCount')
+
+
+def _openai_messages(history: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Neutral turns to Chat Completions messages; see ``call_provider_with_tools`` for the shape.
+    VI: Chuyển lượt hội thoại trung lập sang message Chat Completions; dạng xem ở ``call_provider_with_tools``.
+    """
+    messages: list[dict[str, Any]] = []
+    for item in history:
+        if item['role'] == 'tool':
+            messages.append({'role': 'tool', 'tool_call_id': item['id'], 'content': item['content']})
+        elif item.get('toolCalls'):
+            messages.append({
+                'role': 'assistant',
+                'content': item.get('content') or None,
+                'tool_calls': [
+                    {'id': call['id'], 'type': 'function',
+                     'function': {'name': call['name'], 'arguments': json.dumps(call['arguments'] or {})}}
+                    for call in item['toolCalls']
+                ],
+            })
+        else:
+            messages.append({'role': item['role'], 'content': item['content']})
+    return messages
+
+
+def _openai_tools_request(
+    provider: dict[str, Any], system_prompt: str, history: list[dict[str, Any]], tools: list[dict[str, Any]], max_output: int
+) -> tuple[str, dict[str, str], dict[str, Any], dict[str, Any]]:
+    url, headers, body, options = _openai_request(provider, system_prompt, [], max_output)
+    # Free text, not JSON mode: the final answer is Markdown and tool arguments carry their own JSON.
+    # VI: Văn bản tự do, không dùng JSON mode: câu trả lời cuối là Markdown, tham số tool đã là JSON.
+    del body['response_format']
+    body['messages'] = [body['messages'][0], *_openai_messages(history)]
+    body['tools'] = [{'type': 'function', 'function': tool} for tool in tools]
+    return url, headers, body, options
+
+
+def _openai_tools_reply(payload: dict[str, Any]) -> tuple[dict[str, Any], bool, int | None, int | None]:
+    usage = payload.get('usage') or {}
+    choice = payload['choices'][0]
+    message = choice['message']
+    calls = []
+    for call in message.get('tool_calls') or []:
+        try:
+            arguments = json.loads(call['function'].get('arguments') or '{}')
+        except ValueError:
+            arguments = None
+        calls.append({
+            'id': call['id'], 'name': call['function']['name'],
+            'arguments': arguments if isinstance(arguments, dict) else None,
+        })
+    content = message.get('content')
+    text_value = content if isinstance(content, str) else ''
+    truncated = choice.get('finish_reason') == 'length'
+    if not calls and not text_value and not truncated:
+        raise KeyError('content')
+    return {'text': text_value, 'toolCalls': calls}, truncated, usage.get('prompt_tokens'), usage.get('completion_tokens')
+
+
+def _google_contents(history: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Neutral turns to Gemini contents. Results of one round of calls share one user turn, and a
+    call's ``signature`` (Gemini's thoughtSignature) goes back unchanged, which thinking models require.
+    VI: Chuyển lượt hội thoại trung lập sang contents Gemini. Kết quả của một lượt gọi chung một lượt
+    VI: user, và ``signature`` (thoughtSignature của Gemini) được gửi lại nguyên vẹn như model thinking yêu cầu.
+    """
+    contents: list[dict[str, Any]] = []
+    for item in history:
+        if item['role'] == 'tool':
+            part = {'functionResponse': {'name': item['name'], 'response': {'content': item['content']}}}
+            if contents and contents[-1]['role'] == 'user' and 'functionResponse' in contents[-1]['parts'][0]:
+                contents[-1]['parts'].append(part)
+            else:
+                contents.append({'role': 'user', 'parts': [part]})
+        elif item.get('toolCalls'):
+            contents.append({'role': 'model', 'parts': [
+                {'functionCall': {'name': call['name'], 'args': call['arguments'] or {}},
+                 **({'thoughtSignature': call['signature']} if call.get('signature') else {})}
+                for call in item['toolCalls']
+            ]})
+        else:
+            contents.append({'role': 'model' if item['role'] == 'assistant' else 'user', 'parts': [{'text': item['content']}]})
+    return contents
+
+
+def _google_tools_request(
+    provider: dict[str, Any], system_prompt: str, history: list[dict[str, Any]], tools: list[dict[str, Any]], max_output: int
+) -> tuple[str, dict[str, str], dict[str, Any], dict[str, Any]]:
+    url, headers, body, config = _google_request(provider, system_prompt, [], max_output)
+    del config['responseMimeType']
+    body['contents'] = _google_contents(history)
+    body['tools'] = [{'functionDeclarations': [
+        {'name': tool['name'], 'description': tool['description'], 'parametersJsonSchema': tool['parameters']}
+        for tool in tools
+    ]}]
+    return url, headers, body, config
+
+
+def _google_tools_reply(payload: dict[str, Any]) -> tuple[dict[str, Any], bool, int | None, int | None]:
+    usage = payload.get('usageMetadata') or {}
+    candidate = payload['candidates'][0]
+    parts = (candidate.get('content') or {}).get('parts') or []
+    calls = [
+        {'id': f'call_{index}', 'name': part['functionCall']['name'], 'arguments': part['functionCall'].get('args') or {},
+         'signature': part.get('thoughtSignature')}
+        for index, part in enumerate(parts) if 'functionCall' in part
+    ]
+    text_value = ''.join(part.get('text', '') for part in parts if not part.get('thought'))
+    truncated = candidate.get('finishReason') == 'MAX_TOKENS'
+    if not calls and not text_value and not truncated:
+        raise KeyError('text')
+    return {'text': text_value, 'toolCalls': calls}, truncated, usage.get('promptTokenCount'), usage.get('candidatesTokenCount')
 
 
 def _retry_delay(response: httpx.Response | None, attempt: int) -> float:
@@ -185,23 +299,21 @@ async def _save(provider: dict[str, Any], feature: str, record: dict[str, Any], 
         logger.warning('Could not record an AI provider call.', exc_info=True)
 
 
-async def call_provider(
-    provider: dict[str, Any], feature: str, system_prompt: str, history: list[dict[str, str]]
-) -> str:
-    """Send one completion and return its text, recording the outcome for AI operations.
-
-    ``provider`` comes from ``configured_provider`` and ``feature`` must be a ``CALL_LIMITS`` key.
-    No tools are ever sent, so the model can only answer with text. Every failure is an
-    ``ApiError`` 502, and a reply cut off by the token limit is one too, so callers never try to
-    parse half a JSON document.
-    VI: Gửi một yêu cầu và trả văn bản, ghi kết quả cho AI operations. ``provider`` lấy từ
-    VI: ``configured_provider``, ``feature`` là khoá của ``CALL_LIMITS``. Không bao giờ gửi tool nên
-    VI: model chỉ trả lời được bằng văn bản. Mọi lỗi là ``ApiError`` 502, kể cả câu trả lời bị cắt do
-    VI: giới hạn token, để nơi gọi không phải parse nửa tài liệu JSON.
+class ToolsUnsupported(ApiError):
+    """The provider or gateway refused a request because of its tools; callers fall back to text.
+    VI: Provider hoặc gateway từ chối request vì phần tools; nơi gọi chuyển sang luồng văn bản.
     """
-    timeout, max_output = CALL_LIMITS[feature]
-    is_openai = provider['provider'] == 'OPENAI'
-    build, read = (_openai_request, _openai_reply) if is_openai else (_google_request, _google_reply)
+
+
+async def _complete(
+    provider: dict[str, Any],
+    feature: str,
+    request: tuple[str, dict[str, str], dict[str, Any], dict[str, Any]],
+    read: Callable[[dict[str, Any]], tuple[Any, bool, int | None, int | None]],
+    *,
+    tools: bool = False,
+) -> Any:
+    timeout = CALL_LIMITS[feature][0]
     label = PROVIDER_LABELS[provider['provider']]
     record: dict[str, Any] = {
         'outcome': 'error', 'status_code': None, 'input_tokens': None, 'output_tokens': None, 'attempts': 0,
@@ -209,7 +321,7 @@ async def call_provider(
     started = monotonic()
     try:
         try:
-            response = await _send(*build(provider, system_prompt, history, max_output), timeout, record)
+            response = await _send(*request, timeout, record)
         except httpx.ReadTimeout as error:
             record['outcome'] = 'timeout'
             raise ApiError(502, f'The {label} provider did not answer in time.', 'Bad Gateway') from error
@@ -222,6 +334,10 @@ async def call_provider(
                 feature, provider['provider'], provider['model'], response.status_code,
                 _excerpt(response.text, provider['apiKey']),
             )
+            # A model or gateway without function calling answers 400/404/422 naming tools or functions.
+            # VI: Model hoặc gateway không hỗ trợ function calling trả 400/404/422 có nhắc tới tools/functions.
+            if tools and response.status_code in {400, 404, 422} and re.search(r'tool|function', response.text, re.IGNORECASE):
+                raise ToolsUnsupported(502, f'The {label} model does not accept tools.', 'Bad Gateway')
             raise ApiError(502, f'The {label} provider rejected the request (HTTP {response.status_code}).', 'Bad Gateway')
         try:
             reply, truncated, record['input_tokens'], record['output_tokens'] = read(response.json())
@@ -234,3 +350,53 @@ async def call_provider(
         return reply
     finally:
         await _save(provider, feature, record, started)
+
+
+async def call_provider(
+    provider: dict[str, Any], feature: str, system_prompt: str, history: list[dict[str, str]]
+) -> str:
+    """Send one completion and return its text, recording the outcome for AI operations.
+
+    ``provider`` comes from ``configured_provider`` and ``feature`` must be a ``CALL_LIMITS`` key.
+    No tools are sent, so the model can only answer with text. Every failure is an
+    ``ApiError`` 502, and a reply cut off by the token limit is one too, so callers never try to
+    parse half a JSON document.
+    VI: Gửi một yêu cầu và trả văn bản, ghi kết quả cho AI operations. ``provider`` lấy từ
+    VI: ``configured_provider``, ``feature`` là khoá của ``CALL_LIMITS``. Không gửi tool nên
+    VI: model chỉ trả lời được bằng văn bản. Mọi lỗi là ``ApiError`` 502, kể cả câu trả lời bị cắt do
+    VI: giới hạn token, để nơi gọi không phải parse nửa tài liệu JSON.
+    """
+    max_output = CALL_LIMITS[feature][1]
+    if provider['provider'] == 'OPENAI':
+        return str(await _complete(provider, feature, _openai_request(provider, system_prompt, history, max_output), _openai_reply))
+    return str(await _complete(provider, feature, _google_request(provider, system_prompt, history, max_output), _google_reply))
+
+
+async def call_provider_with_tools(
+    provider: dict[str, Any],
+    feature: str,
+    system_prompt: str,
+    history: list[dict[str, Any]],
+    tools: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """One step of a function-calling loop: returns ``{'text': str, 'toolCalls': [...]}``.
+
+    ``tools`` are ``{'name', 'description', 'parameters'}`` with a JSON Schema. ``history`` holds
+    neutral turns: ``{'role': 'user'|'assistant', 'content'}``, an assistant turn with
+    ``toolCalls`` (``{'id', 'name', 'arguments', 'signature'?}`` exactly as returned here; arguments
+    are None when the model sent invalid JSON) and ``{'role': 'tool', 'id', 'name', 'content'}`` per
+    result. Retries, limits and the ``ai_provider_calls`` record are those of ``call_provider``; a
+    provider that refuses tools raises ``ToolsUnsupported``.
+    VI: Một bước của vòng lặp function calling, trả ``{'text': str, 'toolCalls': [...]}``. ``tools``
+    VI: gồm ``{'name', 'description', 'parameters'}`` với JSON Schema. ``history`` là các lượt trung lập:
+    VI: ``{'role': 'user'|'assistant', 'content'}``, lượt assistant có ``toolCalls`` (đúng như hàm này
+    VI: trả về; arguments là None khi model gửi JSON sai) và ``{'role': 'tool', 'id', 'name', 'content'}``
+    VI: cho từng kết quả. Thử lại, giới hạn và bản ghi ``ai_provider_calls`` giống ``call_provider``;
+    VI: provider từ chối tools thì ném ``ToolsUnsupported``.
+    """
+    max_output = CALL_LIMITS[feature][1]
+    if provider['provider'] == 'OPENAI':
+        request = _openai_tools_request(provider, system_prompt, history, tools, max_output)
+        return dict(await _complete(provider, feature, request, _openai_tools_reply, tools=True))
+    request = _google_tools_request(provider, system_prompt, history, tools, max_output)
+    return dict(await _complete(provider, feature, request, _google_tools_reply, tools=True))

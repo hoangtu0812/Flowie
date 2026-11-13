@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import base64
-from datetime import UTC
+from datetime import UTC, date
 from typing import Any
 
-from ...core.clock import utcnow
 from ...core.errors import ApiError
+from ..teams.insights_api import hcm_today
 from .pagination import CursorCodec, literal_search
 from .policy import AccessPolicy
 from .queries import (
@@ -261,10 +261,14 @@ class QueryService:
                     else value
                 )
         if payload.overdue:
+            # Due dates are calendar days stored at midnight: an issue due today is not overdue yet,
+            # so the date is compared with today in Asia/Ho_Chi_Minh, as the Agent reports do.
+            # VI: Hạn là ngày lịch lưu lúc nửa đêm: issue hạn hôm nay chưa quá hạn, nên ngày được so
+            # VI: với hôm nay theo Asia/Ho_Chi_Minh, giống các báo cáo của Agent.
             filters.append(
-                "i.due_date<:now AND s.category NOT IN ('COMPLETED','CANCELED')"
+                "i.due_date::date<:today AND s.category NOT IN ('COMPLETED','CANCELED')"
             )
-            params["now"] = utcnow()
+            params["today"] = date.fromisoformat(hcm_today())
         suffix = " AND " + " AND ".join(filters) if filters else ""
         return await self.page(
             "search_issues",

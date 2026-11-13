@@ -449,8 +449,10 @@ FOLLOW_UP_SELECT_AGENT_MESSAGES = text('''SELECT content, source_text IS NOT NUL
                     ORDER BY created_at DESC, id DESC LIMIT :limit''')
 
 
-ANALYST_TURN_SELECT_AGENT_MESSAGES = text('''SELECT role, content FROM agent_messages WHERE conversation_id = :conversation_id
-                    ORDER BY created_at DESC, id DESC LIMIT :limit''')
+# A turn saves its question and answer with one timestamp, so the answer sorts first at a tie.
+# VI: Một lượt lưu câu hỏi và câu trả lời cùng thời điểm, nên khi trùng thì câu trả lời đứng trước.
+ANALYST_TURN_SELECT_AGENT_MESSAGES = text('''SELECT role, content, proposal IS NOT NULL AS has_proposal FROM agent_messages WHERE conversation_id = :conversation_id
+                    ORDER BY created_at DESC, CASE role WHEN 'USER' THEN 1 ELSE 0 END, id DESC LIMIT :limit''')
 
 
 PROCESS_MESSAGE_SELECT_AGENT_CONVERSATIONS = text('SELECT id, title FROM agent_conversations WHERE id = :id AND workspace_id = :workspace_id AND user_id = :user_id')
