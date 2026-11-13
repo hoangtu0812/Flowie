@@ -8,11 +8,15 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.identifiers import cuid
-from app.modules.agent.api import _conversation_source_text, _persist_turn
+from app.modules.agent.api import (
+    _conversation_source_text,
+    _follow_up_question,
+    _persist_turn,
+)
 from app.modules.identity.auth import create_workspace_bootstrap
 
 
-async def _turn(db, conversation_id, workspace, user_id, is_new, source_text=None):
+async def _turn(db, conversation_id, workspace, user_id, is_new, source_text=None, user_content='Lập kế hoạch'):
     return await _persist_turn(
         db,
         conversation_id=conversation_id,
@@ -20,7 +24,7 @@ async def _turn(db, conversation_id, workspace, user_id, is_new, source_text=Non
         workspace_id=workspace,
         user_id=user_id,
         is_new_conversation=is_new,
-        user_content='Lập kế hoạch',
+        user_content=user_content,
         assistant_content='Cần thêm thông tin',
         proposal={'summary': 'Cần thêm thông tin'},
         source_text=source_text,
@@ -64,5 +68,36 @@ async def verify_source_text():
             )
             await db.commit()
             assert await _conversation_source_text(db, conversation) == ''
+    finally:
+        await engine.dispose()
+
+
+def test_a_short_reply_is_matched_to_the_latest_question_of_the_conversation():
+    asyncio.run(verify_follow_up_question())
+
+
+async def verify_follow_up_question():
+    engine = create_async_engine(_async_database_url(os.environ['MCP_TEST_DATABASE_URL']))
+    try:
+        async with async_sessionmaker(engine)() as db:
+            now = utcnow()
+            user_id = cuid()
+            await db.execute(
+                text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,'Agent',:email,'ACTIVE',:now,:now)"),
+                {'id': user_id, 'email': cuid() + '@example.test', 'now': now},
+            )
+            workspace = (
+                await create_workspace_bootstrap(
+                    db, user_id=user_id, organization_name='Agent', workspace_name=cuid(), now=now
+                )
+            )['workspace_id']
+            asked, planned = cuid(), cuid()
+            await _turn(db, asked, workspace, user_id, True, user_content='có bao nhiêu deadline hôm nay ?')
+            await asyncio.sleep(0.01)
+            await _turn(db, asked, workspace, user_id, False, user_content='DTD')
+            await _turn(db, planned, workspace, user_id, True, user_content='Tạo issue cho dự án website')
+            await db.commit()
+            assert await _follow_up_question(db, asked) == 'có bao nhiêu deadline hôm nay ?'
+            assert await _follow_up_question(db, planned) is None
     finally:
         await engine.dispose()

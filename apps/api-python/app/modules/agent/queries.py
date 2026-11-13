@@ -411,6 +411,13 @@ APPLY_ASSIGNMENT_SELECT_WORKSPACE_MEMBERS = text("""SELECT 1 FROM workspace_memb
                 WHERE workspace_id = :workspace_id AND user_id = :user_id AND status = 'ACTIVE'""")
 
 
+# The latest user messages of a conversation, newest first, to find the question a short reply answers.
+# VI: Các tin nhắn người dùng mới nhất của hội thoại, mới nhất trước, để tìm câu hỏi mà câu trả lời ngắn đang bổ sung.
+FOLLOW_UP_SELECT_AGENT_MESSAGES = text('''SELECT content, source_text IS NOT NULL AS has_source FROM agent_messages
+                    WHERE conversation_id = :conversation_id AND role = 'USER'
+                    ORDER BY created_at DESC, id DESC LIMIT :limit''')
+
+
 ANALYST_TURN_SELECT_AGENT_MESSAGES = text('''SELECT role, content FROM agent_messages WHERE conversation_id = :conversation_id
                     ORDER BY created_at DESC, id DESC LIMIT :limit''')
 

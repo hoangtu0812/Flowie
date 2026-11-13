@@ -26,8 +26,10 @@ from app.modules.agent.api import (
     _apply_personal_skill_defaults,
     _assignment_explainer_prompt,
     _deadline_insight,
+    _follow_up_question,
     _is_bare_creation_request,
     _is_deadline_question,
+    _is_follow_up_reply,
     _is_initiative_delivery_question,
     _is_open_question,
     _is_overdue_issue_question,
@@ -217,6 +219,34 @@ class AgentPlanningTests(unittest.TestCase):
         self.assertIn('có 2 issue chưa hoàn thành đến hạn: DTD-1 A (Lan); DTD-2 B (chưa phân công).', insight['content'])
         self.assertNotIn('DTD-3', insight['content'])
         self.assertIn('DTD: 2 hôm nay, 3 sắp tới, 1 quá hạn', insight['content'])
+
+    def test_recognizes_short_replies_that_only_narrow_a_question(self) -> None:
+        for message in ('DTD', 'tất cả issue', 'DTD?', 'team TEST thôi'):
+            with self.subTest(message=message):
+                self.assertTrue(_is_follow_up_reply(message))
+        for message in (
+            'Tạo issue cho DTD', 'Ai đang xử lý nhiều nhất?', 'FL-12', 'có bao nhiêu deadline hôm nay ?',
+            'Phân công việc cho team DTD', 'Hãy chia nhỏ việc chuyển cơ sở dữ liệu sang máy chủ mới thành nhiều bước',
+        ):
+            with self.subTest(message=message):
+                self.assertFalse(_is_follow_up_reply(message))
+
+    def test_a_short_reply_finds_the_question_it_narrows_but_not_a_planning_request(self) -> None:
+        def stub(rows):
+            result = SimpleNamespace(mappings=lambda: SimpleNamespace(all=lambda: rows))
+            return SimpleNamespace(execute=AsyncMock(return_value=result))
+
+        question = 'có bao nhiêu deadline hôm nay ?'
+        cases = (
+            ([{'content': 'DTD', 'has_source': False}, {'content': question, 'has_source': False}], question),
+            ([{'content': 'Tạo issue cho dự án website', 'has_source': False}], None),
+            ([{'content': 'Đề xuất công việc từ file này', 'has_source': True}], None),
+            ([{'content': 'Lên kế hoạch dự án website', 'has_source': False}], None),
+            ([], None),
+        )
+        for rows, expected in cases:
+            with self.subTest(rows=rows):
+                self.assertEqual(asyncio.run(_follow_up_question(stub(rows), 'conversation-1')), expected)  # type: ignore[arg-type]  # a stub stands in for AsyncSession / VI: stub thay cho AsyncSession
 
     def test_matches_the_general_issue_count_tool(self) -> None:
         capability = _matching_read_only_capability('Team tôi đang có bao nhiêu issue?')

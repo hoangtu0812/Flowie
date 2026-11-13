@@ -94,6 +94,7 @@ from .queries import (
     CYCLE_PROGRESS_INSIGHT_SELECT_CYCLES,
     DEADLINE_INSIGHT_SELECT_ISSUES,
     DEADLINE_INSIGHT_SELECT_TEAMS,
+    FOLLOW_UP_SELECT_AGENT_MESSAGES,
     GET_CONVERSATION_SELECT_AGENT_CONVERSATIONS,
     GET_CONVERSATION_SELECT_AGENT_MESSAGES,
     INITIATIVE_DELIVERY_INSIGHT_SELECT_INITIATIVES,
@@ -554,6 +555,65 @@ def _is_open_question(message: str) -> bool:
         or any(term in normalized for term in OPEN_QUESTION_TERMS)
         or ISSUE_MENTION.search(normalized) is not None
     )
+
+
+FOLLOW_UP_MAX_WORDS = 8
+FOLLOW_UP_LOOKBACK = 4
+
+
+def _is_question(message: str) -> bool:
+    """True when a message is routed as a question: a report, a fixed report or an open question.
+    VI: True khi tin nhắn được định tuyến như câu hỏi: báo cáo, báo cáo cố định hoặc câu hỏi mở.
+    """
+    return _is_report_request(message) or _matching_read_only_capability(message) is not None or _is_open_question(message)
+
+
+def _is_follow_up_reply(message: str) -> bool:
+    """Detect a short reply that only narrows an earlier question, such as "DTD" or "tất cả issue".
+
+    It must not route anywhere by itself: no request to create work or assign it, no report or
+    fixed-report terms, no question words and no issue identifier. A trailing "?" is allowed, so
+    "DTD?" still counts. Such a reply used to reach the planner, which cannot read issues.
+    VI: Nhận diện câu trả lời ngắn chỉ thu hẹp câu hỏi trước, như "DTD" hay "tất cả issue". Bản thân
+    VI: nó không được khớp tuyến nào: không yêu cầu tạo hay phân công việc, không có từ báo cáo hay
+    VI: báo cáo cố định, không có từ hỏi và không có mã issue. Cho phép dấu "?" ở cuối, nên "DTD?"
+    VI: vẫn tính. Trước đây câu trả lời như vậy rơi vào planner, vốn không đọc được issue.
+    """
+    normalized = message.casefold().strip()
+    return (
+        0 < len(normalized.split()) <= FOLLOW_UP_MAX_WORDS
+        and not WORK_REQUEST.search(normalized)
+        and not _is_bare_creation_request(message)
+        and not _is_assignment_request(message)
+        and not _is_capability_question(message)
+        and not _is_report_request(message)
+        and _matching_read_only_capability(message) is None
+        and not any(term in normalized for term in OPEN_QUESTION_TERMS)
+        and ISSUE_MENTION.search(normalized) is None
+    )
+
+
+async def _follow_up_question(db: AsyncSession, conversation_id: str) -> str | None:
+    """The earlier question a short reply belongs to, or None when the reply belongs to planning.
+
+    Walks back over the latest user messages, skipping other short replies. A message with a
+    source file, a request to create or assign work, or anything else that is not a question means
+    the conversation is planning, so the planner keeps answering clarifications such as "which team?".
+    VI: Câu hỏi trước mà câu trả lời ngắn thuộc về, hoặc None khi câu trả lời thuộc luồng lập kế hoạch.
+    VI: Duyệt ngược các tin nhắn người dùng mới nhất, bỏ qua các câu trả lời ngắn khác. Tin nhắn có
+    VI: file nguồn, yêu cầu tạo hay phân công việc, hoặc bất kỳ tin nào không phải câu hỏi nghĩa là
+    VI: hội thoại đang lập kế hoạch, nên planner tiếp tục nhận câu trả lời như "team nào?".
+    """
+    rows = await db.execute(FOLLOW_UP_SELECT_AGENT_MESSAGES, {'conversation_id': conversation_id, 'limit': FOLLOW_UP_LOOKBACK})
+    for row in rows.mappings().all():
+        content = row['content']
+        if row['has_source'] or WORK_REQUEST.search(content.casefold()) or _is_assignment_request(content):
+            return None
+        if _is_question(content):
+            return content
+        if not _is_follow_up_reply(content):
+            return None
+    return None
 
 
 def _is_vietnamese(message: str) -> bool:
@@ -2300,12 +2360,22 @@ async def _process_message(
         conversation_row = {'id': conversation_id, 'title': message.strip()[:80]}
         is_new_conversation = True
 
+    # A short reply such as "DTD" is routed with the question it narrows; the reply itself is what
+    # gets saved and what the analyst sees as the latest message.
+    # VI: Câu trả lời ngắn như "DTD" được định tuyến cùng câu hỏi nó thu hẹp; tin nhắn được lưu và
+    # VI: là tin mới nhất analyst thấy vẫn là chính câu trả lời đó.
+    routing_text = message
+    if not files and not is_new_conversation and _is_follow_up_reply(message):
+        question = await _follow_up_question(db, conversation_id)
+        if question:
+            routing_text = f'{question}\n{message}'
+
     # A report request wins over the fixed reports: "báo cáo tình hình dự án trễ"
     # asks for the whole written report, not only the delayed-project list.
     # VI: Yêu cầu báo cáo được ưu tiên hơn báo cáo cố định: "báo cáo tình hình dự
     # VI: án trễ" cần cả bản báo cáo, không chỉ danh sách dự án chậm.
-    report_requested = not files and _is_report_request(message)
-    capability = None if files or report_requested else _matching_read_only_capability(message)
+    report_requested = not files and _is_report_request(routing_text)
+    capability = None if files or report_requested else _matching_read_only_capability(routing_text)
     if report_requested or capability:
         capability_id = ANALYST_TOOL if capability is None else capability[0]
         installed_tools = await _installed_tool_keys(db, workspace_id)
@@ -2384,7 +2454,7 @@ async def _process_message(
             progress=progress,
         )
 
-    if not files and _is_open_question(message) and ANALYST_TOOL in await _installed_tool_keys(db, workspace_id):
+    if not files and _is_open_question(routing_text) and ANALYST_TOOL in await _installed_tool_keys(db, workspace_id):
         return await _analyst_turn(
             request,
             db,
