@@ -369,3 +369,32 @@ async def verify_fact_scope(db, owner, seed):
     buckets = ('delayed', 'atRisk', 'onTrack', 'insufficientData')
     projects = {project['identifier'][:4] for bucket in buckets for project in ops_only['projects'][bucket]}
     assert projects == {'OPSP', 'SHRP'}
+
+
+def test_questions_never_reach_the_planner_without_the_q_and_a_tool():
+    asyncio.run(_with_workspace(verify_question_routing)())
+
+
+async def verify_question_routing(db, owner, seed):
+    # A new workspace has the fixed reports but not the Q&A tool, as in the reported conversation.
+    # VI: Workspace mới có các báo cáo cố định nhưng chưa có tool hỏi đáp, đúng như hội thoại được báo lỗi.
+    workspace = seed['workspace_id']
+    team_key = (await db.execute(text('SELECT identifier FROM teams WHERE id = :id'), {'id': seed['team_id']})).scalar_one()
+    user = {'id': owner}
+
+    async def send(message, conversation_id=None):
+        return await agent._process_message(None, workspace, message, conversation_id, [], user, db, agent._ignore_progress)
+
+    first = await send('có bao nhiêu deadline hôm nay ?')
+    assert first['responseType'] == 'INSIGHT' and first['insight']['capability'] == 'issues.overdue'
+    conversation = first['conversation']['id']
+    narrowed = await send(team_key, conversation)
+    assert narrowed['responseType'] == 'INSIGHT' and narrowed['insight']['data']['teamScope'] != []
+    everything = await send('tất cả issue', conversation)
+    assert everything['responseType'] == 'INSIGHT' and everything['insight']['data']['teamScope'] == []
+
+    open_question = await send('Tình hình các dự án thế nào?')
+    assert open_question['responseType'] == 'INSIGHT'
+    assert open_question['insight']['capability'] == agent.ANALYST_TOOL
+    assert open_question['insight']['data'] == {'installed': False}
+    assert 'Agent personalization' in open_question['insight']['content']

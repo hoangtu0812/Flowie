@@ -2380,6 +2380,29 @@ async def _analyst_turn(
     return data
 
 
+def _not_installed_insight(capability_id: str) -> ReadOnlyInsight:
+    """Reply for a question whose Agent tool the workspace has not installed.
+
+    It names the tool and who can install it, and points to the fixed reports that work without
+    it, instead of sending the question to the planner, which cannot read issues and asks the user
+    to paste data.
+    VI: Câu trả lời cho câu hỏi cần tool Agent mà workspace chưa cài. Nêu tên tool, ai cài được và
+    VI: các báo cáo cố định dùng được khi chưa có tool, thay vì chuyển câu hỏi cho planner, vốn
+    VI: không đọc được issue và đề nghị người dùng tự dán dữ liệu.
+    """
+    title = TOOL_DETAILS[capability_id][0]
+    return {
+        'capability': capability_id,
+        'content': (
+            f'Tool "{title}" chưa được cài cho workspace này nên tôi chưa trả lời được câu hỏi này. '
+            'Owner hoặc Admin của workspace có thể cài trong Agent personalization. '
+            'Trong lúc đó bạn vẫn có thể hỏi các báo cáo có sẵn như deadline hôm nay, issue trễ hạn, '
+            'workload của team hoặc tiến độ dự án.'
+        ),
+        'data': {'installed': False},
+    }
+
+
 async def _process_message(
     request: Request,
     workspace_id: str,
@@ -2446,11 +2469,7 @@ async def _process_message(
                 scope_text=routing_text,
             )
         if capability_id not in installed_tools:
-            insight: ReadOnlyInsight = {
-                'capability': capability_id,
-                'content': f'The {title} tool is not installed for this workspace. A workspace owner or admin can install it in Agent personalization.',
-                'data': {'installed': False},
-            }
+            insight: ReadOnlyInsight = _not_installed_insight(capability_id)
             await progress({'id': capability_id, 'label': f'{title} is not installed', 'state': 'completed', 'orb': 'working'})
         else:
             await progress({'id': capability_id, 'label': f'Running {title}', 'state': 'running', 'orb': 'searching'})
@@ -2512,20 +2531,39 @@ async def _process_message(
             progress=progress,
         )
 
-    if not files and _is_open_question(routing_text) and ANALYST_TOOL in await _installed_tool_keys(db, workspace_id):
-        return await _analyst_turn(
-            request,
+    if not files and _is_open_question(routing_text):
+        if ANALYST_TOOL in await _installed_tool_keys(db, workspace_id):
+            return await _analyst_turn(
+                request,
+                db,
+                kind='answer',
+                workspace_id=workspace_id,
+                message=message,
+                conversation_id=conversation_id,
+                conversation=conversation_row,
+                is_new_conversation=is_new_conversation,
+                user=user,
+                progress=progress,
+                scope_text=routing_text,
+            )
+        # A question never reaches the planner: without the Q&A tool the reply says how to get it.
+        # VI: Câu hỏi không bao giờ tới planner: khi chưa có tool hỏi đáp, câu trả lời nêu cách cài.
+        insight = _not_installed_insight(ANALYST_TOOL)
+        await progress({'id': ANALYST_TOOL, 'label': f'{TOOL_DETAILS[ANALYST_TOOL][0]} is not installed', 'state': 'completed', 'orb': 'working'})
+        data = await _persist_turn(
             db,
-            kind='answer',
-            workspace_id=workspace_id,
-            message=message,
             conversation_id=conversation_id,
             conversation=conversation_row,
+            workspace_id=workspace_id,
+            user_id=user['id'],
             is_new_conversation=is_new_conversation,
-            user=user,
-            progress=progress,
-            scope_text=routing_text,
+            user_content=message.strip(),
+            assistant_content=insight['content'],
+            proposal=None,
         )
+        data['responseType'] = 'INSIGHT'
+        data['insight'] = insight
+        return data
 
     if not files and _is_bare_creation_request(message):
         await progress({'id': 'proposal.clarify', 'label': 'Identifying required planning details', 'state': 'running', 'orb': 'working'})
