@@ -312,3 +312,60 @@ async def verify_deadlines(db, owner, seed):
     assert ops_only['content'].startswith(f'Hôm nay ({today.date().isoformat()}) team Ops có 1 issue')
     hidden = await agent._deadline_insight(db, workspace, outsider, f'deadline {ops_key}')
     assert hidden['data']['issues'] == [] and hidden['data']['teams'] == [] and hidden['data']['teamScope'] == []
+
+
+def test_progress_facts_narrow_to_the_teams_the_question_names():
+    asyncio.run(_with_workspace(verify_fact_scope)())
+
+
+async def verify_fact_scope(db, owner, seed):
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    workspace = seed['workspace_id']
+    now = utcnow()
+    late = datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None) - timedelta(days=3)
+    status = (
+        await db.execute(
+            text("SELECT id FROM issue_statuses WHERE workspace_id = :w AND category NOT IN ('COMPLETED','CANCELED') LIMIT 1"),
+            {'w': workspace},
+        )
+    ).scalar_one()
+    ops_key = 'O' + cuid()[:5].upper()
+    ops = cuid()
+    await db.execute(
+        text("INSERT INTO teams(id,workspace_id,name,identifier,created_at,updated_at) VALUES (:id,:w,'Ops',:key,:now,:now)"),
+        {'id': ops, 'w': workspace, 'key': ops_key, 'now': now},
+    )
+    await db.execute(text('INSERT INTO team_members(team_id,user_id) VALUES (:t,:u)'), {'t': ops, 'u': owner})
+    # One overdue issue per team; Ops also owns a project and a team-less project holds an Ops issue.
+    # VI: Mỗi team một issue quá hạn; Ops có thêm một dự án, và một dự án không gắn team chứa issue của Ops.
+    ops_project, shared_project, seed_project = cuid(), cuid(), cuid()
+    for project, team, key in ((ops_project, ops, 'OPSP'), (shared_project, None, 'SHRP'), (seed_project, seed['team_id'], 'SEDP')):
+        await db.execute(
+            text("INSERT INTO projects(id,workspace_id,team_id,name,identifier,created_at,updated_at) VALUES (:id,:w,:t,:key,:key,:now,:now)"),
+            {'id': project, 'w': workspace, 't': team, 'key': key + cuid()[:4].upper(), 'now': now},
+        )
+    seed_key = (await db.execute(text('SELECT identifier FROM teams WHERE id = :id'), {'id': seed['team_id']})).scalar_one()
+    for team, key, project in ((seed['team_id'], seed_key, seed_project), (ops, ops_key, shared_project)):
+        await db.execute(
+            text(
+                """INSERT INTO issues(id,workspace_id,team_id,project_id,status_id,identifier,number,title,creator_id,due_date,created_at,updated_at)
+                   VALUES (:id,:w,:t,:p,:s,:identifier,900,'Late',:u,:due,:now,:now)"""
+            ),
+            {'id': cuid(), 'w': workspace, 't': team, 'p': project, 's': status, 'identifier': f'{key}-900', 'u': owner, 'due': late, 'now': now},
+        )
+    await db.commit()
+
+    everything = await agent._portfolio_facts(db, workspace, owner)
+    assert everything['teamScope'] == [] and everything['issueCounts']['total'] == 2
+    assert {row['identifier'] for row in everything['overdue']['issues']} == {f'{seed_key}-900', f'{ops_key}-900'}
+
+    ops_only = await agent._portfolio_facts(db, workspace, owner, f'Tình hình thế nào?\n{ops_key.lower()}')
+    assert ops_only['teamScope'] == ['Ops'] and ops_only['deadlines']['teamScope'] == ['Ops']
+    assert ops_only['issueCounts']['total'] == 1 and ops_only['overdue']['total'] == 1
+    assert [row['identifier'] for row in ops_only['overdue']['issues']] == [f'{ops_key}-900']
+    assert [team['teamName'] for team in ops_only['workloadByTeam']] == ['Ops']
+    buckets = ('delayed', 'atRisk', 'onTrack', 'insufficientData')
+    projects = {project['identifier'][:4] for bucket in buckets for project in ops_only['projects'][bucket]}
+    assert projects == {'OPSP', 'SHRP'}

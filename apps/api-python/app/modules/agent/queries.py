@@ -28,6 +28,7 @@ OVERDUE_ISSUE_INSIGHT_SELECT_ISSUES = text('''SELECT COUNT(*)::int AS total,
                 WHERE issue.workspace_id = :workspace_id
                   AND issue.archived_at IS NULL
                   AND issue.due_date::date < :today
+                  AND (CAST(:team_ids AS text[]) IS NULL OR issue.team_id = ANY(CAST(:team_ids AS text[])))
                   AND status.category NOT IN ('COMPLETED', 'CANCELED')
                   AND EXISTS(
                       SELECT 1 FROM team_members member
@@ -42,6 +43,7 @@ OVERDUE_ISSUE_INSIGHT_SELECT_ISSUES_2 = text('''SELECT team.name, COUNT(*)::int 
                 WHERE issue.workspace_id = :workspace_id
                   AND issue.archived_at IS NULL
                   AND issue.due_date::date < :today
+                  AND (CAST(:team_ids AS text[]) IS NULL OR issue.team_id = ANY(CAST(:team_ids AS text[])))
                   AND status.category NOT IN ('COMPLETED', 'CANCELED')
                   AND EXISTS(
                       SELECT 1 FROM team_members member
@@ -78,7 +80,7 @@ DEADLINE_INSIGHT_SELECT_TEAMS = text('''SELECT team.name,
 
 # Teams the user belongs to, so a question can be narrowed to the ones it names.
 # VI: Các team người dùng là thành viên, để câu hỏi được thu hẹp vào team nó nêu tên.
-DEADLINE_INSIGHT_SELECT_MEMBER_TEAMS = text('''SELECT team.id, team.name, team.identifier FROM teams team
+MEMBER_TEAMS_SELECT_TEAMS = text('''SELECT team.id, team.name, team.identifier FROM teams team
                 WHERE team.workspace_id = :workspace_id AND team.archived_at IS NULL
                   AND EXISTS (SELECT 1 FROM team_members member
                               WHERE member.team_id = team.id AND member.user_id = :user_id)
@@ -106,16 +108,22 @@ DEADLINE_INSIGHT_SELECT_ISSUES = text('''SELECT issue.identifier, issue.title, t
                 LIMIT 30''')
 
 
+# Every query behind the progress Q&A facts takes :team_ids: NULL keeps all of the asker's teams, a list
+# narrows to those teams. A project without a team is kept when it has issues in one of them.
+# VI: Mọi truy vấn của dữ liệu hỏi đáp nhận :team_ids: NULL giữ mọi team của người hỏi, danh sách thì
+# VI: thu hẹp vào các team đó. Dự án không gắn team được giữ khi có issue thuộc một trong các team đó.
 ISSUE_COUNT_INSIGHT_SELECT_ISSUES = text('''SELECT COUNT(*)::int AS total,
                     COUNT(*) FILTER (WHERE status.category = 'COMPLETED')::int AS completed,
                     COUNT(*) FILTER (WHERE status.category NOT IN ('COMPLETED', 'CANCELED'))::int AS open
             FROM issues issue JOIN issue_statuses status ON status.id = issue.status_id
             WHERE issue.workspace_id = :workspace_id AND issue.archived_at IS NULL
-              AND EXISTS (SELECT 1 FROM team_members member WHERE member.team_id = issue.team_id AND member.user_id = :user_id)''')
+              AND EXISTS (SELECT 1 FROM team_members member WHERE member.team_id = issue.team_id AND member.user_id = :user_id)
+              AND (CAST(:team_ids AS text[]) IS NULL OR issue.team_id = ANY(CAST(:team_ids AS text[])))''')
 
 
 WORKLOAD_INSIGHT_SELECT_TEAMS = text('''SELECT team.id, team.name FROM teams team
                 WHERE team.workspace_id = :workspace_id AND team.archived_at IS NULL
+                  AND (CAST(:team_ids AS text[]) IS NULL OR team.id = ANY(CAST(:team_ids AS text[])))
                   AND EXISTS (SELECT 1 FROM team_members member
                               WHERE member.team_id = team.id AND member.user_id = :user_id)
                 ORDER BY team.name ASC LIMIT 20''')
@@ -166,6 +174,14 @@ PROJECT_DELIVERY_INSIGHT_SELECT_PROJECTS = text('''SELECT project.name, project.
                   AND project.archived_at IS NULL
                   AND project.status NOT IN ('done', 'shipped', 'canceled', 'duplicate')
                   AND (
+                      CAST(:team_ids AS text[]) IS NULL
+                      OR project.team_id = ANY(CAST(:team_ids AS text[]))
+                      OR (project.team_id IS NULL AND EXISTS (
+                          SELECT 1 FROM issues scoped WHERE scoped.project_id = project.id
+                            AND scoped.archived_at IS NULL AND scoped.team_id = ANY(CAST(:team_ids AS text[]))
+                      ))
+                  )
+                  AND (
                       project.team_id IS NULL OR EXISTS (
                           SELECT 1 FROM team_members member
                           WHERE member.team_id = project.team_id AND member.user_id = :user_id
@@ -185,6 +201,7 @@ STALE_ISSUE_INSIGHT_SELECT_ISSUES = text('''SELECT issue.identifier, issue.title
                   AND issue.archived_at IS NULL
                   AND status.category NOT IN ('COMPLETED', 'CANCELED')
                   AND issue.updated_at::date <= :stale_since
+                  AND (CAST(:team_ids AS text[]) IS NULL OR issue.team_id = ANY(CAST(:team_ids AS text[])))
                   AND EXISTS (
                       SELECT 1 FROM team_members member
                       WHERE member.team_id = issue.team_id AND member.user_id = :user_id
@@ -357,6 +374,7 @@ PORTFOLIO_FACTS_SELECT_ISSUES = text('''SELECT issue.identifier, issue.title, pr
                 WHERE issue.workspace_id = :workspace_id
                   AND issue.archived_at IS NULL
                   AND issue.due_date::date < :today
+                  AND (CAST(:team_ids AS text[]) IS NULL OR issue.team_id = ANY(CAST(:team_ids AS text[])))
                   AND status.category NOT IN ('COMPLETED', 'CANCELED')
                   AND EXISTS (SELECT 1 FROM team_members member
                               WHERE member.team_id = issue.team_id AND member.user_id = :user_id)

@@ -93,7 +93,6 @@ from .queries import (
     CONVERSATION_SOURCE_TEXT_SELECT_AGENT_MESSAGES,
     CYCLE_PROGRESS_INSIGHT_SELECT_CYCLES,
     DEADLINE_INSIGHT_SELECT_ISSUES,
-    DEADLINE_INSIGHT_SELECT_MEMBER_TEAMS,
     DEADLINE_INSIGHT_SELECT_TEAMS,
     FOLLOW_UP_SELECT_AGENT_MESSAGES,
     GET_CONVERSATION_SELECT_AGENT_CONVERSATIONS,
@@ -108,6 +107,7 @@ from .queries import (
     LIST_PROVIDERS_SELECT_WORKSPACE_MEMBERS,
     LIST_SKILLS_SELECT_USER_AGENT_SKILLS,
     LIST_TOOLS_SELECT_WORKSPACE_MEMBERS,
+    MEMBER_TEAMS_SELECT_TEAMS,
     MENTIONED_ISSUES_SELECT_ISSUES,
     OVERDUE_ISSUE_INSIGHT_SELECT_ISSUES,
     OVERDUE_ISSUE_INSIGHT_SELECT_ISSUES_2,
@@ -652,10 +652,10 @@ def _capability_response(message: str) -> str:
 
 
 async def _overdue_issue_insight(
-    db: AsyncSession, workspace_id: str, user_id: str
+    db: AsyncSession, workspace_id: str, user_id: str, *, team_ids: list[str] | None = None
 ) -> ReadOnlyInsight:
     today = datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).date()
-    params = {'workspace_id': workspace_id, 'user_id': user_id, 'today': today}
+    params = {'workspace_id': workspace_id, 'user_id': user_id, 'today': today, 'team_ids': team_ids}
     summary = await db.execute(
         OVERDUE_ISSUE_INSIGHT_SELECT_ISSUES,
         params,
@@ -701,6 +701,16 @@ def _named_teams(teams: list[dict[str, Any]], message: str) -> list[dict[str, An
     ]
 
 
+async def _team_scope(db: AsyncSession, workspace_id: str, user_id: str, message: str) -> list[dict[str, Any]]:
+    """The asker's teams named in ``message``; empty when it names none, meaning every team.
+    VI: Các team của người hỏi được nêu trong ``message``; rỗng khi không nêu team nào, nghĩa là mọi team.
+    """
+    if not message:
+        return []
+    rows = await db.execute(MEMBER_TEAMS_SELECT_TEAMS, {'workspace_id': workspace_id, 'user_id': user_id})
+    return _named_teams([dict(row) for row in rows.mappings().all()], message)
+
+
 async def _deadline_insight(db: AsyncSession, workspace_id: str, user_id: str, message: str = '') -> ReadOnlyInsight:
     """Open issues due today, due within the next week and overdue, per team the user belongs to.
 
@@ -717,10 +727,7 @@ async def _deadline_insight(db: AsyncSession, workspace_id: str, user_id: str, m
     """
     today = datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).date()
     window_end = today + timedelta(days=DEADLINE_WINDOW_DAYS)
-    scope: list[dict[str, Any]] = []
-    if message:
-        member_teams = await db.execute(DEADLINE_INSIGHT_SELECT_MEMBER_TEAMS, {'workspace_id': workspace_id, 'user_id': user_id})
-        scope = _named_teams([dict(row) for row in member_teams.mappings().all()], message)
+    scope = await _team_scope(db, workspace_id, user_id, message)
     params = {
         'workspace_id': workspace_id, 'user_id': user_id, 'today': today, 'window_end': window_end,
         'team_ids': [team['id'] for team in scope] or None,
@@ -764,8 +771,8 @@ async def _deadline_insight(db: AsyncSession, workspace_id: str, user_id: str, m
     }
 
 
-async def _issue_count_insight(db: AsyncSession, workspace_id: str, user_id: str) -> ReadOnlyInsight:
-    result = await db.execute(ISSUE_COUNT_INSIGHT_SELECT_ISSUES, {'workspace_id': workspace_id, 'user_id': user_id})
+async def _issue_count_insight(db: AsyncSession, workspace_id: str, user_id: str, *, team_ids: list[str] | None = None) -> ReadOnlyInsight:
+    result = await db.execute(ISSUE_COUNT_INSIGHT_SELECT_ISSUES, {'workspace_id': workspace_id, 'user_id': user_id, 'team_ids': team_ids})
     row = result.mappings().one()
     return {'capability': 'issues.count', 'content': f"Bạn có quyền xem {row['total']} issue: {row['open']} chưa hoàn thành và {row['completed']} đã hoàn thành.", 'data': dict(row)}
 
@@ -773,7 +780,7 @@ async def _issue_count_insight(db: AsyncSession, workspace_id: str, user_id: str
 WORKLOAD_BAND_LABELS = {'healthy': 'ổn định', 'busy': 'bận', 'overloaded': 'quá tải', 'unknown': 'chưa rõ'}
 
 
-async def _workload_insight(db: AsyncSession, workspace_id: str, user_id: str) -> ReadOnlyInsight:
+async def _workload_insight(db: AsyncSession, workspace_id: str, user_id: str, *, team_ids: list[str] | None = None) -> ReadOnlyInsight:
     """Workspace-wide load overview built from the deterministic Phase-1 scores.
 
     Numbers come from SQL via team_insights; the agent only phrases them.
@@ -781,7 +788,7 @@ async def _workload_insight(db: AsyncSession, workspace_id: str, user_id: str) -
     today = hcm_today()
     teams = await db.execute(
         WORKLOAD_INSIGHT_SELECT_TEAMS,
-        {'workspace_id': workspace_id, 'user_id': user_id},
+        {'workspace_id': workspace_id, 'user_id': user_id, 'team_ids': team_ids},
     )
     team_rows = [dict(row) for row in teams.mappings().all()]
     if not team_rows:
@@ -949,11 +956,11 @@ def _project_delivery_reason(row: dict[str, Any], today: date) -> tuple[str, lis
     return state, reasons
 
 
-async def _project_delivery_insight(db: AsyncSession, workspace_id: str, user_id: str) -> ReadOnlyInsight:
+async def _project_delivery_insight(db: AsyncSession, workspace_id: str, user_id: str, *, team_ids: list[str] | None = None) -> ReadOnlyInsight:
     today = datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).date()
     result = await db.execute(
         PROJECT_DELIVERY_INSIGHT_SELECT_PROJECTS,
-        {'workspace_id': workspace_id, 'user_id': user_id, 'today': today},
+        {'workspace_id': workspace_id, 'user_id': user_id, 'today': today, 'team_ids': team_ids},
     )
     rows: list[dict[str, Any]] = []
     for raw_row in result.mappings().all():
@@ -996,12 +1003,12 @@ async def _project_delivery_insight(db: AsyncSession, workspace_id: str, user_id
     }
 
 
-async def _stale_issue_insight(db: AsyncSession, workspace_id: str, user_id: str) -> ReadOnlyInsight:
+async def _stale_issue_insight(db: AsyncSession, workspace_id: str, user_id: str, *, team_ids: list[str] | None = None) -> ReadOnlyInsight:
     today = datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).date()
     stale_since = today - timedelta(days=14)
     result = await db.execute(
         STALE_ISSUE_INSIGHT_SELECT_ISSUES,
-        {'workspace_id': workspace_id, 'user_id': user_id, 'today': today, 'stale_since': stale_since},
+        {'workspace_id': workspace_id, 'user_id': user_id, 'today': today, 'stale_since': stale_since, 'team_ids': team_ids},
     )
     rows = [
         {
@@ -2213,6 +2220,7 @@ ANALYST_RULES = (
     'You are given read-only facts about a work-tracking workspace as JSON, limited to what the asking user may see. '
     'Use only those facts: never invent issues, projects, people, dates or numbers, and say plainly when the facts do not cover something. '
     + UNTRUSTED_FACTS_RULE
+    + ' When teamScope is not empty, the facts cover only those teams: say so and do not describe other teams.'
     + ' Always state the as-of date. Write in the language of the user\'s latest message. '
     'Respond with JSON shaped exactly as {"body": "<markdown text>"}.'
 )
@@ -2249,7 +2257,7 @@ class AnalystText(BaseModel):
     body: str = Field(min_length=1, max_length=12000)
 
 
-async def _portfolio_facts(db: AsyncSession, workspace_id: str, user_id: str) -> dict[str, Any]:
+async def _portfolio_facts(db: AsyncSession, workspace_id: str, user_id: str, scope_text: str = '') -> dict[str, Any]:
     """Read-only facts for Q&A and reports, built from the fixed insights.
 
     Every source filters by the user's team membership, so the provider never
@@ -2257,20 +2265,28 @@ async def _portfolio_facts(db: AsyncSession, workspace_id: str, user_id: str) ->
     VI: Số liệu chỉ đọc cho hỏi đáp và báo cáo, dựng từ các insight cố định.
     VI: Mọi nguồn đều lọc theo team người dùng là thành viên nên provider không
     VI: thấy việc người dùng không mở được. Danh sách bị giới hạn để prompt không quá lớn.
+
+    When ``scope_text`` names some of the user's teams ("DTD"), every source is narrowed to them and
+    ``teamScope`` lists their names; otherwise the facts cover all of the user's teams.
+    VI: Khi ``scope_text`` nêu tên một số team của người dùng ("DTD"), mọi nguồn được thu hẹp vào các
+    VI: team đó và ``teamScope`` liệt kê tên; nếu không, số liệu gồm mọi team của người dùng.
     """
     today = datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).date()
-    counts = await _issue_count_insight(db, workspace_id, user_id)
-    delivery = await _project_delivery_insight(db, workspace_id, user_id)
-    overdue = await _overdue_issue_insight(db, workspace_id, user_id)
-    workload = await _workload_insight(db, workspace_id, user_id)
-    stale = await _stale_issue_insight(db, workspace_id, user_id)
-    deadlines = await _deadline_insight(db, workspace_id, user_id)
+    scope = await _team_scope(db, workspace_id, user_id, scope_text)
+    team_ids = [team['id'] for team in scope] or None
+    counts = await _issue_count_insight(db, workspace_id, user_id, team_ids=team_ids)
+    delivery = await _project_delivery_insight(db, workspace_id, user_id, team_ids=team_ids)
+    overdue = await _overdue_issue_insight(db, workspace_id, user_id, team_ids=team_ids)
+    workload = await _workload_insight(db, workspace_id, user_id, team_ids=team_ids)
+    stale = await _stale_issue_insight(db, workspace_id, user_id, team_ids=team_ids)
+    deadlines = await _deadline_insight(db, workspace_id, user_id, scope_text)
     overdue_rows = await db.execute(
         PORTFOLIO_FACTS_SELECT_ISSUES,
-        {'workspace_id': workspace_id, 'user_id': user_id, 'today': today},
+        {'workspace_id': workspace_id, 'user_id': user_id, 'today': today, 'team_ids': team_ids},
     )
     return {
         'asOfDate': today.isoformat(),
+        'teamScope': [team['name'] for team in scope],
         'issueCounts': counts['data'],
         'projects': delivery['data'],
         'overdue': {**overdue['data'], 'issues': [dict(row) for row in overdue_rows.mappings().all()]},
@@ -2314,6 +2330,7 @@ async def _analyst_turn(
     is_new_conversation: bool,
     user: Any,
     progress: ProgressReporter,
+    scope_text: str = '',
 ) -> dict[str, Any]:
     """Answer an open question or write a leadership report from workspace facts.
 
@@ -2328,7 +2345,7 @@ async def _analyst_turn(
     provider = await _configured_provider(request, db, workspace_id, user['id'])
     await progress({'id': 'provider.configure', 'label': 'AI provider ready', 'state': 'completed', 'orb': 'working'})
     await progress({'id': 'analyst.facts', 'label': 'Collecting progress, overdue and workload data', 'state': 'running', 'orb': 'searching'})
-    facts = await _portfolio_facts(db, workspace_id, user['id'])
+    facts = await _portfolio_facts(db, workspace_id, user['id'], scope_text or message)
     facts['mentionedIssues'] = await _mentioned_issues(db, workspace_id, user['id'], message)
     history: list[dict[str, str]] = []
     if not is_new_conversation:
@@ -2426,6 +2443,7 @@ async def _process_message(
                 is_new_conversation=is_new_conversation,
                 user=user,
                 progress=progress,
+                scope_text=routing_text,
             )
         if capability_id not in installed_tools:
             insight: ReadOnlyInsight = {
@@ -2506,6 +2524,7 @@ async def _process_message(
             is_new_conversation=is_new_conversation,
             user=user,
             progress=progress,
+            scope_text=routing_text,
         )
 
     if not files and _is_bare_creation_request(message):
