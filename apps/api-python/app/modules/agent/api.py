@@ -2684,6 +2684,7 @@ async def _process_message(
     if not files and _is_capability_question(message):
         await progress({'id': 'conversation.reply', 'label': 'Preparing a capability response', 'state': 'running', 'orb': 'working'})
         content = _capability_response(message)
+        await progress({'id': 'conversation.reply', 'label': 'Capability response prepared', 'state': 'completed', 'orb': 'working'})
         await progress({'id': 'conversation.persist', 'label': 'Saving conversation', 'state': 'running', 'orb': 'shaping'})
         data = await _persist_turn(
             db,

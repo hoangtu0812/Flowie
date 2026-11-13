@@ -26,6 +26,9 @@ pull request and commit references, which are for us.
 
 ### Fixed
 
+- Agent questions no longer fail with "provider rejected the request (HTTP 404)" when the AI gateway answers a request with tools with a 404, as LiteLLM in front of Azure does for a model group without function calling; the Agent answers with the fixed reports instead. A question about what the Agent can do no longer leaves its "Preparing a capability response" step spinning after the answer. Rebuild `api`; no migration. (DTD-872, #292)
+  VI: Câu hỏi cho Agent không còn lỗi "provider rejected the request (HTTP 404)" khi gateway AI trả 404 cho request có tools, như LiteLLM trước Azure làm với model group không hỗ trợ function calling; Agent trả lời bằng báo cáo cố định. Câu hỏi về việc Agent làm được gì không còn để bước "Preparing a capability response" quay mãi sau khi đã trả lời. Build lại `api`; không có migration. (DTD-872)
+
 - MCP `search_issues` with `overdue=true` no longer counts issues due today as overdue; it compares the due date with today in Vietnam time. Rebuild `api`. (DTD-871, #291)
   VI: MCP `search_issues` với `overdue=true` không còn tính issue hạn hôm nay là quá hạn; hạn được so với ngày hôm nay theo giờ Việt Nam. Build lại `api`. (DTD-871)
 
