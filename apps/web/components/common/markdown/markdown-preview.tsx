@@ -1,11 +1,12 @@
 'use client';
 
-import { useContext, useMemo } from 'react';
+import { useContext, useMemo, useRef } from 'react';
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { VStack } from '@astryxdesign/core/Layout';
 import { Heading, Text } from '@astryxdesign/core/Text';
 import { AttachmentImage } from '@/components/common/attachment-image';
+import { CopyButton } from '@/components/common/copy-button';
 import { splitMentions } from '@/features/issues/mention-text';
 import { createSlugger } from '@/lib/markdown-headings';
 import { rehypeMathPlugin, remarkMathPlugin } from '@/lib/markdown-math';
@@ -126,6 +127,28 @@ function MarkdownLink({
 }
 
 /**
+ * Code block of the `chat` appearance: a header with the fence language and a copy button
+ * above the `<pre>`. The copied text is read from the rendered block, so it is exactly what
+ * the reader sees.
+ * VI: Code block của kiểu `chat`: phần đầu có ngôn ngữ của fence và nút copy phía trên
+ * VI: `<pre>`. Văn bản được chép đọc từ khối đã hiển thị, nên đúng như người đọc thấy.
+ */
+function CopyableCode({ children, language }: { children?: React.ReactNode; language?: string }) {
+   const ref = useRef<HTMLPreElement>(null);
+   return (
+      <div className="min-w-0 overflow-hidden rounded-xl bg-muted">
+         <div className="flex items-center justify-between pl-4 pr-1.5 pt-1.5 text-xs font-medium">
+            <span>{language ?? 'code'}</span>
+            <CopyButton text={() => ref.current?.textContent ?? ''} label="Copy code" />
+         </div>
+         <pre ref={ref} className="overflow-auto px-4 pb-4 pt-1 text-xs leading-6">
+            {children}
+         </pre>
+      </div>
+   );
+}
+
+/**
  * Element renderers for both appearances, built once at module load. react-markdown compares
  * component identity on every render, so an inline object would remount each element on any
  * parent update — an embedded screenshot would then fetch again and fall back to its loading
@@ -135,7 +158,7 @@ function MarkdownLink({
  * VI: mount lại khi component cha cập nhật — ảnh chụp màn hình nhúng sẽ tải lại và về khung chờ,
  * VI: làm trang nhảy khi người dùng đang gõ bình luận.
  */
-function markdownComponents(readable: boolean): Components {
+function markdownComponents(readable: boolean, copyCode = false): Components {
    return {
       h1: ({ children, id }) => (
          <Heading id={id} level={readable ? 2 : 1} accessibilityLevel={1}>
@@ -181,6 +204,16 @@ function markdownComponents(readable: boolean): Components {
       pre: ({ children, node }) =>
          isMermaid((node?.children?.[0] as HtmlNode | undefined)?.properties?.className) ? (
             <>{children}</>
+         ) : copyCode ? (
+            <CopyableCode
+               language={
+                  String(
+                     (node?.children?.[0] as HtmlNode | undefined)?.properties?.className ?? ''
+                  ).match(/language-(\S+)/)?.[1]
+               }
+            >
+               {children}
+            </CopyableCode>
          ) : (
             <pre
                className={cn(
@@ -242,13 +275,19 @@ function markdownComponents(readable: boolean): Components {
    };
 }
 
-const COMPONENTS = { default: markdownComponents(false), issue: markdownComponents(true) };
+const COMPONENTS = {
+   default: markdownComponents(false),
+   issue: markdownComponents(true),
+   chat: markdownComponents(false, true),
+};
 
 /**
  * CommonMark/GFM rendering with TeX math, without raw HTML or executable URL protocols.
- * `mentions` lists the member names whose `@Name` should be highlighted.
+ * `mentions` lists the member names whose `@Name` should be highlighted. The `chat`
+ * appearance (Agent replies) gives code blocks a language label and a copy button.
  * VI: Hiển thị CommonMark/GFM kèm công thức TeX, không có HTML thô hay giao thức URL thực thi
- * VI: được. `mentions` là danh sách tên thành viên cần highlight `@Tên`.
+ * VI: được. `mentions` là danh sách tên thành viên cần highlight `@Tên`. Kiểu `chat` (câu trả
+ * VI: lời của Agent) thêm nhãn ngôn ngữ và nút copy cho code block.
  */
 export function MarkdownPreview({
    content,
@@ -257,7 +296,7 @@ export function MarkdownPreview({
    documentMedia = false,
 }: {
    content: string;
-   appearance?: 'default' | 'issue';
+   appearance?: 'default' | 'issue' | 'chat';
    mentions?: string[];
    documentMedia?: boolean;
 }) {
