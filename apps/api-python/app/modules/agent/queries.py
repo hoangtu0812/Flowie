@@ -53,7 +53,9 @@ OVERDUE_ISSUE_INSIGHT_SELECT_ISSUES_2 = text('''SELECT team.name, COUNT(*)::int 
 
 
 # Open issues per visible team that are overdue, due today or due within the window ending :window_end.
+# :team_ids NULL means every visible team; otherwise only those teams.
 # VI: Issue chưa xong theo từng team được xem: quá hạn, đến hạn hôm nay, hoặc đến hạn trước :window_end.
+# VI: :team_ids NULL nghĩa là mọi team được xem; nếu có thì chỉ các team đó.
 DEADLINE_INSIGHT_SELECT_TEAMS = text('''SELECT team.name,
                        COUNT(*) FILTER (WHERE issue.due_date::date < :today)::int AS overdue,
                        COUNT(*) FILTER (WHERE issue.due_date::date = :today)::int AS due_today,
@@ -65,12 +67,22 @@ DEADLINE_INSIGHT_SELECT_TEAMS = text('''SELECT team.name,
                   AND issue.archived_at IS NULL
                   AND issue.due_date::date <= :window_end
                   AND status.category NOT IN ('COMPLETED', 'CANCELED')
+                  AND (CAST(:team_ids AS text[]) IS NULL OR issue.team_id = ANY(CAST(:team_ids AS text[])))
                   AND EXISTS(
                       SELECT 1 FROM team_members member
                       WHERE member.team_id = issue.team_id AND member.user_id = :user_id
                   )
                 GROUP BY team.id, team.name
                 ORDER BY due_today DESC, due_soon DESC, team.name ASC''')
+
+
+# Teams the user belongs to, so a question can be narrowed to the ones it names.
+# VI: Các team người dùng là thành viên, để câu hỏi được thu hẹp vào team nó nêu tên.
+DEADLINE_INSIGHT_SELECT_MEMBER_TEAMS = text('''SELECT team.id, team.name, team.identifier FROM teams team
+                WHERE team.workspace_id = :workspace_id AND team.archived_at IS NULL
+                  AND EXISTS (SELECT 1 FROM team_members member
+                              WHERE member.team_id = team.id AND member.user_id = :user_id)
+                ORDER BY team.name ASC''')
 
 
 # Open visible issues due from today up to :window_end, soonest first, for the answer and analyst facts.
@@ -87,6 +99,7 @@ DEADLINE_INSIGHT_SELECT_ISSUES = text('''SELECT issue.identifier, issue.title, t
                   AND issue.archived_at IS NULL
                   AND issue.due_date::date BETWEEN :today AND :window_end
                   AND status.category NOT IN ('COMPLETED', 'CANCELED')
+                  AND (CAST(:team_ids AS text[]) IS NULL OR issue.team_id = ANY(CAST(:team_ids AS text[])))
                   AND EXISTS (SELECT 1 FROM team_members member
                               WHERE member.team_id = issue.team_id AND member.user_id = :user_id)
                 ORDER BY issue.due_date ASC, issue.identifier ASC

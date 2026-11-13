@@ -93,6 +93,7 @@ from .queries import (
     CONVERSATION_SOURCE_TEXT_SELECT_AGENT_MESSAGES,
     CYCLE_PROGRESS_INSIGHT_SELECT_CYCLES,
     DEADLINE_INSIGHT_SELECT_ISSUES,
+    DEADLINE_INSIGHT_SELECT_MEMBER_TEAMS,
     DEADLINE_INSIGHT_SELECT_TEAMS,
     FOLLOW_UP_SELECT_AGENT_MESSAGES,
     GET_CONVERSATION_SELECT_AGENT_CONVERSATIONS,
@@ -682,8 +683,31 @@ async def _overdue_issue_insight(
     }
 
 
-async def _deadline_insight(db: AsyncSession, workspace_id: str, user_id: str) -> ReadOnlyInsight:
+def _named_teams(teams: list[dict[str, Any]], message: str) -> list[dict[str, Any]]:
+    """Teams whose identifier ("DTD") or name appears in ``message`` as a whole word, ignoring case.
+
+    Only the asker's own teams are passed in, so naming another team never widens what they see.
+    VI: Các team có mã ("DTD") hoặc tên xuất hiện trong ``message`` dưới dạng từ nguyên, không phân
+    VI: biệt hoa thường. Chỉ team của chính người hỏi được truyền vào, nên nêu team khác không mở rộng
+    VI: phạm vi họ được xem.
+    """
+    normalized = message.casefold()
+    return [
+        team for team in teams
+        if any(
+            re.search(rf'(?<![\w-]){re.escape(term.casefold())}(?![\w-])', normalized)
+            for term in (team['identifier'], team['name']) if term
+        )
+    ]
+
+
+async def _deadline_insight(db: AsyncSession, workspace_id: str, user_id: str, message: str = '') -> ReadOnlyInsight:
     """Open issues due today, due within the next week and overdue, per team the user belongs to.
+
+    When ``message`` names some of the user's teams ("DTD", or a follow-up reply carrying it), the
+    report covers only those teams; otherwise it covers all of them.
+    VI: Khi ``message`` nêu tên một số team của người dùng ("DTD", hoặc câu trả lời nối tiếp chứa nó),
+    VI: báo cáo chỉ tính các team đó; nếu không thì tính mọi team.
 
     Counts come from SQL so the answer never depends on the provider; the listed issues are the
     ones due today, capped so the reply stays readable.
@@ -693,7 +717,15 @@ async def _deadline_insight(db: AsyncSession, workspace_id: str, user_id: str) -
     """
     today = datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).date()
     window_end = today + timedelta(days=DEADLINE_WINDOW_DAYS)
-    params = {'workspace_id': workspace_id, 'user_id': user_id, 'today': today, 'window_end': window_end}
+    scope: list[dict[str, Any]] = []
+    if message:
+        member_teams = await db.execute(DEADLINE_INSIGHT_SELECT_MEMBER_TEAMS, {'workspace_id': workspace_id, 'user_id': user_id})
+        scope = _named_teams([dict(row) for row in member_teams.mappings().all()], message)
+    params = {
+        'workspace_id': workspace_id, 'user_id': user_id, 'today': today, 'window_end': window_end,
+        'team_ids': [team['id'] for team in scope] or None,
+    }
+    scope_names = ', '.join(team['name'] for team in scope)
     teams = [dict(row) for row in (await db.execute(DEADLINE_INSIGHT_SELECT_TEAMS, params)).mappings().all()]
     issues = [
         {**row, 'due_date': row['due_date'].isoformat()}
@@ -707,10 +739,12 @@ async def _deadline_insight(db: AsyncSession, workspace_id: str, user_id: str) -
         listed = '; '.join(
             f"{issue['identifier']} {issue['title']} ({issue['assignee'] or 'chưa phân công'})" for issue in today_issues
         )
-        content = f'Hôm nay ({today.isoformat()}) có {due_today} issue chưa hoàn thành đến hạn: {listed}'
+        subject = f'team {scope_names} ' if scope else ''
+        content = f'Hôm nay ({today.isoformat()}) {subject}có {due_today} issue chưa hoàn thành đến hạn: {listed}'
         content += f' và {due_today - len(today_issues)} issue khác.' if due_today > len(today_issues) else '.'
     else:
-        content = f'Hôm nay ({today.isoformat()}) không có issue nào đến hạn trong các team bạn có quyền xem.'
+        where = f'team {scope_names}' if scope else 'các team bạn có quyền xem'
+        content = f'Hôm nay ({today.isoformat()}) không có issue nào đến hạn trong {where}.'
     content += (
         f' Trong {DEADLINE_WINDOW_DAYS} ngày tới (đến {window_end.isoformat()}) còn {due_soon} issue đến hạn;'
         f' {overdue} issue đã quá hạn.'
@@ -724,7 +758,7 @@ async def _deadline_insight(db: AsyncSession, workspace_id: str, user_id: str) -
         'capability': 'issues.overdue',
         'content': content,
         'data': {
-            'asOfDate': today.isoformat(), 'windowEnd': window_end.isoformat(),
+            'asOfDate': today.isoformat(), 'windowEnd': window_end.isoformat(), 'teamScope': [team['name'] for team in scope],
             'dueToday': due_today, 'dueSoon': due_soon, 'overdue': overdue, 'teams': teams, 'issues': issues,
         },
     }
@@ -2403,7 +2437,13 @@ async def _process_message(
         else:
             await progress({'id': capability_id, 'label': f'Running {title}', 'state': 'running', 'orb': 'searching'})
             assert capability is not None
-            insight = await capability[2](db, workspace_id, user['id'])
+            # The deadline report reads the question, with any follow-up reply, to narrow it to named teams.
+            # VI: Báo cáo deadline đọc câu hỏi, kèm câu trả lời nối tiếp, để thu hẹp vào team được nêu tên.
+            run = capability[2]
+            insight = await (
+                _deadline_insight(db, workspace_id, user['id'], routing_text) if run is _deadline_insight
+                else run(db, workspace_id, user['id'])
+            )
             await progress({'id': capability_id, 'label': f'{title} report ready', 'state': 'completed', 'orb': 'searching'})
         await progress({'id': 'conversation.persist', 'label': 'Saving conversation', 'state': 'running', 'orb': 'shaping'})
         data = await _persist_turn(
