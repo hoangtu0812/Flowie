@@ -7,12 +7,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.modules.agent.api import (
+from app.modules.agent.assignments import (
     _assignment_explainer_prompt,
-    _is_assignment_request,
-    _is_workload_question,
     _parse_assignment_notes,
     _resolve_assignment_team,
+)
+from app.modules.agent.intents import (
+    _is_assignment_request,
+    _is_workload_question,
 )
 
 TEAMS = [

@@ -13,38 +13,54 @@ from pydantic import ValidationError
 
 from app.core.errors import ApiError
 from app.modules.agent.api import (
+    _sse,
+)
+from app.modules.agent.assignments import (
+    _assignment_explainer_prompt,
+)
+from app.modules.agent.chat import (
     ANALYST_ANSWER_PROMPT,
+    LEADERSHIP_REPORT_PROMPT,
+    AnalystText,
+    _follow_up_question,
+    _is_follow_up_reply,
+)
+from app.modules.agent.compose import (
     COMPOSE_COMMENT_PROMPT,
     COMPOSE_UPDATE_PROMPT,
-    LEADERSHIP_REPORT_PROMPT,
     PROJECT_SCHEDULE_PROMPT,
-    TOOL_DETAILS,
-    UNTRUSTED_FACTS_RULE,
-    AgentProposal,
-    AnalystText,
     ProjectScheduleProposal,
-    _apply_personal_skill_defaults,
-    _assignment_explainer_prompt,
+    _parse_schedule_proposal,
+    _validate_schedule_proposal,
+)
+from app.modules.agent.insights import (
+    TOOL_DETAILS,
     _deadline_insight,
-    _follow_up_question,
+    _matching_read_only_capability,
+    _named_teams,
+)
+from app.modules.agent.intents import (
     _is_bare_creation_request,
     _is_deadline_question,
-    _is_follow_up_reply,
     _is_initiative_delivery_question,
     _is_open_question,
     _is_overdue_issue_question,
     _is_project_delivery_question,
     _is_report_request,
     _is_stale_issue_question,
-    _matching_read_only_capability,
-    _named_teams,
+)
+from app.modules.agent.models import (
+    AgentProposal,
+)
+from app.modules.agent.planning import (
+    _apply_personal_skill_defaults,
     _parse_agent_proposal,
-    _parse_schedule_proposal,
     _source_text,
-    _sse,
     _system_prompt,
     _validate_proposal,
-    _validate_schedule_proposal,
+)
+from app.modules.agent.providers import (
+    UNTRUSTED_FACTS_RULE,
     _validated_endpoint,
 )
 

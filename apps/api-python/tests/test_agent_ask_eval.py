@@ -26,8 +26,7 @@ from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.core.identifiers import cuid
-from app.modules.agent import api as agent
-from app.modules.agent import ask
+from app.modules.agent import ask, chat, insights, planning
 from app.modules.ai.calls import ToolsUnsupported
 from app.modules.identity.auth import create_workspace_bootstrap
 
@@ -295,13 +294,13 @@ async def _eval(monkeypatch, subtests):
                     async def progress(step, steps=steps):
                         steps.append(step)
 
-                    data = await agent._process_message(
+                    data = await chat._process_message(
                         _request(), ctx['workspace'], question, conversations.get(after), [], user, db, progress,
                     )
                     await db.commit()
                     if key:
                         conversations[key] = data['conversation']['id']
-                    assert data['responseType'] == 'INSIGHT' and data['insight']['capability'] == agent.ASK_CAPABILITY
+                    assert data['responseType'] == 'INSIGHT' and data['insight']['capability'] == chat.ASK_CAPABILITY
                     called = [name for round_ in rounds for name, _ in round_]
                     assert data['insight']['data']['tools'] == called
                     assert len(model.results) == len(called)
@@ -314,12 +313,12 @@ async def _eval(monkeypatch, subtests):
             # A follow-up reply carries the earlier question and answer as history.
             # VI: Câu trả lời nối tiếp mang theo câu hỏi và câu trả lời trước làm lịch sử.
             model.rounds = [[('get_deadlines', {'team': 'OPS'})]]
-            await agent._process_message(_request(), ctx['workspace'], 'OPS', conversations['deadline-all'], [], user, db, agent._ignore_progress)
+            await chat._process_message(_request(), ctx['workspace'], 'OPS', conversations['deadline-all'], [], user, db, planning._ignore_progress)
             contents = [turn.get('content') for turn in model.requests[-1]['history']]
             assert contents[:3] == ['có bao nhiêu deadline hôm nay ?', 'Trả lời từ get_deadlines', 'DTD']
             assert model.requests[-1]['history'][-3]['content'] == 'OPS'
             tool_names = {tool['name'] for tool in model.requests[-1]['tools']}
-            assert tool_names >= set(ask.MCP_READ_TOOLS) | {tool.name for tool in agent.INSIGHT_TOOLS} | {ask.HANDOFF_TOOL}
+            assert tool_names >= set(ask.MCP_READ_TOOLS) | {tool.name for tool in insights.INSIGHT_TOOLS} | {ask.HANDOFF_TOOL}
             assert not tool_names & {'create_issue', 'update_issue', 'transition_issue', 'add_comment', 'delete_issue'}
             await db.commit()
             await _routing(monkeypatch, db, ctx, user, model)
@@ -339,10 +338,10 @@ async def _routing(monkeypatch, db, ctx, user, model):
         planned.append(history[-1]['content'])
         return CLARIFY
 
-    monkeypatch.setattr(agent, 'call_provider', planner)
+    monkeypatch.setattr(planning, 'call_provider', planner)
 
     async def send(message, conversation=None):
-        data = await agent._process_message(_request(), ctx['workspace'], message, conversation, [], user, db, agent._ignore_progress)
+        data = await chat._process_message(_request(), ctx['workspace'], message, conversation, [], user, db, planning._ignore_progress)
         await db.commit()
         return data
 
@@ -383,7 +382,7 @@ async def _routing(monkeypatch, db, ctx, user, model):
     async def record(step):
         states[step['id']] = step['state']
 
-    capability = await agent._process_message(_request(), ctx['workspace'], 'Bạn giúp gì được cho tôi', None, [], user, db, record)
+    capability = await chat._process_message(_request(), ctx['workspace'], 'Bạn giúp gì được cho tôi', None, [], user, db, record)
     await db.commit()
     assert capability['responseType'] == 'CHAT' and states['conversation.reply'] == 'completed'
     assert 'running' not in states.values()
