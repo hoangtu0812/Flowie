@@ -19,26 +19,28 @@ pull request and commit references, which are for us.
 
 ## Unreleased
 
+## [0.21.0] — 2026-11-16 20:18 +07
+
 ### Changed
 
-- The Agent backend is split from one 2,959-line file into modules by responsibility (providers, message intents, insights, planning, assignments, chat, Write with Agent and scheduling); routes, requests and replies are unchanged. Rebuild `api`; no migration. (DTD-896, #294)
+- The Agent backend is split from one 2,959-line file into modules by responsibility (providers, message intents, insights, planning, assignments, chat, Write with Agent and scheduling); routes, requests and replies are unchanged. Rebuild `api`; no migration. (DTD-896, #294, b9ea30d)
   VI: Backend Agent được tách từ một file 2.959 dòng thành các module theo trách nhiệm (provider, nhận dạng tin nhắn, insight, lập kế hoạch, phân công, chat, Write with Agent và xếp lịch); route, request và phản hồi không đổi. Build lại `api`; không có migration. (DTD-896)
-- The outdated root `implement_plan.md`, which still described the NestJS migration as the only source of instructions, moved to `docs/history/`, and both READMEs now point to Flowie `FL` tasks and `CHANGELOG.md` instead. Documentation only; nothing to rebuild. (DTD-895, #293)
+- The outdated root `implement_plan.md`, which still described the NestJS migration as the only source of instructions, moved to `docs/history/`, and both READMEs now point to Flowie `FL` tasks and `CHANGELOG.md` instead. Documentation only; nothing to rebuild. (DTD-895, #293, 0a4016d)
   VI: `implement_plan.md` lỗi thời ở gốc repo, vốn vẫn mô tả việc chuyển NestJS là nguồn chỉ thị duy nhất, đã chuyển vào `docs/history/`, và hai README nay trỏ tới task Flowie `FL` và `CHANGELOG.md`. Chỉ đổi tài liệu; không cần build lại. (DTD-895)
-- Agent chat answers free-form questions from your live workspace data: the AI looks up what it needs itself — deadlines, overdue and stale issues, workload, project health, issue details and comments, a person's or a team's work — with read-only tools limited to the teams you belong to, shows each lookup as a step with its arguments, and answers in your language citing issue and project identifiers. Short follow-ups such as "DTD" or "tất cả issue" narrow the previous question. It is on by default without installing "Progress Q&A and reports"; requests to create or plan work still go to the planner, and a workspace without an AI provider, or with a model that does not support tools, gets the fixed reports as before. Leadership reports are unchanged. Rebuild `api` and `web`; no migration. (DTD-871, #291)
+- Agent chat answers free-form questions from your live workspace data: the AI looks up what it needs itself — deadlines, overdue and stale issues, workload, project health, issue details and comments, a person's or a team's work — with read-only tools limited to the teams you belong to, shows each lookup as a step with its arguments, and answers in your language citing issue and project identifiers. Short follow-ups such as "DTD" or "tất cả issue" narrow the previous question. It is on by default without installing "Progress Q&A and reports"; requests to create or plan work still go to the planner, and a workspace without an AI provider, or with a model that does not support tools, gets the fixed reports as before. Leadership reports are unchanged. Rebuild `api` and `web`; no migration. (DTD-871, #291, 7e51479)
   VI: Agent chat trả lời câu hỏi tự do từ dữ liệu thật của workspace: AI tự tra những gì cần — deadline, issue quá hạn và treo, workload, tình hình dự án, chi tiết và bình luận của issue, việc của một người hay một team — bằng các tool chỉ đọc giới hạn trong các team bạn là thành viên, hiển thị mỗi lần tra cứu là một bước kèm tham số, và trả lời bằng ngôn ngữ của bạn kèm mã issue, mã dự án. Câu nối tiếp ngắn như "DTD" hay "tất cả issue" thu hẹp câu hỏi trước. Tính năng bật mặc định, không cần cài "Progress Q&A and reports"; yêu cầu tạo hay lập kế hoạch công việc vẫn đi vào planner, và workspace chưa có provider AI hoặc dùng model không hỗ trợ tools vẫn nhận báo cáo cố định như trước. Báo cáo lãnh đạo không đổi. Build lại `api` và `web`; không có migration. (DTD-871)
 
 ### Fixed
 
-- Agent questions no longer fail with "provider rejected the request (HTTP 404)" when the AI gateway answers a request with tools with a 404, as LiteLLM in front of Azure does for a model group without function calling; the Agent answers with the fixed reports instead. A question about what the Agent can do no longer leaves its "Preparing a capability response" step spinning after the answer. Rebuild `api`; no migration. (DTD-872, #292)
+- Agent questions no longer fail with "provider rejected the request (HTTP 404)" when the AI gateway answers a request with tools with a 404, as LiteLLM in front of Azure does for a model group without function calling; the Agent answers with the fixed reports instead. A question about what the Agent can do no longer leaves its "Preparing a capability response" step spinning after the answer. Rebuild `api`; no migration. (DTD-872, #292, d55681b)
   VI: Câu hỏi cho Agent không còn lỗi "provider rejected the request (HTTP 404)" khi gateway AI trả 404 cho request có tools, như LiteLLM trước Azure làm với model group không hỗ trợ function calling; Agent trả lời bằng báo cáo cố định. Câu hỏi về việc Agent làm được gì không còn để bước "Preparing a capability response" quay mãi sau khi đã trả lời. Build lại `api`; không có migration. (DTD-872)
 
-- MCP `search_issues` with `overdue=true` no longer counts issues due today as overdue; it compares the due date with today in Vietnam time. Rebuild `api`. (DTD-871, #291)
+- MCP `search_issues` with `overdue=true` no longer counts issues due today as overdue; it compares the due date with today in Vietnam time. Rebuild `api`. (DTD-871, #291, 7e51479)
   VI: MCP `search_issues` với `overdue=true` không còn tính issue hạn hôm nay là quá hạn; hạn được so với ngày hôm nay theo giờ Việt Nam. Build lại `api`. (DTD-871)
 
 ### Security
 
-- MCP `list_teams` and `list_issue_options` no longer reveal teams the connection's user is not a member of (their names, statuses and members); a team check in the access policy matched any team of the workspace as soon as the user belonged to one. Rebuild `api`. (DTD-871, #291)
+- MCP `list_teams` and `list_issue_options` no longer reveal teams the connection's user is not a member of (their names, statuses and members); a team check in the access policy matched any team of the workspace as soon as the user belonged to one. Rebuild `api`. (DTD-871, #291, 7e51479)
   VI: MCP `list_teams` và `list_issue_options` không còn lộ team mà người dùng của kết nối không phải thành viên (tên, trạng thái và thành viên); bước kiểm tra team trong chính sách truy cập khớp mọi team của workspace chỉ cần người dùng thuộc một team. Build lại `api`. (DTD-871)
 
 ## [0.20.0] — 2026-11-13 09:53 +07
