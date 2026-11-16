@@ -8,9 +8,11 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.identifiers import cuid
-from app.modules.agent.api import (
-    _conversation_source_text,
+from app.modules.agent.chat import (
     _follow_up_question,
+)
+from app.modules.agent.planning import (
+    _conversation_source_text,
     _persist_turn,
 )
 from app.modules.identity.auth import create_workspace_bootstrap

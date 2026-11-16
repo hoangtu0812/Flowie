@@ -14,6 +14,7 @@ from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.core.identifiers import cuid
 from app.modules.agent import api as agent
+from app.modules.agent import chat, insights, planning, providers
 from app.modules.identity.auth import create_workspace_bootstrap
 
 KEY = Fernet.generate_key().decode('ascii')
@@ -31,17 +32,17 @@ def _replies(monkeypatch, *replies):
             raise reply
         return reply
 
-    monkeypatch.setattr(agent, 'call_provider', fake)
+    monkeypatch.setattr(planning, 'call_provider', fake)
     return calls
 
 
 def _checked(parse):
-    return asyncio.run(agent._call_checked({}, 'agent.plan', 's', HISTORY, parse))
+    return asyncio.run(planning._call_checked({}, 'agent.plan', 's', HISTORY, parse))
 
 
 def test_a_malformed_reply_is_corrected_once(monkeypatch):
     calls = _replies(monkeypatch, 'not json', PROPOSAL)
-    assert _checked(agent._parse_agent_proposal).summary == 'Xong'
+    assert _checked(planning._parse_agent_proposal).summary == 'Xong'
     assert calls[1][1] == {'role': 'assistant', 'content': 'not json'}
     assert 'required JSON format' in calls[1][2]['content'] and calls[1][2]['role'] == 'user'
 
@@ -61,26 +62,26 @@ def test_a_broken_rule_goes_back_to_the_model_with_its_reason(monkeypatch):
 def test_a_second_bad_reply_reaches_the_caller(monkeypatch):
     calls = _replies(monkeypatch, 'bad', 'still bad')
     with pytest.raises(ValidationError):
-        _checked(agent._parse_agent_proposal)
+        _checked(planning._parse_agent_proposal)
     assert len(calls) == 2
 
 
 def test_a_provider_failure_is_not_corrected(monkeypatch):
     calls = _replies(monkeypatch, ApiError(502, 'Provider down.', 'Bad Gateway'))
     with pytest.raises(ApiError):
-        _checked(agent._parse_agent_proposal)
+        _checked(planning._parse_agent_proposal)
     assert len(calls) == 1
 
 
 def test_validation_text_never_returns_to_the_prompt(monkeypatch):
     calls = _replies(monkeypatch, '{"summary": "x", "extra": "SECRET-ECHO"}', PROPOSAL)
-    _checked(agent._parse_agent_proposal)
+    _checked(planning._parse_agent_proposal)
     assert 'SECRET-ECHO' not in calls[1][2]['content']
 
 
 def test_planner_turns_a_second_malformed_reply_into_a_clarification(monkeypatch):
     calls = _replies(monkeypatch, 'bad', 'still bad')
-    result = asyncio.run(agent._draft_proposal({'provider': {}, 'system_prompt': 's', 'history': HISTORY}))
+    result = asyncio.run(planning._draft_proposal({'provider': {}, 'system_prompt': 's', 'history': HISTORY}))
     assert result['proposal']['requiresClarification'] is True and len(calls) == 2
 
 
@@ -147,18 +148,18 @@ def test_hourly_limit_counts_each_person_apart(monkeypatch):
 
 
 async def verify_limit(db, owner, seed, monkeypatch):
-    monkeypatch.setattr(agent, 'AGENT_HOURLY_LIMIT', 2)
+    monkeypatch.setattr(providers, 'AGENT_HOURLY_LIMIT', 2)
     workspace = seed['workspace_id']
     await _provider(db, workspace)
     other = await _user(db, utcnow())
     await db.commit()
     request = _request()
     for _ in range(2):
-        assert (await agent._configured_provider(request, db, workspace, owner))['provider'] == 'OPENAI'
+        assert (await providers._configured_provider(request, db, workspace, owner))['provider'] == 'OPENAI'
     with pytest.raises(ApiError) as limited:
-        await agent._configured_provider(request, db, workspace, owner)
+        await providers._configured_provider(request, db, workspace, owner)
     assert limited.value.status_code == 429
-    assert (await agent._configured_provider(request, db, workspace, other))['provider'] == 'OPENAI'
+    assert (await providers._configured_provider(request, db, workspace, other))['provider'] == 'OPENAI'
 
 
 def test_a_workspace_without_a_provider_does_not_use_up_the_limit(monkeypatch):
@@ -166,11 +167,11 @@ def test_a_workspace_without_a_provider_does_not_use_up_the_limit(monkeypatch):
 
 
 async def verify_no_provider(db, owner, seed, monkeypatch):
-    monkeypatch.setattr(agent, 'AGENT_HOURLY_LIMIT', 1)
+    monkeypatch.setattr(providers, 'AGENT_HOURLY_LIMIT', 1)
     request = _request()
     for _ in range(3):
         with pytest.raises(ApiError) as missing:
-            await agent._configured_provider(request, db, seed['workspace_id'], owner)
+            await providers._configured_provider(request, db, seed['workspace_id'], owner)
         assert missing.value.status_code == 409
 
 
@@ -242,11 +243,11 @@ async def verify_mentions(db, owner, seed):
     await db.commit()
 
     message = f'{prefix.lower()}-1 và {prefix}-1 và {prefix}-2 ra sao, còn NOPE-9?'
-    found = await agent._mentioned_issues(db, workspace, owner, message)
+    found = await chat._mentioned_issues(db, workspace, owner, message)
     assert [row['identifier'] for row in found] == [f'{prefix}-1']
-    assert found[0]['title'] == 'Issue 1' and len(found[0]['description']) == agent.MENTIONED_ISSUE_DESCRIPTION_CHARS
-    assert await agent._mentioned_issues(db, workspace, outsider, message) == []
-    assert await agent._mentioned_issues(db, workspace, owner, 'Tình hình chung thế nào?') == []
+    assert found[0]['title'] == 'Issue 1' and len(found[0]['description']) == chat.MENTIONED_ISSUE_DESCRIPTION_CHARS
+    assert await chat._mentioned_issues(db, workspace, outsider, message) == []
+    assert await chat._mentioned_issues(db, workspace, owner, 'Tình hình chung thế nào?') == []
 
 
 def test_deadline_report_counts_open_issues_in_the_askers_teams():
@@ -301,17 +302,17 @@ async def verify_deadlines(db, owner, seed):
     await _member(db, workspace, outsider, now)
     await db.commit()
 
-    insight = await agent._deadline_insight(db, workspace, owner)
+    insight = await insights._deadline_insight(db, workspace, owner)
     assert (insight['data']['dueToday'], insight['data']['dueSoon'], insight['data']['overdue']) == (2, 1, 1)
     assert insight['data']['teamScope'] == []
-    seed_only = await agent._deadline_insight(db, workspace, owner, f'có bao nhiêu deadline hôm nay ?\n{seed_key.lower()}')
+    seed_only = await insights._deadline_insight(db, workspace, owner, f'có bao nhiêu deadline hôm nay ?\n{seed_key.lower()}')
     assert (seed_only['data']['dueToday'], seed_only['data']['dueSoon'], seed_only['data']['overdue']) == (1, 1, 1)
     assert [row['identifier'] for row in seed_only['data']['issues']] == [f'{prefix}-1', f'{prefix}-2']
     assert f'{prefix}-1 Issue 1' in seed_only['content'] and 'Ops issue' not in seed_only['content']
-    ops_only = await agent._deadline_insight(db, workspace, owner, 'deadline hôm nay của team Ops')
+    ops_only = await insights._deadline_insight(db, workspace, owner, 'deadline hôm nay của team Ops')
     assert [row['identifier'] for row in ops_only['data']['issues']] == [f'{ops_key}-1']
     assert ops_only['content'].startswith(f'Hôm nay ({today.date().isoformat()}) team Ops có 1 issue')
-    hidden = await agent._deadline_insight(db, workspace, outsider, f'deadline {ops_key}')
+    hidden = await insights._deadline_insight(db, workspace, outsider, f'deadline {ops_key}')
     assert hidden['data']['issues'] == [] and hidden['data']['teams'] == [] and hidden['data']['teamScope'] == []
 
 
@@ -358,11 +359,11 @@ async def verify_fact_scope(db, owner, seed):
         )
     await db.commit()
 
-    everything = await agent._portfolio_facts(db, workspace, owner)
+    everything = await chat._portfolio_facts(db, workspace, owner)
     assert everything['teamScope'] == [] and everything['issueCounts']['total'] == 2
     assert {row['identifier'] for row in everything['overdue']['issues']} == {f'{seed_key}-900', f'{ops_key}-900'}
 
-    ops_only = await agent._portfolio_facts(db, workspace, owner, f'Tình hình thế nào?\n{ops_key.lower()}')
+    ops_only = await chat._portfolio_facts(db, workspace, owner, f'Tình hình thế nào?\n{ops_key.lower()}')
     assert ops_only['teamScope'] == ['Ops'] and ops_only['deadlines']['teamScope'] == ['Ops']
     assert ops_only['issueCounts']['total'] == 1 and ops_only['overdue']['total'] == 1
     assert [row['identifier'] for row in ops_only['overdue']['issues']] == [f'{ops_key}-900']
@@ -386,7 +387,7 @@ async def verify_question_routing(db, owner, seed):
     user = {'id': owner}
 
     async def send(message, conversation_id=None):
-        return await agent._process_message(_request(), workspace, message, conversation_id, [], user, db, agent._ignore_progress)
+        return await chat._process_message(_request(), workspace, message, conversation_id, [], user, db, planning._ignore_progress)
 
     first = await send('có bao nhiêu deadline hôm nay ?')
     assert first['responseType'] == 'INSIGHT' and first['insight']['capability'] == 'issues.overdue'
@@ -398,6 +399,6 @@ async def verify_question_routing(db, owner, seed):
 
     open_question = await send('Tình hình các dự án thế nào?')
     assert open_question['responseType'] == 'INSIGHT'
-    assert open_question['insight']['capability'] == agent.ANALYST_TOOL
+    assert open_question['insight']['capability'] == chat.ANALYST_TOOL
     assert open_question['insight']['data'] == {'installed': False}
     assert 'Agent personalization' in open_question['insight']['content']

@@ -12,7 +12,7 @@ from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.core.identifiers import cuid
-from app.modules.agent import api as agent
+from app.modules.agent import planning
 from app.modules.ai import calls as ai_calls
 from app.modules.identity.auth import create_workspace_bootstrap
 
@@ -221,9 +221,9 @@ def test_planner_graph_carries_the_usage_engine_to_the_call(monkeypatch):
         seen.update(engine=provider['engine'], feature=feature)
         return json.dumps({'summary': 'Xong', 'requiresClarification': False, 'questions': [], 'projects': [], 'issues': []})
 
-    monkeypatch.setattr(agent, 'call_provider', answer)
+    monkeypatch.setattr(planning, 'call_provider', answer)
     result = asyncio.run(
-        agent.planner_graph.ainvoke({'provider': {**OPENAI, 'engine': engine}, 'system_prompt': 's', 'history': HISTORY})
+        planning.planner_graph.ainvoke({'provider': {**OPENAI, 'engine': engine}, 'system_prompt': 's', 'history': HISTORY})
     )
     assert result['proposal']['summary'] == 'Xong'
     assert seen == {'engine': engine, 'feature': 'agent.plan'}

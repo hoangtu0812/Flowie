@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.errors import ApiError
-from ..agent.api import configured_provider, fence_untrusted
+from ..agent.providers import configured_provider, fence_untrusted
 from ..ai.calls import call_provider
 from ..identity.password_reset import limit_request
 from ..work_items.issue_search import (
