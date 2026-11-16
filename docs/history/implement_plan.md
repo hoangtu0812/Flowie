@@ -1,3 +1,6 @@
+> **Archived 2026-11-16 (DTD-895).** Outdated; not a source of instructions. Open work lives in Flowie project `FL`.
+> VI: Đã lưu trữ ngày 16/11/2026 (DTD-895). Đã lỗi thời, không dùng làm chỉ thị. Việc còn mở nằm trong project Flowie `FL`.
+
 # Flowie — Kế hoạch khôi phục UI Circle và chuyển backend sang Python
 
 > **Tài liệu này là nguồn mục tiêu, trạng thái và thứ tự thực thi duy nhất để giao Terra.**

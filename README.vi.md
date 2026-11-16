@@ -27,7 +27,7 @@ Flowie không chỉ dành cho phần mềm: có thể quản lý sản phẩm, v
 - Project, milestone, custom property, template, label, update và Initiative.
 - Documents, resources, activity/audit, attachment và cấu hình Discord.
 
-Danh mục implementation, các phần còn mock và thứ tự tiếp tục nằm tại [implement_plan.md](./implement_plan.md).
+Việc còn mở được theo dõi bằng task trong project Flowie (mã `FL`), thay đổi đã phát hành nằm trong [CHANGELOG.md](./CHANGELOG.md). Kế hoạch chuyển đổi năm 2026 đã lưu trữ tại [docs/history](./docs/history/implement_plan.md).
 
 ## 🧱 Kiến trúc
 
@@ -66,9 +66,9 @@ thất bại sẽ chặn deployment; không khởi động riêng API để bỏ
 1. Giữ nguyên cấu trúc, spacing và tương tác của giao diện hiện có.
 2. Chỉ thay mock bằng API Python/PostgreSQL hoặc bổ sung tính năng đã được duyệt.
 3. Kiểm tra persistence sau refresh và workspace/RBAC isolation.
-4. Mỗi lát hoàn chỉnh phải cập nhật [implement_plan.md](./implement_plan.md), commit và push.
+4. Theo dõi công việc bằng task Flowie `FL` và đưa vào `main` qua pull request.
 5. Tuân thủ [AGENTS.md](./AGENTS.md) và [quy trình release](./docs/release-process.md):
-   `main` deploy trực tiếp lên môi trường production duy nhất, và mọi commit
+   `main` coi như production (maintainer deploy thủ công), và mọi commit
    phải có mục tương ứng trong `CHANGELOG.md`.
 
 ## 🙏 Ghi nhận & giấy phép

@@ -38,7 +38,7 @@ It supports more than software delivery: product, operations, research, marketin
 - **Collaboration** — documents, resources, activity history, attachments, real-time Inbox delivery and Discord notification configuration.
 - **Administration** — platform administrator bootstrap, workspace management and audit endpoints.
 
-The implementation inventory and remaining adapter work are tracked in [implement_plan.md](./implement_plan.md). A control is not marked complete merely because it has a mock screen.
+Open work is tracked as tasks in the Flowie project (identifier `FL`) and shipped changes in [CHANGELOG.md](./CHANGELOG.md). The 2026 migration plan is archived in [docs/history](./docs/history/implement_plan.md).
 
 ## 🧱 Architecture
 
@@ -109,10 +109,10 @@ Never commit `.env`, credentials, tokens or webhook URLs.
 1. Preserve the existing UI structure, spacing and interaction model.
 2. Replace mock reads/writes with Python/PostgreSQL, or add an explicitly approved feature.
 3. Verify persistence after refresh and workspace/RBAC isolation.
-4. Update [implement_plan.md](./implement_plan.md), commit and push every completed vertical slice.
+4. Track the work as a Flowie `FL` task and land it through a pull request.
 5. Follow [AGENTS.md](./AGENTS.md) and the [release process](./docs/release-process.md):
-   `main` deploys directly to the sole production environment, and every commit
-   must include its `CHANGELOG.md` entry.
+   `main` is production-bound (the maintainer deploys it by hand), and every
+   commit must include its `CHANGELOG.md` entry.
 
 ## 🙏 Attribution & license
 
