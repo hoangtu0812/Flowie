@@ -21,7 +21,7 @@ pull request and commit references, which are for us.
 
 ### Changed
 
-- The Agent backend is split from one 2,959-line file into modules by responsibility (providers, message intents, insights, planning, assignments, chat, Write with Agent and scheduling); routes, requests and replies are unchanged. Rebuild `api`; no migration. (DTD-896)
+- The Agent backend is split from one 2,959-line file into modules by responsibility (providers, message intents, insights, planning, assignments, chat, Write with Agent and scheduling); routes, requests and replies are unchanged. Rebuild `api`; no migration. (DTD-896, #294)
   VI: Backend Agent được tách từ một file 2.959 dòng thành các module theo trách nhiệm (provider, nhận dạng tin nhắn, insight, lập kế hoạch, phân công, chat, Write with Agent và xếp lịch); route, request và phản hồi không đổi. Build lại `api`; không có migration. (DTD-896)
 - The outdated root `implement_plan.md`, which still described the NestJS migration as the only source of instructions, moved to `docs/history/`, and both READMEs now point to Flowie `FL` tasks and `CHANGELOG.md` instead. Documentation only; nothing to rebuild. (DTD-895, #293)
   VI: `implement_plan.md` lỗi thời ở gốc repo, vốn vẫn mô tả việc chuyển NestJS là nguồn chỉ thị duy nhất, đã chuyển vào `docs/history/`, và hai README nay trỏ tới task Flowie `FL` và `CHANGELOG.md`. Chỉ đổi tài liệu; không cần build lại. (DTD-895)
