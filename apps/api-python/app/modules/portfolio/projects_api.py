@@ -22,7 +22,13 @@ from ...services.notification_events import (
     project_recipient_ids,
     publish_notification_batches,
 )
-from ..access.projects import team_access, workspace_access, workspace_manager
+from ..access.projects import (
+    team_access,
+    team_write_role,
+    team_writer,
+    workspace_access,
+    workspace_manager,
+)
 from ..identity.auth import current_user
 from ..teams.api import team_record
 from .commands import (
@@ -723,12 +729,14 @@ async def _activity(db: AsyncSession, project_id: str) -> list[dict[str, Any]]:
     return [{'id': row['id'], 'workspaceId': row['workspace_id'], 'projectId': row['project_id'], 'actorId': row['actor_id'], 'type': row['type'], 'data': row['data'], 'createdAt': row['created_at'], 'actor': {'id': row['actor_id_value'], 'name': row['actor_name'], 'avatarUrl': row['actor_avatar_url']} if row['actor_id_value'] else None} for row in rows.mappings().all()]
 
 
-async def _project(db: AsyncSession, project_id: str, workspace_id: str, user_id: str, *, include_favorites: bool = True) -> dict[str, Any]:
+async def _project(db: AsyncSession, project_id: str, workspace_id: str, user_id: str, *, include_favorites: bool = True, writing: bool = False) -> dict[str, Any]:
     result = await db.execute(PROJECT_SELECT_ISSUES, {'project_id': project_id, 'workspace_id': workspace_id, 'user_id': user_id})
     row = result.mappings().first()
     if not row: raise ApiError(404, 'Project not found.', 'Not Found')
     if row['team_id']:
         await team_access(db, workspace_id, row['team_id'], user_id)
+        # A write needs a writing team role; VIEWER reads only. VI: Thao tác ghi cần vai trò team được ghi; VIEWER chỉ đọc.
+        if writing: await team_write_role(db, row['team_id'], user_id)
     team = None
     if row['team_id_value']:
         team_result = await db.execute(PROJECT_SELECT_TEAMS, {'team_id': row['team_id_value']})
@@ -773,7 +781,7 @@ async def list_projects(workspaceId: str = Query(min_length=1), teamId: str | No
 @router.post('')
 async def create_project(payload: CreateProjectInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     await workspace_access(db, payload.workspaceId, user['id'])
-    if payload.teamId: await team_access(db, payload.workspaceId, payload.teamId, user['id'])
+    if payload.teamId: await team_writer(db, payload.workspaceId, payload.teamId, user['id'])
     template = None
     if payload.templateId:
         template = (await db.execute(CREATE_PROJECT_SELECT_PROJECT_TEMPLATES, {'id': payload.templateId, 'workspace_id': payload.workspaceId})).mappings().first()
@@ -822,7 +830,7 @@ async def update_project(project_id: str, payload: UpdateProjectInput, workspace
     # _project only checks team membership, so a project without a team needs the workspace check here.
     # VI: _project chỉ kiểm tra thành viên team, nên dự án không thuộc team cần kiểm tra workspace ở đây.
     await workspace_access(db, workspaceId, user['id'])
-    current = await _project(db, project_id, workspaceId, user['id'])
+    current = await _project(db, project_id, workspaceId, user['id'], writing=True)
     values = payload.model_dump(exclude_unset=True)
     # The length rule runs before strip(), so a null or whitespace-only name is rejected here.
     # VI: Giới hạn độ dài chạy trước strip(), nên tên null hoặc toàn khoảng trắng bị từ chối ở đây.
@@ -833,7 +841,7 @@ async def update_project(project_id: str, payload: UpdateProjectInput, workspace
     if values.get('leadId'):
         lead = await db.execute(UPDATE_PROJECT_SELECT_WORKSPACE_MEMBERS, {'workspace_id': workspaceId, 'user_id': values['leadId']})
         if lead.scalar_one_or_none() is None: raise ApiError(404, 'Project lead must be an active workspace member.', 'Not Found')
-    if values.get('teamId'): await team_access(db, workspaceId, values['teamId'], user['id'])
+    if values.get('teamId'): await team_writer(db, workspaceId, values['teamId'], user['id'])
     # Every Ask needs a team, so a team-less project could never receive a ticket. Removing the team
     # later leaves the flag set but inert: Service Desk queries match on the project's team.
     # VI: Mỗi Ask cần một team nên dự án không có team không thể nhận ticket. Gỡ team sau đó vẫn giữ cờ
@@ -1021,7 +1029,7 @@ async def project_custom_fields(project_id: str, workspaceId: str = Query(min_le
 
 @router.patch('/{project_id}/custom-fields/{field_id}')
 async def update_project_custom_field(project_id: str, field_id: str, payload: ProjectCustomFieldValueInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    await _project(db, project_id, payload.workspaceId, user['id'])
+    await _project(db, project_id, payload.workspaceId, user['id'], writing=True)
     result = await db.execute(UPDATE_PROJECT_CUSTOM_FIELD_SELECT_PROJECT_CUSTOM_FIELDS, {'id': field_id, 'workspace_id': payload.workspaceId})
     field = result.mappings().first()
     if not field:
@@ -1039,7 +1047,7 @@ async def update_project_custom_field(project_id: str, field_id: str, payload: P
 
 @router.patch('/{project_id}/members')
 async def update_members(project_id: str, payload: ProjectMembersInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
-    await _project(db, project_id, payload.workspaceId, user['id'])
+    await _project(db, project_id, payload.workspaceId, user['id'], writing=True)
     member_ids = list(set(payload.userIds))
     if len(member_ids) != len(payload.userIds):
         raise ApiError(400, 'Project members must be unique.', 'Bad Request')
@@ -1118,7 +1126,7 @@ async def list_milestones(project_id: str, workspaceId: str = Query(min_length=1
 
 @router.post('/{project_id}/milestones')
 async def create_milestone(project_id: str, payload: MilestoneInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    await _project(db, project_id, payload.workspaceId, user['id'])
+    await _project(db, project_id, payload.workspaceId, user['id'], writing=True)
     milestone_id, now = cuid(), utcnow()
     await db.execute(CREATE_MILESTONE_INSERT_PROJECT_MILESTONES, {'id': milestone_id, 'workspace_id': payload.workspaceId, 'project_id': project_id, 'title': payload.title.strip(), 'description': payload.description, 'target_date': parse_date(payload.targetDate), 'position': payload.position or 0, 'now': now})
     await db.commit()
@@ -1128,7 +1136,7 @@ async def create_milestone(project_id: str, payload: MilestoneInput, user: Any =
 
 @router.patch('/{project_id}/milestones/{milestone_id}')
 async def update_milestone(project_id: str, milestone_id: str, payload: UpdateMilestoneInput, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    await _project(db, project_id, workspaceId, user['id'])
+    await _project(db, project_id, workspaceId, user['id'], writing=True)
     exists = await db.execute(UPDATE_MILESTONE_SELECT_PROJECT_MILESTONES, {'id': milestone_id, 'project_id': project_id, 'workspace_id': workspaceId})
     if exists.scalar_one_or_none() is None: raise ApiError(404, 'Project milestone not found.', 'Not Found')
     values, sets, params = payload.model_dump(exclude_unset=True), [], {'id': milestone_id, 'now': utcnow()}
@@ -1144,7 +1152,7 @@ async def update_milestone(project_id: str, milestone_id: str, payload: UpdateMi
 
 @router.delete('/{project_id}/milestones/{milestone_id}')
 async def remove_milestone(project_id: str, milestone_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    await _project(db, project_id, workspaceId, user['id'])
+    await _project(db, project_id, workspaceId, user['id'], writing=True)
     deleted = await db.execute(REMOVE_MILESTONE_DELETE_PROJECT_MILESTONES, {'id': milestone_id, 'project_id': project_id, 'workspace_id': workspaceId})
     if deleted.scalar_one_or_none() is None: raise ApiError(404, 'Project milestone not found.', 'Not Found')
     await db.commit()
@@ -1191,6 +1199,9 @@ async def create_update(project_id: str, payload: ProjectUpdateInput, user: Any 
     project = await _project(db, project_id, payload.workspaceId, user['id']); body = payload.body.strip()
     if not body: raise ApiError(400, 'Project update cannot be empty.', 'Bad Request')
     update_id, now, kind = cuid(), utcnow(), payload.kind or 'update'
+    # Comments stay open to VIEWER like issue comments; a status update changes project health.
+    # VI: Comment vẫn mở cho VIEWER như comment issue; cập nhật trạng thái thì đổi health của dự án.
+    if kind != 'comment': await team_write_role(db, project['teamId'], user['id'])
     await db.execute(CREATE_UPDATE_INSERT_PROJECT_UPDATES, {'id': update_id, 'workspace_id': payload.workspaceId, 'project_id': project_id, 'author_id': user['id'], 'body': body, 'kind': kind, 'health': None if kind == 'comment' else (payload.health or 'on-track'), 'now': now})
     if kind != 'comment' and payload.health: await db.execute(CREATE_UPDATE_UPDATE_PROJECTS, {'id': project_id, 'health': payload.health, 'now': now})
     await db.execute(CREATE_UPDATE_INSERT_PROJECT_SUBSCRIPTIONS, {'project_id': project_id, 'user_id': user['id'], 'now': now})
@@ -1219,7 +1230,7 @@ async def create_update(project_id: str, payload: ProjectUpdateInput, user: Any 
 
 @router.post('/{project_id}/resources')
 async def create_resource(project_id: str, payload: ProjectResourceInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    await _project(db, project_id, payload.workspaceId, user['id'])
+    await _project(db, project_id, payload.workspaceId, user['id'], writing=True)
     resource_id, now, label, resource_url = cuid(), utcnow(), payload.label.strip(), _url(payload.url)
     await db.execute(CREATE_RESOURCE_INSERT_PROJECT_RESOURCES, {'id': resource_id, 'workspace_id': payload.workspaceId, 'project_id': project_id, 'created_by': user['id'], 'label': label, 'url': resource_url, 'now': now})
     await db.execute(CREATE_RESOURCE_INSERT_ACTIVITIES, {'id': cuid(), 'workspace_id': payload.workspaceId, 'project_id': project_id, 'actor_id': user['id'], 'data': json.dumps({'resourceId': resource_id, 'label': label, 'url': resource_url}), 'now': now})

@@ -16,6 +16,7 @@ from ...core.identifiers import cuid
 from ...core.utc_responses import UtcAPIRouter as APIRouter
 from ...db.session import get_session
 from ..access.membership import manager, owner, workspace_role
+from ..access.team_roles import TeamRole
 from ..identity.auth import current_user
 from .commands import (
     ADD_MEMBER_INSERT_TEAM_MEMBERS,
@@ -79,11 +80,11 @@ class UpdateTeamInput(BaseModel):
 class TeamMemberInput(BaseModel):
     workspaceId: str = Field(min_length=1)
     userId: str = Field(min_length=1)
-    role: Literal['LEAD', 'MEMBER']
+    role: TeamRole
 
 
 class TeamMemberRoleInput(BaseModel):
-    role: Literal['LEAD', 'MEMBER']
+    role: TeamRole
 
 
 def team_record(row: Any) -> dict[str, Any]:

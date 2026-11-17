@@ -200,6 +200,7 @@ export function IssuePropertiesPanel({ issue, reviews }: IssuePropertiesPanelPro
                      rowIcon={UserRound}
                      user={issue.assignee}
                      issueId={issue.id}
+                     teamId={issue.teamId}
                      labels={{
                         field: tx('Assignee'),
                         menu: tx('Assign to...'),

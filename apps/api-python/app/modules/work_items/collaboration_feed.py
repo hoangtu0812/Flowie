@@ -227,6 +227,7 @@ async def activity_page(
                     "id": r["actor_id"],
                     "name": r["actor_name"],
                     "avatarUrl": r["actor_avatar_url"],
+                    "isBot": r["actor_is_bot"],
                 }
                 if r["actor_id"]
                 else None,

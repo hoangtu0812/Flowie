@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import utcnow
 from ...core.errors import ApiError
+from ..access.projects import team_write_role
 from .commands import (
     ADD_ISSUE_RELATION_INSERT_ISSUE_RELATIONS,
     ADD_ISSUE_RELATION_UPDATE_ISSUE_RELATIONS,
@@ -27,6 +28,10 @@ async def _add_issue_relation(
 ) -> dict[str, Any]:
     issue = await issue_row(db, issue_id, workspace_id, user_id)
     related = await issue_row(db, related_issue_id, workspace_id, user_id)
+    # A relation writes activity on both issues, so both teams must allow the caller to write.
+    # VI: Relation ghi activity trên cả hai issue nên cả hai team phải cho người gọi ghi.
+    await team_write_role(db, issue["teamId"], user_id)
+    await team_write_role(db, related["teamId"], user_id)
     if issue["id"] == related["id"]:
         raise ApiError(400, "An issue cannot be related to itself.", "Bad Request")
 

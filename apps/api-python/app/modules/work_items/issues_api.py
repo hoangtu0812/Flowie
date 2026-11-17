@@ -15,7 +15,12 @@ from ...core.utc_responses import UtcAPIRouter as APIRouter
 from ...db.session import get_session
 from ..access.membership import manager
 from ..access.project_scope import project_read_scope
-from ..access.projects import team_access, workspace_access
+from ..access.projects import (
+    team_access,
+    team_write_role,
+    team_writer,
+    workspace_access,
+)
 from ..identity.auth import current_user
 from .commands import (
     ADD_ISSUE_REACTION_INSERT_ISSUE_REACTIONS,
@@ -279,7 +284,7 @@ async def issue_options(
     return {'data': {
         'statuses': [{'id': row['id'], 'name': row['name'], 'category': row['category'], 'color': row['color'], 'position': row['position']} for row in statuses.mappings().all()],
         'projects': [{'id': row['id'], 'name': row['name'], 'identifier': row['identifier'], 'status': row['status'], 'priority': row['priority'], 'health': row['health'], 'startDate': row['start_date'], 'targetDate': row['target_date'], 'leadId': row['lead_id'], 'teamId': row['team_id']} for row in projects.mappings().all()],
-        'members': [{'id': row['id'], 'name': row['name'], 'email': row['email'], 'avatarUrl': row['avatar_url'], 'lastSeenAt': row['last_seen_at'], 'isOnline': bool(row['last_seen_at'] and row['last_seen_at'] >= utcnow() - timedelta(minutes=2))} for row in members.mappings().all()],
+        'members': [{'id': row['id'], 'name': row['name'], 'email': row['email'], 'avatarUrl': row['avatar_url'], 'lastSeenAt': row['last_seen_at'], 'isOnline': bool(row['last_seen_at'] and row['last_seen_at'] >= utcnow() - timedelta(minutes=2)), 'teamRoles': row['team_roles']} for row in members.mappings().all()],
         'labels': [dict(row) for row in labels.mappings().all()],
         'cycles': [{'id': row['id'], 'teamId': row['team_id'], 'name': row['name'], 'status': row['status'], 'startDate': row['start_date'], 'endDate': row['end_date']} for row in cycles.mappings().all()],
         'releases': [{'id': row['id'], 'name': row['name'], 'version': row['version'], 'status': row['status'], 'targetDate': row['target_date']} for row in releases.mappings().all()],
@@ -566,6 +571,8 @@ async def remove_issue_relation(
 ) -> dict[str, dict[str, Any]]:
     issue = await issue_row(db, issue_id, workspaceId, user['id'])
     related = await issue_row(db, related_issue_id, workspaceId, user['id'])
+    await team_write_role(db, issue['teamId'], user['id'])
+    await team_write_role(db, related['teamId'], user['id'])
     result = await db.execute(
         REMOVE_ISSUE_RELATION_DELETE_ISSUE_RELATIONS,
         {
@@ -609,8 +616,10 @@ async def move_issue(
     issue = await issue_row(db, issue_id, payload.workspaceId, user['id'])
     if issue['teamId'] == payload.teamId:
         return {'data': issue}
+    # Moving writes to both the source and the target team. VI: Di chuyển ghi vào cả team nguồn lẫn team đích.
+    await team_write_role(db, issue['teamId'], user['id'])
     if payload.teamId:
-        await team_access(db, payload.workspaceId, payload.teamId, user['id'])
+        await team_writer(db, payload.workspaceId, payload.teamId, user['id'])
     from .issue_numbering import allocate_issue_number
     team = await allocate_issue_number(db, payload.workspaceId, payload.teamId)
     status = await db.execute(
@@ -673,6 +682,7 @@ async def classify_issue(
     await locked_issue(db, issue_id)
     await actor_context(db, user['id'])
     issue = await issue_row(db, issue_id, payload.workspaceId, user['id'])
+    await team_write_role(db, issue['teamId'], user['id'])
     duplicate_of_id: str | None = None
     duplicate_identifier: str | None = None
     if payload.resolution == 'DUPLICATE':
@@ -733,6 +743,7 @@ async def convert_issue_to_comment(
     await locked_issue(db, issue_id)
     await actor_context(db, user['id'])
     source = await issue_row(db, issue_id, payload.workspaceId, user['id'])
+    await team_write_role(db, source['teamId'], user['id'])
     target_id = await db.execute(
         CONVERT_ISSUE_TO_COMMENT_SELECT_ISSUES,
         {'workspace_id': payload.workspaceId, 'identifier': payload.targetIdentifier.strip().upper()},
@@ -863,6 +874,7 @@ async def archive_issue(
     await locked_issue(db, issue_id)
     await actor_context(db, user['id'])
     await issue_row(db, issue_id, workspaceId, user['id'])
+    await team_write_role(db, issue['teamId'], user['id'])
     archived_ids = [issue_id]
     if includeSubIssues:
         descendant_ids = await _descendant_ids(db, workspaceId, issue['teamId'], issue_id)

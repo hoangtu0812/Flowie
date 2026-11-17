@@ -1,4 +1,5 @@
 import { loadCurrentUser } from '@/features/identity/current-user';
+import type { TeamRoles } from '@/lib/team-roles';
 import {
    issueQueryParams,
    type IssueQuery,
@@ -103,6 +104,7 @@ type NativeIssueOptions = {
       avatarUrl?: string | null;
       isOnline?: boolean;
       lastSeenAt?: string | null;
+      teamRoles?: TeamRoles;
    }>;
    labels: LabelInterface[];
    cycles: Array<{
@@ -264,6 +266,7 @@ function asMember(native: NativeIssueOptions['members'][number]): User {
       joinedDate: '',
       teamIds: [],
       timezone: 'UTC',
+      teamRoles: native.teamRoles,
    };
 }
 

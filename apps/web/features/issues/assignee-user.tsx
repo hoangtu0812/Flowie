@@ -9,6 +9,8 @@ import {
    DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { User } from '@/types/users';
+import { BotBadge } from '@/components/common/bot-badge';
+import { isAssignable, isBot } from '@/lib/team-roles';
 import { useIssuesStore } from '@/store/issues-store';
 import { CheckIcon, CircleUserRound, UserIcon, type LucideIcon } from 'lucide-react';
 import { useState } from 'react';
@@ -47,6 +49,13 @@ interface AssigneeUserProps {
     * VI: có chấm trạng thái, vốn dành cho avatar ở danh sách.
     */
    rowIcon?: LucideIcon;
+   /**
+    * Team of the issue. When set, the menu hides that team's VIEWERs, who cannot be assigned, and
+    * marks its BOTs; leave it unset for fields such as the reporter, which any member may hold.
+    * VI: Team của issue. Khi có, menu ẩn VIEWER của team đó vì không được giao việc, và đánh dấu
+    * VI: BOT; để trống cho các trường như reporter, mà thành viên nào cũng giữ được.
+    */
+   teamId?: string | null;
 }
 
 const assigneeLabels = { field: 'Assignee', menu: 'Assign to...', empty: 'No assignee' };
@@ -57,11 +66,13 @@ export function AssigneeUser({
    onAssign,
    labels = assigneeLabels,
    rowIcon: RowIcon,
+   teamId,
 }: AssigneeUserProps) {
    const row = Boolean(RowIcon);
    const [open, setOpen] = useState(false);
    const [saving, setSaving] = useState(false);
-   const { members, updateIssueAssignee } = useIssuesStore();
+   const { members: allMembers, updateIssueAssignee } = useIssuesStore();
+   const members = allMembers.filter((member) => isAssignable(member.teamRoles, teamId));
 
    const assign = async (nextAssignee: User | null) => {
       setOpen(false);
@@ -170,6 +181,7 @@ export function AssigneeUser({
                         <AvatarFallback>{member.name[0]}</AvatarFallback>
                      </Avatar>
                      <span className="truncate">{member.name}</span>
+                     {isBot(member.teamRoles, teamId) && <BotBadge />}
                   </div>
                   {user?.id === member.id && <CheckIcon className="ml-auto h-4 w-4 shrink-0" />}
                </DropdownMenuItem>

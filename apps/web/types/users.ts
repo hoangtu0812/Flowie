@@ -1,3 +1,5 @@
+import type { TeamRoles } from '../lib/team-roles';
+
 export interface User {
    id: string;
    name: string;
@@ -12,4 +14,6 @@ export interface User {
    workspaceMemberId?: string;
    workspaceRole?: 'OWNER' | 'ADMIN' | 'MEMBER' | 'ADMIN_VIEWER';
    membershipStatus?: 'ACTIVE' | 'INVITED';
+   /** Role per team id (DTD-918). VI: Vai trò theo id team (DTD-918). */
+   teamRoles?: TeamRoles;
 }

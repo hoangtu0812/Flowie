@@ -19,7 +19,7 @@ from .document_repository import (
     _document_by_id,
     _resolve_folder,
     _source_url,
-    document_team_access,
+    document_team_writer,
 )
 from .document_review import announce_status_change, check_status_change
 from .queries import (
@@ -34,7 +34,7 @@ from .queries import (
 async def create_document(
     payload: CreateDocumentInput, user: Any, db: AsyncSession
 ) -> dict[str, dict[str, Any]]:
-    await document_team_access(db, payload.workspaceId, payload.teamId, user["id"])
+    await document_team_writer(db, payload.workspaceId, payload.teamId, user["id"])
     if payload.teamId:
         from .document_tree import _lock_team_folders
 
@@ -105,7 +105,7 @@ async def update_document(
         owner = (await db.execute(UPDATE_DOCUMENT_SELECT_DOCUMENTS_2, {"id": document_id, "workspace": workspaceId})).mappings().first()
         if not owner:
             raise ApiError(404, "Document not found.", "Not Found")
-        await document_team_access(db, workspaceId, owner["team_id"], user["id"])
+        await document_team_writer(db, workspaceId, owner["team_id"], user["id"])
         # Relocation locks the tree before the document row, matching folder deletion.
         # Ordinary autosaves need no tree lock because their active document blocks deletion.
         # VI: Di chuyển khóa cây trước dòng tài liệu, cùng thứ tự với xóa thư mục. Lưu tự động
@@ -124,7 +124,7 @@ async def update_document(
     )
     if not current:
         raise ApiError(404, "Document not found.", "Not Found")
-    await document_team_access(db, workspaceId, current["team_id"], user["id"])
+    await document_team_writer(db, workspaceId, current["team_id"], user["id"])
     if (
         payload.expectedVersion is not None
         and current["version"] != payload.expectedVersion
@@ -215,7 +215,7 @@ async def archive_document(document_id, workspaceId, user, db, expected_version=
     )
     if not current:
         raise ApiError(404, "Document not found.", "Not Found")
-    await document_team_access(db, workspaceId, current["team_id"], user["id"])
+    await document_team_writer(db, workspaceId, current["team_id"], user["id"])
     if expected_version is not None and current["version"] != expected_version:
         raise ApiError(409, "This document changed. Reload it before deleting.", "Conflict")
     await db.execute(

@@ -1,9 +1,11 @@
+import type { TeamRoles } from '../../lib/team-roles';
 import type { User } from '../../types/users';
 export type IssueMemberOption = {
    id: string;
    name: string;
    email: string;
    avatarUrl?: string | null;
+   teamRoles?: TeamRoles;
 };
 export function issueMember(member: IssueMemberOption, team: string): User {
    return {

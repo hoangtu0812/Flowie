@@ -22,6 +22,8 @@ import { useParams } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { useLiveTeam } from './use-live-team';
+import { BotBadge } from '@/components/common/bot-badge';
+import { TEAM_ROLES, type TeamRole } from '@/lib/team-roles';
 import { TeamWorkload } from './team-workload';
 
 /** Team member list and membership controls using the native Team API. */
@@ -40,7 +42,7 @@ export default function TeamMembers() {
    } = useLiveTeam(teamId);
    const [dialogOpen, setDialogOpen] = useState(false);
    const [personId, setPersonId] = useState('');
-   const [role, setRole] = useState<'LEAD' | 'MEMBER'>('MEMBER');
+   const [role, setRole] = useState<TeamRole>('MEMBER');
    const [saving, setSaving] = useState(false);
 
    const members = useMemo(
@@ -81,7 +83,7 @@ export default function TeamMembers() {
       }
    };
 
-   const changeRole = async (userId: string, nextRole: 'LEAD' | 'MEMBER') => {
+   const changeRole = async (userId: string, nextRole: TeamRole) => {
       try {
          await updateMember(userId, nextRole);
          toast.success('Team role updated.');
@@ -132,7 +134,10 @@ export default function TeamMembers() {
                      <AvatarFallback>{member.user.name[0]}</AvatarFallback>
                   </Avatar>
                   <div className="flex flex-col min-w-0">
-                     <span className="font-medium truncate">{member.user.name}</span>
+                     <span className="flex items-center gap-1.5 min-w-0">
+                        <span className="font-medium truncate">{member.user.name}</span>
+                        {member.role === 'BOT' && <BotBadge />}
+                     </span>
                      <span className="text-xs text-muted-foreground truncate">
                         {member.user.title ?? member.user.name.split('.')[0]}
                      </span>
@@ -144,16 +149,17 @@ export default function TeamMembers() {
                <div className="w-[45%] md:w-[20%] flex items-center gap-1">
                   <Select
                      value={member.role}
-                     onValueChange={(value: 'LEAD' | 'MEMBER') =>
-                        void changeRole(member.user.id, value)
-                     }
+                     onValueChange={(value: TeamRole) => void changeRole(member.user.id, value)}
                   >
                      <SelectTrigger className="h-7 w-24 border-0 bg-accent text-xs">
                         <SelectValue />
                      </SelectTrigger>
                      <SelectContent>
-                        <SelectItem value="MEMBER">Member</SelectItem>
-                        <SelectItem value="LEAD">Lead</SelectItem>
+                        {TEAM_ROLES.map((option) => (
+                           <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                           </SelectItem>
+                        ))}
                      </SelectContent>
                   </Select>
                   <Button
@@ -189,13 +195,16 @@ export default function TeamMembers() {
                         ))}
                      </SelectContent>
                   </Select>
-                  <Select value={role} onValueChange={(value: 'LEAD' | 'MEMBER') => setRole(value)}>
-                     <SelectTrigger>
+                  <Select value={role} onValueChange={(value: TeamRole) => setRole(value)}>
+                     <SelectTrigger aria-label="Team role">
                         <SelectValue />
                      </SelectTrigger>
                      <SelectContent>
-                        <SelectItem value="MEMBER">Member</SelectItem>
-                        <SelectItem value="LEAD">Lead</SelectItem>
+                        {TEAM_ROLES.map((option) => (
+                           <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                           </SelectItem>
+                        ))}
                      </SelectContent>
                   </Select>
                   {availablePeople.length === 0 && (

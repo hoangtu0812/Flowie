@@ -109,6 +109,12 @@ enum PlatformRole {
 enum TeamMemberRole {
   LEAD
   MEMBER
+  /// Reads the team's issues, projects and documents but never writes them, and is never assigned.
+  /// VI: Đọc issue, project, document của team nhưng không bao giờ ghi, và không được assign.
+  VIEWER
+  /// Bot or agent account: member permissions, shown with a Bot badge.
+  /// VI: Tài khoản bot hoặc agent: quyền như member, hiển thị kèm badge Bot.
+  BOT
 }
 
 enum TeamJoinPolicy {

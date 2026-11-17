@@ -161,6 +161,10 @@ const catalog = {
    ],
    markdownNeedsContent: ['Enter a file name and some content.', 'Nhập tên tệp và nội dung.'],
    issueSections: ['Issue sections', 'Các phần của công việc'],
+   teamViewOnly: [
+      'You are a Viewer in this team: you can read and comment, not edit.',
+      'Bạn là Viewer của team này: bạn xem và bình luận được, không sửa được.',
+   ],
    language: ['Language', 'Ngôn ngữ'],
 } as const;
 export type MessageKey = keyof typeof catalog;
