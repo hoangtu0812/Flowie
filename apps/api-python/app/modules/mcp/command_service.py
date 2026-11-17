@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from ...core.errors import ApiError
 from ...core.identifiers import cuid
+from ..attachments.api import delete_attachment_row
 from ..work_items import comments, documents, issues
 from ..work_items.commands import REORDER_LOCK, reorder_update_unnest_sql
 from ..work_items.contracts import (
@@ -26,6 +27,7 @@ from .queries import (
     STATUS_BY_NAME_SELECT_ISSUE_STATUSES,
     context_select_issues_sql,
 )
+from .query_service import QueryService
 from .uploads import upload_link
 
 
@@ -363,6 +365,24 @@ class CommandService:
             )["data"]
         if name == "upsert_feature_doc":
             return await upsert_feature_doc(self.db, self.principal, self.subject, payload)
+        if name == "delete_attachment":
+            # Checked here rather than in prepare(): a replayed key must return its stored result
+            # after the row is gone. Reading the parent record comes first, as for
+            # read_attachment_*; a file of a comment or document also needs that kind's write
+            # scope, not only issues:write.
+            # VI: Kiểm tra ở đây thay vì trong prepare(): gọi lại cùng key phải trả kết quả đã lưu
+            # VI: khi dòng đã bị xoá. Phải đọc được bản ghi cha trước, như read_attachment_*; tệp
+            # VI: của comment hay tài liệu còn cần quyền ghi của loại đó, không chỉ issues:write.
+            row = await QueryService(
+                self.db, self.principal, self.settings
+            )._authorized_attachment(payload.attachmentId)
+            scope = {"comment": "comments:write", "document": "documents:write"}.get(
+                row["entity_type"]
+            )
+            if scope:
+                self.principal.require(scope)
+            await delete_attachment_row(self.db, self.settings, row, self.principal.user["id"])
+            return {"id": row["id"], "filename": row["filename"], "deleted": True}
         if name == "create_attachment_upload":
             return upload_link(self.settings, self.principal, self.subject, payload.filename)
         if name == "link_document":

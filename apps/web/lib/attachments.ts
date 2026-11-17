@@ -76,6 +76,23 @@ export async function uploadAttachment(
    return ((await response.json()) as { data: Attachment }).data;
 }
 
+/**
+ * Permanently deletes an attachment; the API allows the uploader or a workspace owner/admin and
+ * answers 403 otherwise, whose message is thrown.
+ * VI: Xoá vĩnh viễn tệp đính kèm; API cho phép người tải lên hoặc owner/admin của workspace, ngược
+ * VI: lại trả 403, message của lỗi đó được ném ra.
+ */
+export async function deleteAttachment(attachmentId: string): Promise<void> {
+   const response = await authenticatedFetch(
+      `${api}/attachments/${encodeURIComponent(attachmentId)}`,
+      { method: 'DELETE' }
+   );
+   if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+      throw new Error(payload?.message ?? 'Could not delete the file.');
+   }
+}
+
 /** Markdown an editor inserts for an uploaded image. */
 export const imageMarkdown = (attachment: Attachment) =>
    `![${attachment.filename}](${attachmentPreviewUrl(attachment.id)})`;

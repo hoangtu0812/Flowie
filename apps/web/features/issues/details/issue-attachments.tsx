@@ -11,6 +11,7 @@ import {
    Link2,
    Paperclip,
    Plus,
+   Trash2,
 } from 'lucide-react';
 import { Button } from '@astryxdesign/core/Button';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
@@ -156,8 +157,27 @@ export function IssueAttachments({
                   return (
                      <div
                         key={attachment.id}
-                        className="overflow-hidden rounded-lg border border-border/70 bg-background transition-colors hover:border-border"
+                        className="group relative overflow-hidden rounded-lg border border-border/70 bg-background transition-colors hover:border-border"
                      >
+                        <button
+                           type="button"
+                           aria-label={`${t('deleteAttachment')} ${attachment.filename}`}
+                           title={t('deleteAttachment')}
+                           className="absolute right-1.5 top-1.5 z-10 grid size-7 place-items-center rounded-md bg-background/90 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+                           onClick={() => {
+                              if (
+                                 window.confirm(
+                                    t('deleteAttachmentConfirm').replace(
+                                       '{name}',
+                                       attachment.filename
+                                    )
+                                 )
+                              )
+                                 void state.remove(attachment);
+                           }}
+                        >
+                           <Trash2 className="size-4" aria-hidden />
+                        </button>
                         {image ? (
                            <>
                               <div className="grid h-28 place-items-center overflow-hidden bg-muted/40">

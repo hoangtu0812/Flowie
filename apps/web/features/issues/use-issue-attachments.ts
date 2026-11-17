@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { authenticatedFetch } from '@/lib/workspaces';
 import { responseData } from '@/lib/http';
-import { uploadAttachment, type Attachment } from '@/lib/attachments';
+import { deleteAttachment, uploadAttachment, type Attachment } from '@/lib/attachments';
 import { SubmissionGate } from '@/features/shared/submission-gate';
 
 export function useIssueAttachments(workspaceId: string | undefined, issueId: string) {
@@ -59,6 +59,16 @@ export function useIssueAttachments(workspaceId: string | undefined, issueId: st
       });
       return stored;
    };
+   const remove = async (attachment: Attachment) => {
+      setError(undefined);
+      try {
+         await deleteAttachment(attachment.id);
+         await load();
+      } catch (caught) {
+         if (scopeRef.current === scope)
+            setError(caught instanceof Error ? caught.message : 'Could not delete the file.');
+      }
+   };
    const retry = async () => {
       try {
          await load();
@@ -68,5 +78,5 @@ export function useIssueAttachments(workspaceId: string | undefined, issueId: st
             setError(caught instanceof Error ? caught.message : 'Could not load attachments.');
       }
    };
-   return { attachments, uploading, error, upload, retry };
+   return { attachments, uploading, error, upload, remove, retry };
 }

@@ -17,13 +17,16 @@ from ...core.identifiers import cuid
 from ...core.utc_responses import UtcAPIRouter as APIRouter
 from ...db.session import get_session
 from ...storage.minio import MinioStorage
+from ..access.membership import workspace_role
 from ..access.projects import (
     team_access,
     workspace_access,
 )
+from ..audit.write import record_change
 from ..identity.auth import current_user
 from ..sharepoint.graph import viewer_url
 from .commands import (
+    DELETE_ATTACHMENT_DELETE_ATTACHMENTS,
     STORE_ATTACHMENT_INSERT_ATTACHMENTS,
 )
 from .queries import (
@@ -184,6 +187,52 @@ async def get_attachment(attachment_id: str, user: Any = Depends(current_user), 
         raise ApiError(404, 'Attachment not found.', 'Not Found')
     await _authorize_entity(db, row['workspace_id'], row['entity_type'], row['entity_id'], user['id'])
     return {'data': {**_present(row), 'uploadedByName': row['uploader_name']}}
+
+
+@router.delete('/{attachment_id}')
+@public_router.delete('/{attachment_id}')
+async def delete_attachment(attachment_id: str, request: Request, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    """Permanently deletes an attachment the caller can read; see `delete_attachment_row`.
+
+    Reading the parent record is required first, so an unreadable attachment is a 404 or 403
+    exactly as on download. ADMIN_VIEWER never reaches this route: the app-wide read-only guard
+    refuses every HTTP write of that role.
+    VI: Xoá vĩnh viễn một tệp đính kèm mà người gọi đọc được; xem `delete_attachment_row`. Phải
+    VI: đọc được bản ghi cha trước, nên tệp không đọc được trả 404 hoặc 403 giống khi tải về.
+    VI: ADMIN_VIEWER không bao giờ tới route này: lớp chặn chỉ đọc toàn app từ chối mọi thao tác
+    VI: ghi HTTP của role đó.
+    """
+    row = (await db.execute(DOWNLOAD_ATTACHMENT_SELECT_ATTACHMENTS, {'attachment_id': attachment_id})).mappings().first()
+    if not row:
+        raise ApiError(404, 'Attachment not found.', 'Not Found')
+    await _authorize_entity(db, row['workspace_id'], row['entity_type'], row['entity_id'], user['id'])
+    await delete_attachment_row(db, request.app.state.settings, row, user['id'])
+    await db.commit()
+    return {'data': {'id': attachment_id, 'deleted': True}}
+
+
+async def delete_attachment_row(db: AsyncSession, settings: Any, row: Any, user_id: str) -> None:
+    """Deletes an attachment whose parent record the caller may already read; the caller commits.
+
+    Shared by the web route and the MCP `delete_attachment` tool. Only the uploader or a workspace
+    OWNER/ADMIN may delete (403 otherwise). The row goes first (its SharePoint publication row
+    cascades; the SharePoint copy itself stays), then the audit entry, then the stored object: a
+    storage failure raises 502 and the caller's transaction rolls back, so the file is never
+    listed without its content. A concurrent delete that already removed the row is a 404.
+    VI: Xoá tệp đính kèm mà người gọi đã được xác nhận đọc được bản ghi cha; bên gọi tự commit.
+    VI: Dùng chung cho route web và công cụ MCP `delete_attachment`. Chỉ người tải lên hoặc
+    VI: OWNER/ADMIN của workspace được xoá (ngược lại 403). Xoá dòng trước (dòng phát hành
+    VI: SharePoint xoá theo; bản sao trên SharePoint vẫn giữ), rồi ghi audit, rồi xoá object trong
+    VI: kho: kho lỗi thì trả 502 và transaction của bên gọi rollback, nên tệp không bao giờ còn
+    VI: trong danh sách mà mất nội dung. Lần xoá song song đã xoá dòng trước đó trả 404.
+    """
+    if row['uploaded_by'] != user_id and await workspace_role(db, row['workspace_id'], user_id) not in ('OWNER', 'ADMIN'):
+        raise ApiError(403, 'Only the uploader or a workspace administrator can delete this attachment.', 'Forbidden')
+    object_key = (await db.execute(DELETE_ATTACHMENT_DELETE_ATTACHMENTS, {'id': row['id']})).scalar_one_or_none()
+    if object_key is None:
+        raise ApiError(404, 'Attachment not found.', 'Not Found')
+    await record_change(db, row['workspace_id'], user_id, 'attachment.deleted', 'attachment', row['id'], fields=(row['filename'], f"{row['entity_type']}:{row['entity_id']}"))
+    await MinioStorage(settings).delete(object_key)
 
 
 @router.get('/{attachment_id}/download')
