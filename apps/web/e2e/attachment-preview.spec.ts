@@ -67,7 +67,7 @@ test('HTML runs as an opaque origin that cannot reach Flowie; CSV stays static',
    }
    await page.goto(`/${fixture.slug}/issue/${owner.identifier}?tab=attachments`);
 
-   await page.getByRole('button', { name: /mockup\.html/ }).click();
+   await page.getByRole('button', { name: /^mockup\.html/ }).click();
    const dialog = page.getByRole('dialog');
    await expect(dialog.locator('iframe')).toHaveAttribute('sandbox', 'allow-scripts allow-modals');
    const report = await sandboxReport(dialog.frameLocator('iframe[title="mockup.html"]'));
@@ -83,7 +83,7 @@ test('HTML runs as an opaque origin that cannot reach Flowie; CSV stays static',
    );
    await page.keyboard.press('Escape');
 
-   await page.getByRole('button', { name: /plan\.csv/ }).click();
+   await page.getByRole('button', { name: /^plan\.csv/ }).click();
    const plan = page.getByRole('dialog').frameLocator('iframe[title="plan.csv"]');
    await expect(plan.getByRole('cell', { name: 'Lan' })).toBeVisible();
    await expect(page.getByRole('dialog').locator('iframe')).toHaveAttribute('sandbox', '');
