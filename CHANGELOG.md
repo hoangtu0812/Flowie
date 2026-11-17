@@ -21,7 +21,7 @@ pull request and commit references, which are for us.
 
 ### Added
 
-- AI clients connected over MCP can set the order of a task's sub-issues: the new `reorder_sub_issues` tool takes the parent task and the full list of its sub-issues in the wanted order, switches the parent to manual sorting so the web shows that order, and rejects a list with a missing, extra or repeated sub-issue without changing anything. `get_issue_context` returns sub-issues in that order with their `manualOrder`, up to `subIssueLimit` (default 50, maximum 200) instead of 5 sorted by id. Rebuild `api` and reconnect MCP clients; no migration. (DTD-868)
+- AI clients connected over MCP can set the order of a task's sub-issues: the new `reorder_sub_issues` tool takes the parent task and the full list of its sub-issues in the wanted order, switches the parent to manual sorting so the web shows that order, and rejects a list with a missing, extra or repeated sub-issue without changing anything. `get_issue_context` returns sub-issues in that order with their `manualOrder`, up to `subIssueLimit` (default 50, maximum 200) instead of 5 sorted by id. Rebuild `api` and reconnect MCP clients; no migration. (DTD-868, #295)
   VI: AI client kết nối qua MCP đặt được thứ tự sub-issue của một task: tool mới `reorder_sub_issues` nhận task cha và danh sách đầy đủ sub-issue theo thứ tự mong muốn, chuyển task cha sang sắp xếp thủ công để web hiển thị đúng thứ tự đó, và từ chối danh sách thiếu, thừa hoặc trùng sub-issue mà không thay đổi gì. `get_issue_context` trả sub-issue theo thứ tự đó kèm `manualOrder`, tối đa `subIssueLimit` mục (mặc định 50, tối đa 200) thay vì 5 mục sắp theo id. Build lại `api` và kết nối lại MCP client; không có migration. (DTD-868)
 
 ## [0.21.0] — 2026-11-16 20:18 +07
