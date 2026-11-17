@@ -41,6 +41,7 @@ from .commands import (
     CREATE_PROJECT_TEMPLATE_INSERT_PROJECT_TEMPLATES,
     CREATE_RESOURCE_INSERT_ACTIVITIES,
     CREATE_RESOURCE_INSERT_PROJECT_RESOURCES,
+    CREATE_SUB_PROJECT_LABEL_INSERT_SUB_PROJECT_LABELS,
     CREATE_UPDATE_INSERT_ACTIVITIES,
     CREATE_UPDATE_INSERT_PROJECT_SUBSCRIPTIONS,
     CREATE_UPDATE_INSERT_PROJECT_UPDATES,
@@ -52,6 +53,7 @@ from .commands import (
     ENSURE_DEFAULT_PROJECT_STATUSES_INSERT_PROJECT_STATUSES,
     FAVORITE_INSERT_PROJECT_FAVORITES,
     REMOVE_MILESTONE_DELETE_PROJECT_MILESTONES,
+    REMOVE_SUB_PROJECT_LABEL_DELETE_SUB_PROJECT_LABELS,
     SUBSCRIBE_INSERT_PROJECT_SUBSCRIPTIONS,
     UNFAVORITE_DELETE_PROJECT_FAVORITES,
     UNSUBSCRIBE_DELETE_PROJECT_SUBSCRIPTIONS,
@@ -71,6 +73,7 @@ from .commands import (
     update_project_status_update_project_statuses_sql,
     update_project_template_update_project_templates_sql,
     update_project_update_projects_sql,
+    update_sub_project_label_update_sub_project_labels_sql,
 )
 from .queries import (
     ACTIVITY_SELECT_ACTIVITIES,
@@ -90,6 +93,7 @@ from .queries import (
     LIST_MILESTONES_SELECT_PROJECT_MILESTONES,
     LIST_PROJECT_LABELS_SELECT_PROJECT_LABELS,
     LIST_PROJECT_TEMPLATES_SELECT_PROJECT_TEMPLATES,
+    LIST_SUB_PROJECT_LABELS_SELECT_SUB_PROJECT_LABELS,
     MEMBERS_SELECT_PROJECT_MEMBERS,
     PROJECT_CUSTOM_FIELDS_SELECT_PROJECT_CUSTOM_FIELDS,
     PROJECT_ISSUE_ROWS_SELECT_ISSUE_CYCLES,
@@ -103,6 +107,8 @@ from .queries import (
     PROJECT_SELECT_TEAMS,
     PROJECT_STATUSES_SELECT_PROJECT_STATUSES,
     RESOLVE_PROJECT_SELECT_PROJECTS,
+    SUB_PROJECT_LABEL_NAME_TAKEN_SELECT_SUB_PROJECT_LABELS,
+    SUB_PROJECT_LABEL_SELECT_SUB_PROJECT_LABELS,
     SUBSCRIBE_SELECT_PROJECT_SUBSCRIPTIONS,
     SUBSCRIPTION_SELECT_PROJECT_SUBSCRIPTIONS,
     UPDATE_CUSTOM_FIELD_SELECT_PROJECT_CUSTOM_FIELDS,
@@ -228,6 +234,19 @@ class UpdateMilestoneInput(BaseModel):
     targetDate: str | None = None
     completed: bool | None = None
     position: int | None = Field(default=None, ge=0)
+
+
+class SubProjectLabelInput(BaseModel):
+    workspaceId: str = Field(min_length=1)
+    name: str = Field(min_length=1, max_length=60)
+    color: str = Field(pattern=r'^#[0-9a-fA-F]{6}$')
+
+
+class UpdateSubProjectLabelInput(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=60)
+    color: str | None = Field(default=None, pattern=r'^#[0-9a-fA-F]{6}$')
+    # True archives (kept on issues, no new assignments), false restores. VI: True lưu trữ (giữ trên issue, không gán mới), false khôi phục.
+    archived: bool | None = None
 
 
 class ProjectUpdateInput(BaseModel):
@@ -1159,6 +1178,70 @@ async def remove_milestone(project_id: str, milestone_id: str, workspaceId: str 
     return {'data': {'id': milestone_id, 'deleted': True}}
 
 
+def _sub_project_label(row: Any) -> dict[str, Any]:
+    return {
+        'id': row['id'], 'projectId': row['project_id'], 'name': row['name'], 'color': row['color'],
+        'archivedAt': row['archived_at'], 'createdAt': row['created_at'], 'updatedAt': row['updated_at'],
+    }
+
+
+async def _sub_project_label_name(db: AsyncSession, project_id: str, name: str, label_id: str = '') -> str:
+    """Trims a sub project name and refuses an empty one or one already used in the project
+    (letter case ignored). VI: Bỏ khoảng trắng tên sub project, từ chối tên rỗng hoặc tên đã dùng
+    VI: trong dự án (không phân biệt hoa thường)."""
+    name = name.strip()
+    if not name: raise ApiError(400, 'Sub project name cannot be empty.', 'Bad Request')
+    taken = await db.execute(SUB_PROJECT_LABEL_NAME_TAKEN_SELECT_SUB_PROJECT_LABELS, {'project_id': project_id, 'name': name, 'id': label_id})
+    if taken.scalar_one_or_none() is not None: raise ApiError(409, 'A sub project with this name already exists in the project.', 'Conflict')
+    return name
+
+
+@router.get('/{project_id}/sub-project-labels')
+async def list_sub_project_labels(project_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
+    await _project(db, project_id, workspaceId, user['id'])
+    result = await db.execute(LIST_SUB_PROJECT_LABELS_SELECT_SUB_PROJECT_LABELS, {'project_id': project_id})
+    return {'data': [_sub_project_label(row) for row in result.mappings().all()]}
+
+
+# Writes use the milestone guard: whoever may edit the project manages its sub projects, and a
+# team VIEWER is refused. VI: Thao tác ghi dùng guard của milestone: ai sửa được dự án thì quản lý
+# VI: sub project của nó, VIEWER của team bị từ chối.
+@router.post('/{project_id}/sub-project-labels')
+async def create_sub_project_label(project_id: str, payload: SubProjectLabelInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    await _project(db, project_id, payload.workspaceId, user['id'], writing=True)
+    name, label_id = await _sub_project_label_name(db, project_id, payload.name), cuid()
+    await db.execute(CREATE_SUB_PROJECT_LABEL_INSERT_SUB_PROJECT_LABELS, {'id': label_id, 'project_id': project_id, 'name': name, 'color': payload.color, 'now': utcnow()})
+    await db.commit()
+    result = await db.execute(SUB_PROJECT_LABEL_SELECT_SUB_PROJECT_LABELS, {'id': label_id, 'project_id': project_id})
+    return {'data': _sub_project_label(result.mappings().one())}
+
+
+@router.patch('/{project_id}/sub-project-labels/{label_id}')
+async def update_sub_project_label(project_id: str, label_id: str, payload: UpdateSubProjectLabelInput, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    await _project(db, project_id, workspaceId, user['id'], writing=True)
+    params: dict[str, Any] = {'id': label_id, 'project_id': project_id}
+    if (await db.execute(SUB_PROJECT_LABEL_SELECT_SUB_PROJECT_LABELS, params)).first() is None: raise ApiError(404, 'Sub project not found.', 'Not Found')
+    values, sets = payload.model_dump(exclude_unset=True), []
+    if any(values[key] is None for key in values): raise ApiError(400, 'Sub project fields cannot be null.', 'Bad Request')
+    if 'name' in values: params['name'] = await _sub_project_label_name(db, project_id, values['name'], label_id); sets.append('name = :name')
+    if 'color' in values: params['color'] = values['color']; sets.append('color = :color')
+    if 'archived' in values: params['archived_at'] = utcnow() if values['archived'] else None; sets.append('archived_at = :archived_at')
+    if sets: await db.execute(update_sub_project_label_update_sub_project_labels_sql(sets), {**params, 'now': utcnow()}); await db.commit()
+    result = await db.execute(SUB_PROJECT_LABEL_SELECT_SUB_PROJECT_LABELS, params)
+    return {'data': _sub_project_label(result.mappings().one())}
+
+
+# Deleting cascades to issue_sub_project_labels, so every issue loses the label in the same statement.
+# VI: Xoá lan sang issue_sub_project_labels, nên mọi issue mất label trong cùng một câu lệnh.
+@router.delete('/{project_id}/sub-project-labels/{label_id}')
+async def remove_sub_project_label(project_id: str, label_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    await _project(db, project_id, workspaceId, user['id'], writing=True)
+    deleted = await db.execute(REMOVE_SUB_PROJECT_LABEL_DELETE_SUB_PROJECT_LABELS, {'id': label_id, 'project_id': project_id})
+    if deleted.scalar_one_or_none() is None: raise ApiError(404, 'Sub project not found.', 'Not Found')
+    await db.commit()
+    return {'data': {'id': label_id, 'deleted': True}}
+
+
 def _project_update(row: Any, *, include_project: bool = False) -> dict[str, Any]:
     value = {
         'id': row['id'], 'workspaceId': row['workspace_id'], 'projectId': row['project_id'],
@@ -1345,6 +1428,26 @@ async def public_update_milestone(project_suffix: str, milestone_id: str, payloa
 @public_router.delete('/c{project_suffix}/milestones/{milestone_id}')
 async def public_remove_milestone(project_suffix: str, milestone_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     return await remove_milestone(_public_project_id(project_suffix), milestone_id, workspaceId, user, db)
+
+
+@public_router.get('/c{project_suffix}/sub-project-labels')
+async def public_list_sub_project_labels(project_suffix: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
+    return await list_sub_project_labels(_public_project_id(project_suffix), workspaceId, user, db)
+
+
+@public_router.post('/c{project_suffix}/sub-project-labels')
+async def public_create_sub_project_label(project_suffix: str, payload: SubProjectLabelInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    return await create_sub_project_label(_public_project_id(project_suffix), payload, user, db)
+
+
+@public_router.patch('/c{project_suffix}/sub-project-labels/{label_id}')
+async def public_update_sub_project_label(project_suffix: str, label_id: str, payload: UpdateSubProjectLabelInput, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    return await update_sub_project_label(_public_project_id(project_suffix), label_id, payload, workspaceId, user, db)
+
+
+@public_router.delete('/c{project_suffix}/sub-project-labels/{label_id}')
+async def public_remove_sub_project_label(project_suffix: str, label_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    return await remove_sub_project_label(_public_project_id(project_suffix), label_id, workspaceId, user, db)
 
 
 @public_router.post('/c{project_suffix}/favorite')

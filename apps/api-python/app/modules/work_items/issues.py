@@ -46,6 +46,7 @@ from .queries import (
     UPDATE_ISSUE_SELECT_ISSUES,
     UPDATE_ISSUE_SELECT_ISSUES_2,
 )
+from .sub_projects import replace_sub_projects, validate_sub_projects
 
 
 async def create_issue(
@@ -67,6 +68,9 @@ async def create_issue(
     await _enforce_start_gate(
         db, payload.workspaceId, payload.teamId, None, category,
         parse_date(values.get("targetDate")),
+    )
+    sub_projects = await validate_sub_projects(
+        db, values.get("projectId"), values.get("subProjectLabelIds") or [], []
     )
     explicit_due = bool(values.get("dueDate"))
     sla_policy = (
@@ -133,6 +137,7 @@ async def create_issue(
             db, await locked_issue(db, issue_id), sla_policy, now, clock=sla_clock
         )
     await sync_issue(db, issue_id, now=now)
+    await replace_sub_projects(db, issue_id, [], sub_projects)
     for label_id in values.get("labelIds") or []:
         await db.execute(
             CREATE_ISSUE_INSERT_ISSUE_LABELS,
@@ -252,6 +257,19 @@ async def update_issue(
         values["releaseIds"] = await _validate_release_ids(
             db, workspaceId, values["releaseIds"]
         )
+    # The issue keeps only sub projects of its final project: a new list is checked against it,
+    # and a project change without a list drops the old project's ones (they never fit the new one).
+    # VI: Issue chỉ giữ sub project của dự án sau cùng: danh sách mới được kiểm theo dự án đó, còn
+    # VI: đổi dự án mà không gửi danh sách thì gỡ sub project của dự án cũ (không hợp dự án mới).
+    current_sub_projects = issue["subProjectLabels"]
+    target_sub_projects = None
+    final_project_id = values["projectId"] if "projectId" in values else issue["projectId"]
+    if "subProjectLabelIds" in values:
+        target_sub_projects = await validate_sub_projects(
+            db, final_project_id, values["subProjectLabelIds"] or [], current_sub_projects
+        )
+    elif final_project_id != issue["projectId"]:
+        target_sub_projects = []
     # A parent change (set, move or remove with null) only rewrites this issue's parent, so its
     # own sub-issues stay under it; validate_parent rejects self, descendants and other teams.
     # VI: Đổi cha (đặt, chuyển hoặc gỡ bằng null) chỉ ghi lại cha của issue này nên các con của
@@ -324,6 +342,11 @@ async def update_issue(
                 UPDATE_ISSUE_INSERT_ISSUE_LABELS,
                 {"issue_id": issue_id, "label_id": label_id},
             )
+    sub_project_change = (
+        await replace_sub_projects(db, issue_id, current_sub_projects, target_sub_projects)
+        if target_sub_projects is not None
+        else None
+    )
     if "releaseIds" in values:
         await db.execute(
             UPDATE_ISSUE_DELETE_ISSUE_RELEASES,
@@ -396,6 +419,8 @@ async def update_issue(
         )
     if parent_transition:
         changes.append(("Parent", parent_transition))
+    if sub_project_change:
+        changes.append(("Sub projects", sub_project_change))
     if "startDate" in values:
         before = (
             issue["startDate"].date().isoformat() if issue.get("startDate") else None

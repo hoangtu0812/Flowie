@@ -9,7 +9,7 @@ import { priorities } from '@/lib/priority-presentations';
 import { Status } from '@/lib/status-presentations';
 import { useDisplaySettingsStore } from '@/store/display-settings-store';
 import { useFilterStore } from '@/store/filter-store';
-import { Box, ChevronDown, User, X } from 'lucide-react';
+import { Box, ChevronDown, FolderTree, User, X } from 'lucide-react';
 import { FC, useMemo, useState } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -19,6 +19,7 @@ import { IssuesListHeader } from './issues-list-header';
 import { LoadingState } from '@/components/common/loading-state';
 import { QueryState } from '@/components/common/query-state';
 import { issueListMinWidth, useIssueColumns } from './issue-columns';
+import { groupBySubProject } from './sub-project-groups';
 
 interface GroupedIssuesViewProps {
    /** Issues to display (after the filter bar has been applied). */
@@ -223,6 +224,25 @@ export const GroupedIssuesView: FC<GroupedIssuesViewProps> = ({
                         total: totalGroup.length,
                      };
                   });
+            }
+            case 'subProject': {
+               // Totals come from the unfiltered scope so a group emptied by the filter bar still
+               // shows; an issue with several sub projects is counted in each of its groups.
+               // VI: Tổng lấy từ phạm vi chưa lọc để nhóm bị bộ lọc làm rỗng vẫn hiện; issue có
+               // VI: nhiều sub project được đếm ở mỗi nhóm của nó.
+               const visible = new Map(
+                  groupBySubProject(visibleIssues).map((group) => [group.id, group.issues])
+               );
+               return groupBySubProject(scopeIssues).map((group) => ({
+                  group: {
+                     id: group.id,
+                     name: group.name,
+                     color: group.color,
+                     icon: <FolderTree className="size-4" style={{ color: group.color }} />,
+                  },
+                  issues: visible.get(group.id) ?? [],
+                  total: group.issues.length,
+               }));
             }
             case 'none': {
                return [

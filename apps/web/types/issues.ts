@@ -1,4 +1,4 @@
-import type { LabelInterface } from '@/types/labels';
+import type { LabelInterface, SubProjectLabel } from '@/types/labels';
 import type { Priority } from '@/lib/priority-presentations';
 import type { Project } from '@/types/projects';
 import type { Status } from '@/lib/status-presentations';
@@ -16,6 +16,8 @@ export interface Issue {
    creator?: User;
    priority: Priority;
    labels: LabelInterface[];
+   /** Sub projects of the issue's project. VI: Sub project thuộc dự án của issue. */
+   subProjectLabels?: SubProjectLabel[];
    createdAt: string;
    team?: { id: string; name: string; identifier: string };
    isSubscribed?: boolean;

@@ -25,6 +25,9 @@ OPTION_COLUMNS = {
     "severity": "COALESCE(i.severity::text,'NONE')",
     "cycle": "COALESCE((SELECT cycle_id FROM issue_cycles ic WHERE ic.issue_id=i.id ORDER BY created_at,cycle_id LIMIT 1),'no-cycle')",
 }
+# Link tables filtered by "has any / all / none of these ids"; both key the label as label_id.
+# VI: Bảng liên kết lọc theo "có bất kỳ / tất cả / không có id nào"; cả hai đặt khoá label là label_id.
+MULTI_OPTION_TABLES = {"labels": "issue_labels", "subProjects": "issue_sub_project_labels"}
 VIETNAMESE = "đàáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵ"
 NORMALIZED = "".join(
     "d" if char == "đ" else unicodedata.normalize("NFD", char)[0] for char in VIETNAMESE
@@ -70,8 +73,9 @@ def filter_sql(raw: str | None) -> tuple[list[str], dict]:
             # không có dự án), nên "is not X" giữ task thiếu trường đó và
             # "project is not ['']" vẫn nghĩa là "có dự án".
             clauses.append(f"({comparison})")
-        elif item.type == "multiOption" and item.columnId == "labels":
-            count = f"(SELECT COUNT(DISTINCT il.label_id) FROM issue_labels il WHERE il.issue_id=i.id AND il.label_id=ANY(CAST(:{key} AS text[])))"
+        elif item.type == "multiOption" and item.columnId in MULTI_OPTION_TABLES:
+            table = MULTI_OPTION_TABLES[item.columnId]
+            count = f"(SELECT COUNT(DISTINCT il.label_id) FROM {table} il WHERE il.issue_id=i.id AND il.label_id=ANY(CAST(:{key} AS text[])))"
             comparisons = {
                 "include": f"{count}>0",
                 "include any of": f"{count}>0",

@@ -18,6 +18,7 @@ import { type FormEvent, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { canonicalProjectPath } from '@/lib/project-route';
 import { rememberProjectSlug } from '../project-route';
+import { ProjectSubProjects } from './project-sub-projects';
 import { useLiveProjectData } from './use-live-project';
 
 /** Same rule as the API: 2–120 characters after trimming. VI: Cùng quy tắc với API: 2–120 ký tự sau khi bỏ khoảng trắng. */
@@ -115,13 +116,13 @@ export function ProjectSettingsDialog({
 
    return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-         <DialogContent className="sm:max-w-md">
+         <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
             <form onSubmit={(event) => void submit(event)} className="grid gap-4">
                <DialogHeader>
                   <DialogTitle>Project settings</DialogTitle>
                   <DialogDescription>
-                     Rename the project, change its icon or the slug used in its links, or open it
-                     to Service Desk tickets.
+                     Rename the project, change its icon or the slug used in its links, open it to
+                     Service Desk tickets, or manage its sub projects.
                   </DialogDescription>
                </DialogHeader>
                <div className="grid gap-2">
@@ -205,6 +206,11 @@ export function ProjectSettingsDialog({
                   </Button>
                </DialogFooter>
             </form>
+            {/* Outside the form: each sub project change saves on its own, not with Save.
+                VI: Nằm ngoài form: mỗi thay đổi sub project tự lưu, không đi cùng nút Save. */}
+            <div className="border-t pt-4">
+               <ProjectSubProjects />
+            </div>
          </DialogContent>
       </Dialog>
    );

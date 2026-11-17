@@ -10,6 +10,7 @@ const fixture = JSON.parse(readFileSync('.e2e-fixture.json', 'utf8')) as {
 const api = 'http://localhost:4000/api/v1';
 const DEFAULT_ORDER = [
    'labels',
+   'subProjects',
    'project',
    'startDate',
    'targetDate',
@@ -139,6 +140,7 @@ test('issue columns resize, hide and reorder, persist per account and reset', as
       .toEqual([
          'assignee',
          'labels',
+         'subProjects',
          'startDate',
          'targetDate',
          'estimatedEffort',
@@ -163,6 +165,7 @@ test('issue columns resize, hide and reorder, persist per account and reset', as
       .toEqual([
          'assignee',
          'labels',
+         'subProjects',
          'startDate',
          'targetDate',
          'estimatedEffort',

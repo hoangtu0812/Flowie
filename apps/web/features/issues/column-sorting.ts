@@ -1,6 +1,7 @@
 export type ColumnSortKey =
    | 'title'
    | 'labels'
+   | 'subProjects'
    | 'project'
    | 'startDate'
    | 'targetDate'

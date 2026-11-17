@@ -16,6 +16,7 @@ import { useUiPreferencesStore, type StoredIssueColumns } from '@/store/ui-prefe
  */
 export const ISSUE_COLUMN_KEYS = [
    'labels',
+   'subProjects',
    'project',
    'startDate',
    'targetDate',
@@ -39,6 +40,7 @@ export const TITLE_PROPERTIES = [
 
 export const ISSUE_COLUMN_LABEL = {
    labels: 'Labels',
+   subProjects: 'Sub projects',
    project: 'Project',
    startDate: 'Start',
    targetDate: 'End',
@@ -60,6 +62,7 @@ export const ISSUE_COLUMN_LABEL = {
  */
 export const ISSUE_COLUMN: Record<IssueColumnKey, string> = {
    labels: 'hidden lg:flex items-center gap-1 shrink-0 pl-2 overflow-hidden',
+   subProjects: 'hidden lg:flex items-center gap-1 shrink-0 pl-2 overflow-hidden',
    project: 'hidden xl:flex items-center shrink-0 pl-2 overflow-hidden',
    startDate: 'hidden xl:flex items-center shrink-0 pl-2 overflow-hidden',
    targetDate: 'hidden xl:flex items-center shrink-0 pl-2 overflow-hidden',
@@ -74,6 +77,7 @@ export const ISSUE_COLUMN: Record<IssueColumnKey, string> = {
 const DEFAULT_WIDTHS: Record<IssueColumnWidthKey, number> = {
    title: 320,
    labels: 160,
+   subProjects: 140,
    project: 120,
    startDate: 82,
    targetDate: 82,

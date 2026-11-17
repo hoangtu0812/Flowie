@@ -13,12 +13,20 @@ class BulkChanges(BaseModel):
     cycleId: str | None = None
     priority: Literal["NONE", "LOW", "MEDIUM", "HIGH", "URGENT"] | None = None
     labelIds: list[str] | None = Field(default=None, max_length=100)
+    # Replaces each issue's sub projects; an issue of another project fails on its own row.
+    # VI: Thay sub project của từng issue; issue thuộc dự án khác lỗi riêng ở dòng của nó.
+    subProjectLabelIds: list[str] | None = Field(default=None, max_length=100)
 
     @model_validator(mode="after")
     def valid_changes(self):
         if not self.model_fields_set:
             raise ValueError("Choose at least one change.")
-        for field in self.model_fields_set & {"statusId", "priority", "labelIds"}:
+        for field in self.model_fields_set & {
+            "statusId",
+            "priority",
+            "labelIds",
+            "subProjectLabelIds",
+        }:
             if getattr(self, field) is None:
                 raise ValueError(f"{field} cannot be null.")
         for field in self.model_fields_set & {
@@ -30,11 +38,12 @@ class BulkChanges(BaseModel):
             value = getattr(self, field)
             if value is not None and (not value or len(value) > 100):
                 raise ValueError("Invalid reference.")
-        if self.labelIds is not None and (
-            len(set(self.labelIds)) != len(self.labelIds)
-            or any(not value or len(value) > 100 for value in self.labelIds)
-        ):
-            raise ValueError("Invalid or duplicate label reference.")
+        for ids in (self.labelIds, self.subProjectLabelIds):
+            if ids is not None and (
+                len(set(ids)) != len(ids)
+                or any(not value or len(value) > 100 for value in ids)
+            ):
+                raise ValueError("Invalid or duplicate label reference.")
         return self
 
 

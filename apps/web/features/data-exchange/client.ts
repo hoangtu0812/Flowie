@@ -52,4 +52,6 @@ export const importFields = [
    'startDate',
    'targetDate',
    'dueDate',
+   // Comma-separated sub project names of the row's project. VI: Tên sub project của dự án trong dòng, cách nhau dấu phẩy.
+   'subProjects',
 ];

@@ -22,7 +22,8 @@ def export_issues_select_projects_sql(scope) -> TextClause:
         i.status_id,s.name AS status_name,i.team_id,i.project_id,i.assignee_id,i.start_date,i.target_date,i.due_date,i.created_at,i.updated_at,
         t.name AS team_name,(SELECT p.name FROM projects p WHERE p.id=i.project_id) AS project_name,
         (SELECT u.name FROM users u WHERE u.id=i.assignee_id) AS assignee_name,i.estimated_effort,i.actual_effort,
-        (SELECT string_agg(l.name,', ' ORDER BY l.name) FROM issue_labels il JOIN labels l ON l.id=il.label_id WHERE il.issue_id=i.id) AS label_names """
+        (SELECT string_agg(l.name,', ' ORDER BY l.name) FROM issue_labels il JOIN labels l ON l.id=il.label_id WHERE il.issue_id=i.id) AS label_names,
+        (SELECT string_agg(l.name,', ' ORDER BY lower(l.name)) FROM issue_sub_project_labels il JOIN sub_project_labels l ON l.id=il.label_id WHERE il.issue_id=i.id) AS sub_project_names """
         + scope
         + " ORDER BY i.created_at DESC,i.id DESC LIMIT 10001"
     )
@@ -77,4 +78,11 @@ PROCESS_IMPORT_ROW_SELECT_USERS = text(
 
 PROCESS_IMPORT_ROW_SELECT_ISSUE_IMPORT_ROWS = text(
     "SELECT * FROM issue_import_rows WHERE batch_id=:id AND state='PENDING' ORDER BY row_number LIMIT 1 FOR UPDATE"
+)
+
+
+# Active sub projects of one project for CSV import, matched by name without letter case.
+# VI: Sub project đang dùng của một dự án cho nhập CSV, khớp theo tên không phân biệt hoa thường.
+IMPORT_PREVIEW_SELECT_SUB_PROJECT_LABELS = text(
+    "SELECT id,lower(name) AS name FROM sub_project_labels WHERE project_id=:project_id AND archived_at IS NULL"
 )

@@ -1270,6 +1270,7 @@ model Project {
   customerRequests  CustomerRequest[]
   asks              Ask[]
   labelLinks        ProjectLabelLink[]
+  subProjectLabels  SubProjectLabel[]
   subscriptions     ProjectSubscription[]
   favorites         ProjectFavorite[]
   updates           ProjectUpdate[]
@@ -1878,6 +1879,7 @@ model Issue {
   comments          Comment[]
   activities        Activity[]
   labelLinks        IssueLabel[]
+  subProjectLinks   IssueSubProjectLabel[]
   subscribers       IssueSubscription[]
   reactions         IssueReaction[]
   favorites         IssueFavorite[]
@@ -2319,6 +2321,44 @@ model ProjectLabelLink {
   @@id([projectId, labelId])
   @@index([labelId])
   @@map("project_label_links")
+}
+
+/// Sub project of one project: groups that project's issues by area. Separate from workspace
+/// labels so the team-wide label list keeps its technical meaning. An archived row stays on the
+/// issues that carry it but cannot be newly assigned. Names are unique per project; the API also
+/// refuses names that differ only by letter case.
+/// VI: Sub project của một dự án: chia issue của dự án theo mảng. Tách khỏi label workspace để
+/// VI: danh sách label dùng chung giữ ý nghĩa kỹ thuật. Bản đã lưu trữ vẫn nằm trên issue đang gắn
+/// VI: nhưng không gán mới được. Tên duy nhất trong dự án; API còn từ chối tên chỉ khác hoa thường.
+model SubProjectLabel {
+  id         String    @id @default(cuid())
+  projectId  String    @map("project_id")
+  name       String
+  color      String
+  archivedAt DateTime? @map("archived_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  project    Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  issueLinks IssueSubProjectLabel[]
+
+  @@unique([projectId, name])
+  @@map("sub_project_labels")
+}
+
+/// Sub projects of an issue (many-to-many); the API keeps only labels of the issue's project.
+/// VI: Sub project của issue (nhiều-nhiều); API chỉ giữ label thuộc dự án của issue.
+model IssueSubProjectLabel {
+  issueId   String   @map("issue_id")
+  labelId   String   @map("label_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  issue Issue           @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  label SubProjectLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([issueId, labelId])
+  @@index([labelId])
+  @@map("issue_sub_project_labels")
 }
 
 model Label {

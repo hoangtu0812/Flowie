@@ -310,3 +310,14 @@ RESOLVE_PROJECT_SELECT_PROJECTS = text('''SELECT p.id, p.slug, p.team_id FROM pr
 
 
 CREATE_PROJECT_SELECT_PROJECT_TEMPLATES = text('SELECT * FROM project_templates WHERE id = :id AND workspace_id = :workspace_id')
+
+
+LIST_SUB_PROJECT_LABELS_SELECT_SUB_PROJECT_LABELS = text('SELECT * FROM sub_project_labels WHERE project_id = :project_id ORDER BY lower(name), id')
+
+
+SUB_PROJECT_LABEL_SELECT_SUB_PROJECT_LABELS = text('SELECT * FROM sub_project_labels WHERE id = :id AND project_id = :project_id')
+
+
+# Names are compared without letter case, so "Mobile" and "mobile" cannot both exist in one project.
+# VI: Tên được so không phân biệt hoa thường, nên "Mobile" và "mobile" không cùng tồn tại trong một dự án.
+SUB_PROJECT_LABEL_NAME_TAKEN_SELECT_SUB_PROJECT_LABELS = text('SELECT 1 FROM sub_project_labels WHERE project_id = :project_id AND lower(name) = lower(:name) AND id <> :id LIMIT 1')

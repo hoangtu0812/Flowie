@@ -22,7 +22,10 @@ LONG_TEXT = {
 }
 # Request fields whose stored form has another name in the issue record.
 # VI: Trường gửi lên có tên khác trong bản ghi issue.
-RENAMED = {"assigneeId": "assignee", "reporterId": "reporter", "projectId": "project", "labelIds": "labelLinks"}
+RENAMED = {
+    "assigneeId": "assignee", "reporterId": "reporter", "projectId": "project",
+    "labelIds": "labelLinks", "subProjectLabelIds": "subProjectLabels",
+}
 COMMENT_FIELDS = ("id", "issueId", "parentCommentId", "version", "createdAt")
 DOCUMENT_FIELDS = ("id", "title", "version", "docType", "status", "teamId", "folderId", "updatedAt")
 
@@ -43,6 +46,8 @@ def compact_issue(data: dict[str, Any], sent: set[str]) -> dict[str, Any]:
         if key == "labelLinks":
             value = [link["label"]["name"] for link in value or [] if link.get("label")]
             key = "labels"
+        elif key == "subProjectLabels":
+            value = [label["name"] for label in value or []]
         elif key in {"assignee", "reporter", "project"}:
             value = _person(value)
         result[key] = value

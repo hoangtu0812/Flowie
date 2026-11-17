@@ -241,6 +241,16 @@ def update_issue_update_issues_sql(sets) -> TextClause:
 UPDATE_ISSUE_DELETE_ISSUE_LABELS = text("DELETE FROM issue_labels WHERE issue_id = :issue_id")
 
 
+REPLACE_SUB_PROJECTS_DELETE_ISSUE_SUB_PROJECT_LABELS = text(
+    "DELETE FROM issue_sub_project_labels WHERE issue_id = :issue_id"
+)
+
+
+REPLACE_SUB_PROJECTS_INSERT_ISSUE_SUB_PROJECT_LABELS = text(
+    "INSERT INTO issue_sub_project_labels (issue_id, label_id) VALUES (:issue_id, :label_id)"
+)
+
+
 UPDATE_ISSUE_DELETE_ISSUE_RELEASES = text("DELETE FROM issue_releases WHERE issue_id = :issue_id")
 
 

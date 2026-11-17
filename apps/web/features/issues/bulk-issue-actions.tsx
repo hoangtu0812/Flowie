@@ -34,8 +34,27 @@ type Operation = {
 type Recent = { id: string; state: string; createdAt: string };
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 const running = (state?: string) => state === 'QUEUED' || state === 'RUNNING';
-const fields = ['priority', 'statusId', 'assigneeId', 'projectId', 'cycleId', 'labelIds'];
-const fieldLabels = ['Priority', 'Status', 'Assignee', 'Project', 'Cycle', 'Replace labels'];
+const fields = [
+   'priority',
+   'statusId',
+   'assigneeId',
+   'projectId',
+   'cycleId',
+   'labelIds',
+   'subProjectLabelIds',
+];
+const fieldLabels = [
+   'Priority',
+   'Status',
+   'Assignee',
+   'Project',
+   'Cycle',
+   'Replace labels',
+   'Replace sub projects',
+];
+// Fields that replace a whole id list; an empty list clears it.
+// VI: Trường thay cả danh sách id; danh sách rỗng là xoá hết.
+const listFields = new Set(['labelIds', 'subProjectLabelIds']);
 
 type BulkIssueActionsProps = { open: boolean; onOpenChange: (open: boolean) => void };
 
@@ -62,7 +81,8 @@ function BulkEditor({
    const tx = useMessages(messages);
    const enumLabel = useEnumLabel();
 
-   const { issues, statuses, members, projects, labels, cycles, retryIssues } = useIssuesStore();
+   const { issues, statuses, members, projects, labels, cycles, subProjectLabels, retryIssues } =
+      useIssuesStore();
    const alive = useRef(true);
    const requestKey = useRef('');
    const [selection, setSelection] = useState('selected');
@@ -157,7 +177,7 @@ function BulkEditor({
                      return { id: row.id, version: row.version };
                   }),
                changes: {
-                  [field]: field === 'labelIds' ? labelIds : value === '__clear__' ? null : value,
+                  [field]: listFields.has(field) ? labelIds : value === '__clear__' ? null : value,
                },
             };
          }
@@ -251,9 +271,29 @@ function BulkEditor({
                            resetPreview();
                            setField(next);
                            setValue('');
+                           setLabelIds([]);
                         }}
                      />
-                     {field === 'labelIds' ? (
+                     {field === 'subProjectLabelIds' ? (
+                        // Issues outside a chosen sub project's project fail on their own row.
+                        // VI: Issue ngoài dự án của sub project đã chọn lỗi riêng ở dòng của nó.
+                        <MultiSelector
+                           label={tx('Replacement sub projects')}
+                           value={labelIds}
+                           options={subProjectLabels
+                              .filter((row) => !row.archivedAt)
+                              .map((row) => ({
+                                 value: row.id,
+                                 label: `${row.name} · ${projects.find((project) => project.id === row.projectId)?.name ?? ''}`,
+                              }))}
+                           onChange={(next) => {
+                              resetPreview();
+                              setLabelIds(next);
+                           }}
+                           hasSearch
+                           description={tx('An empty selection removes all sub projects.')}
+                        />
+                     ) : field === 'labelIds' ? (
                         <MultiSelector
                            label={tx('Replacement labels')}
                            value={labelIds}
@@ -280,7 +320,7 @@ function BulkEditor({
                         label={tx('Preview changes')}
                         isLoading={busy}
                         isDisabled={
-                           (field !== 'labelIds' && !value) ||
+                           (!listFields.has(field) && !value) ||
                            (selection === 'selected' ? !selected.length : !confirm)
                         }
                         onClick={() => void act('preview')}
@@ -312,7 +352,10 @@ function BulkEditor({
                                  ? next
                                       .map(
                                          (id) =>
-                                            labels.find((row) => row.id === id)?.name ??
+                                            (key === 'subProjectLabelIds'
+                                               ? subProjectLabels
+                                               : labels
+                                            ).find((row) => row.id === id)?.name ??
                                             tx('Unavailable label')
                                       )
                                       .join(', ') || tx('No labels')
