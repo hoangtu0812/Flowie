@@ -92,7 +92,7 @@ test('customize sidebar rows share one height and reorder from the keyboard', as
 
    let dialog = await openCustomize(page);
    const rows = dialog.locator('[data-sidebar-pref-row]');
-   await expect(rows).toHaveCount(15);
+   await expect(rows).toHaveCount(16);
    await expect(
       dialog.getByRole('checkbox', { name: 'Show Inbox only when badged' })
    ).toBeVisible();

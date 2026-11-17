@@ -30,6 +30,8 @@ pull request and commit references, which are for us.
 
 ### Fixed
 
+- The browser regression check passes again: it now expects the Timesheet row in Customize sidebar, picks an attachment's preview button rather than its new delete button, and expects the Coding preset to leave the new repository permission off. Test only; nothing to rebuild. (DTD-914, #300)
+  VI: Bước kiểm tra hồi quy trên trình duyệt chạy đạt trở lại: test nay tính cả dòng Timesheet trong Customize sidebar, chọn nút xem trước của tệp đính kèm thay vì nút xoá mới, và kỳ vọng preset Coding không bật quyền repository mới. Chỉ đổi test; không cần build lại. (DTD-914)
 - The backend check no longer fails at random when its AI quota test runs across a minute boundary; the test now holds one fixed clock for writing and reading the per-minute usage. Test only; nothing to rebuild. (#296)
   VI: Bước kiểm tra backend không còn lỗi ngẫu nhiên khi test hạn mức AI chạy qua mốc phút; test nay dùng một đồng hồ cố định cho cả lúc ghi và lúc đọc mức dùng theo phút. Chỉ đổi test; không cần build lại.
 

@@ -91,10 +91,18 @@ test('MCP connections table filters by status and name; form groups permissions'
          )
       ).toBeLessThan(2);
       await dialog.getByRole('button', { name: 'Coding project preset' }).click();
+      // The Coding preset grants every write scope except the opt-in repository one.
+      // VI: Preset Coding cấp mọi quyền ghi trừ quyền repository phải bật riêng.
       const write = page.getByRole('group', { name: 'Write permissions' });
       await expect(
          write.getByRole('checkbox', { name: 'Select all write permissions' })
+      ).not.toBeChecked();
+      await expect(
+         write.getByRole('checkbox', { name: 'Create and edit tasks', exact: true })
       ).toBeChecked();
+      await expect(
+         write.getByRole('checkbox', { name: 'Configure project repositories', exact: true })
+      ).not.toBeChecked();
       const read = page.getByRole('group', { name: 'Read permissions' });
       await read.getByRole('checkbox', { name: 'Select all read permissions' }).click();
       await expect(
