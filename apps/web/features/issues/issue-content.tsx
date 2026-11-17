@@ -24,6 +24,7 @@ import { IssueParent } from '@/features/issues/details/issue-parent';
 import { IssuePropertiesPanel } from '@/features/issues/details/issue-properties-panel';
 import { MobileIssueProperties } from '@/features/issues/details/mobile-issue-properties';
 import { IssueSlaPanel } from '@/features/sla/issue-sla-panel';
+import { IssueWorklogs } from '@/features/worklogs/issue-worklogs';
 import {
    IssuePullRequests,
    useIssueReviews,
@@ -167,6 +168,7 @@ export function IssueContent({
                         teamId={issue.teamId}
                         orgId={orgId}
                      />
+                     <IssueWorklogs issueId={issue.id} />
                      <CommentsSection issueId={issue.id} state={activity} />
                   </TabsContent>
                   <TabsContent value="activity">

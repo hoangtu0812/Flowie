@@ -6,6 +6,7 @@ import {
    Box,
    ChartNoAxesCombined,
    ChevronRight,
+   Clock3,
    Compass,
    ContactRound,
    FileText,
@@ -62,6 +63,7 @@ const WORKSPACE_NAV: WorkspaceNavItem[] = [
    { key: 'docs', name: 'Docs', icon: FileText, url: '/docs' },
    { key: 'news', name: 'News', icon: Newspaper, url: '/news' },
    { key: 'views', name: 'Views', icon: Layers, url: '/views' },
+   { key: 'timesheet', name: 'Timesheet', icon: Clock3, url: '/timesheet' },
    { key: 'teams', name: 'Teams', icon: ContactRound, url: '/teams' },
    { key: 'members', name: 'Members', icon: UserRound, url: '/members' },
 ];

@@ -19,6 +19,11 @@ pull request and commit references, which are for us.
 
 ## Unreleased
 
+### Added
+
+- People can log the hours they spend on an issue: the issue's Overview has a Time log where you add, edit or delete entries (date, hours in quarter steps, note), and the issue's actual effort becomes the logged hours divided by 8 in man-days. Only the author or a workspace owner/admin can change an entry. A new Timesheet page in the sidebar shows hours per person per day for a week on the issues you can access, filters by team and project, and exports the entries as CSV or XLSX. AI clients connected over MCP can log hours with the new `log_work` tool. Adds a migration: rebuild `migrate`, `api` and `web`, run `migrate` before `api`, and reconnect MCP clients. (DTD-902)
+  VI: Mọi người ghi được số giờ đã làm trên một issue: tab Overview của issue có mục Chấm công để thêm, sửa hoặc xoá bản ghi (ngày, số giờ theo bước 0,25, ghi chú), và actual effort của issue bằng tổng giờ đã ghi chia 8 theo man-day. Chỉ người ghi hoặc owner/admin workspace sửa được một bản ghi. Trang Bảng chấm công mới trên sidebar hiển thị số giờ theo người theo ngày trong một tuần trên các issue bạn truy cập được, lọc theo team và dự án, và xuất các bản ghi ra CSV hoặc XLSX. AI client kết nối qua MCP ghi được giờ bằng tool mới `log_work`. Có migration: build lại `migrate`, `api` và `web`, chạy `migrate` trước `api`, và kết nối lại MCP client. (DTD-902)
+
 ### Fixed
 
 - The backend check no longer fails at random when its AI quota test runs across a minute boundary; the test now holds one fixed clock for writing and reading the per-minute usage. Test only; nothing to rebuild. (#296)

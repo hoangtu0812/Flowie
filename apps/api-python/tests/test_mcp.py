@@ -1016,6 +1016,25 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(error.exception.details, {"currentVersion": version + 1})
             self.assertEqual(await stored(), expected)
 
+    async def test_log_work_records_hours_for_the_connection_user(self):
+        arguments = {
+            "issueId": self.issue["identifier"],
+            "workDate": utcnow().date().isoformat(),
+            "hours": 4,
+            "note": "Review",
+            "idempotencyKey": "log-work-1",
+        }
+        result = (await self.call("log_work", **arguments))["data"]
+        self.assertEqual((result["totalHours"], result["actualEffort"]), (4, 0.5))
+        self.assertEqual(result["items"][0]["user"]["id"], self.principal.user["id"])
+        # A replay returns the stored result instead of logging the hours twice.
+        # VI: Gọi lại trả kết quả đã lưu thay vì ghi giờ hai lần.
+        self.assertEqual((await self.call("log_work", **arguments))["data"], result)
+        # An issue outside the connection's project grant cannot receive hours.
+        # VI: Issue ngoài phạm vi dự án của kết nối không nhận được giờ.
+        with self.assertRaises(ApiError):
+            await self.call("log_work", **{**arguments, "issueId": self.other_issue["id"], "idempotencyKey": "log-work-2"})
+
     async def test_document_links_history_restore_and_isolation(self):
         created = await self.call(
             "create_document",

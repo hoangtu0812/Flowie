@@ -234,6 +234,7 @@ model User {
   commentReactions         CommentReaction[]
   issueFavorites           IssueFavorite[]
   issueReminders           IssueReminder[]
+  issueWorklogs            IssueWorklog[]
   projectSubscriptions     ProjectSubscription[]
   projectFavorites         ProjectFavorite[]
   projectMemberships       ProjectMember[]
@@ -1875,6 +1876,7 @@ model Issue {
   reactions         IssueReaction[]
   favorites         IssueFavorite[]
   reminders         IssueReminder[]
+  worklogs          IssueWorklog[]
   customerRequests  CustomerRequest[]
   convertedAsks     Ask[]                 @relation("AskConvertedIssue")
   codeReviewLinks   CodeReviewIssueLink[]
@@ -1958,6 +1960,26 @@ model IssueReminder {
   @@unique([issueId, userId])
   @@index([userId, deliveredAt, remindAt])
   @@map("issue_reminders")
+}
+
+/// Hours one person spent on an issue on one day; their sum drives the issue's actual effort.
+/// VI: Số giờ một người làm trên một issue trong một ngày; tổng của chúng quyết định actual effort của issue.
+model IssueWorklog {
+  id        String   @id @default(cuid())
+  issueId   String   @map("issue_id")
+  userId    String   @map("user_id")
+  workDate  DateTime @map("work_date") @db.Date
+  hours     Float
+  note      String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([issueId, workDate])
+  @@index([userId, workDate])
+  @@map("issue_worklogs")
 }
 
 model IssueReaction {

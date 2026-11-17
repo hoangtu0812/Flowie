@@ -25,6 +25,7 @@ import {
    ChartNoAxesCombined,
    Check,
    ChevronDown,
+   Clock3,
    ClipboardCheck,
    Compass,
    ContactRound,
@@ -65,6 +66,7 @@ export const WORKSPACE_ITEMS: ItemConfig[] = [
    { key: 'docs', label: 'Docs', icon: FileText },
    { key: 'news', label: 'News', icon: Newspaper },
    { key: 'views', label: 'Views', icon: Layers },
+   { key: 'timesheet', label: 'Timesheet', icon: Clock3 },
    { key: 'teams', label: 'Teams', icon: ContactRound },
    { key: 'members', label: 'Members', icon: UserRound },
 ];

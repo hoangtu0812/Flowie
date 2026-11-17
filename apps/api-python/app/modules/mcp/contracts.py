@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Literal
 
 from annotated_types import Le
@@ -250,6 +250,15 @@ class ReorderSubIssuesTool(VersionInput, IssueInput):
     orderedIssueIds: list[Annotated[str, Field(min_length=1, max_length=100)]] = Field(
         min_length=1, max_length=500
     )
+
+
+class LogWorkTool(WriteInput, IssueInput):
+    """Hours the connection's own user spent on an issue on one day; limits match the web form.
+    VI: Số giờ chính người dùng của kết nối làm trên một issue trong một ngày; giới hạn giống form web."""
+
+    workDate: date
+    hours: float = Field(gt=0, le=24, multiple_of=0.25)
+    note: str | None = Field(default=None, max_length=1000)
 
 
 class StartIssueTool(VersionInput, IssueInput):
