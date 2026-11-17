@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 from annotated_types import Le
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -107,6 +107,11 @@ class IssueContextInput(IssueInput):
     # the response. VI: Mặc định tắt: các tài liệu khác của dự án hiếm khi liên quan tới issue này
     # VI: và từng chiếm phần lớn phản hồi.
     includeProjectDocuments: bool = False
+    # Sub-issues have their own cap because each row is three short fields and a parent's plan
+    # often lists more children than the 10 comments `limit` allows.
+    # VI: Sub-issue có giới hạn riêng vì mỗi dòng chỉ gồm ba trường ngắn và kế hoạch của task cha
+    # VI: thường có nhiều task con hơn mức 10 comment mà `limit` cho phép.
+    subIssueLimit: int = Field(default=50, ge=1, le=200)
 
 
 class ProjectInput(StrictInput):
@@ -234,6 +239,17 @@ class TransitionIssueTool(VersionInput, IssueInput):
         if bool(self.statusId) == bool(self.status):
             raise ValueError("Give exactly one of statusId or status.")
         return self
+
+
+class ReorderSubIssuesTool(VersionInput, IssueInput):
+    """New order of a parent's sub-issues. `issueId` and `expectedVersion` are the parent's;
+    `orderedIssueIds` lists every sub-issue the connection can see, by id or identifier, once.
+    VI: Thứ tự mới cho sub-issue của một task cha. `issueId` và `expectedVersion` là của task cha;
+    VI: `orderedIssueIds` liệt kê mọi sub-issue kết nối nhìn thấy, theo id hoặc mã, mỗi mục một lần."""
+
+    orderedIssueIds: list[Annotated[str, Field(min_length=1, max_length=100)]] = Field(
+        min_length=1, max_length=500
+    )
 
 
 class StartIssueTool(VersionInput, IssueInput):
@@ -374,7 +390,14 @@ class RestoreDocumentTool(VersionInput, DocumentInput):
 # other unknown argument is still rejected.
 # VI: Tên tham số mà client MCP đã được ghi nhận gửi thay cho tên công bố (audit MCP, 10-11/2026).
 # VI: Chỉ ánh xạ đúng các tên này; model vẫn `extra="forbid"` nên tham số lạ khác vẫn bị từ chối.
-ARGUMENT_ALIASES = {"issueId": ("identifier", "issueKey"), "content": ("body",)}
+# `parentIssueId` is not measured: it is the name `reorder_sub_issues` was requested with, and it
+# maps only on tools that have no `parentIssueId` field of their own.
+# VI: `parentIssueId` không đến từ số đo: đó là tên được đề xuất cho `reorder_sub_issues`, và chỉ
+# VI: được ánh xạ ở tool không có trường `parentIssueId` riêng.
+ARGUMENT_ALIASES = {
+    "issueId": ("identifier", "issueKey", "parentIssueId"),
+    "content": ("body",),
+}
 # Placeholder that some clients send to tools without parameters.
 # VI: Tham số giả mà một số client gửi cho tool không có tham số.
 IGNORED_ARGUMENTS = frozenset({"random_string"})

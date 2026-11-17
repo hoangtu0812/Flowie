@@ -193,6 +193,15 @@ DEFINITIONS = (
         extra_scopes=("issues:read",),
     ),
     ToolDefinition(
+        "reorder_sub_issues",
+        "Set the order of a parent issue's sub-issues: issueId and expectedVersion are the parent's, orderedIssueIds lists every sub-issue (id or identifier) exactly once in the wanted order; read them with get_issue_context. A missing, extra or repeated id is rejected and nothing changes. The parent switches to manual sub-issue sorting if it used another sort.",
+        c.ReorderSubIssuesTool,
+        "issues:write",
+        "reorder_sub_issues",
+        True,
+        extra_scopes=("issues:read",),
+    ),
+    ToolDefinition(
         "create_attachment_upload",
         "Get a one-time URL, valid for 10 minutes, to attach a local file (screenshot, log, document; at most 10 MB) to an issue. Then run the returned curl command with the file path, for example curl -F \"file=@shot.png\" <uploadUrl>; the response is the new attachment. Use a new idempotency key for each file.",
         c.CreateAttachmentUploadTool,

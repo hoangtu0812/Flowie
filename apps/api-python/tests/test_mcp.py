@@ -919,6 +919,103 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertIsNone(await parent_of(child["id"]))
 
+    async def test_reorder_sub_issues_orders_validates_and_keeps_hidden_children(self):
+        parent = self.issue["id"]
+        children = [
+            (
+                await self.call(
+                    "create_issue",
+                    teamId=self.team,
+                    projectId=self.project,
+                    statusId=self.status,
+                    title=f"Step {index}",
+                    parentIssueId=parent,
+                    idempotencyKey=f"reorder-child-{index}",
+                )
+            )["data"]
+            for index in range(3)
+        ]
+        first, second, third = (child["id"] for child in children)
+        hidden = self.other_issue["id"]
+        # The hidden child belongs to a project outside the connection's grant and sits between
+        # the first and second visible children; the parent starts on a non-manual sort.
+        # VI: Task con ẩn thuộc dự án ngoài phạm vi của kết nối và nằm giữa task con nhìn thấy thứ
+        # VI: nhất và thứ hai; task cha ban đầu dùng kiểu sắp không phải manual.
+        async with self.factory() as db:
+            for issue_id, rank in [(first, 1024), (hidden, 1536), (second, 2048), (third, 3072)]:
+                await db.execute(
+                    text("UPDATE issues SET parent_issue_id=:parent,manual_order=:rank WHERE id=:id"),
+                    {"parent": parent, "rank": rank, "id": issue_id},
+                )
+            await db.execute(
+                text("UPDATE issues SET sub_issue_sort='status-asc' WHERE id=:id"), {"id": parent}
+            )
+            await db.commit()
+
+        async def stored():
+            async with self.factory() as db:
+                order = list(
+                    (
+                        await db.execute(
+                            text(
+                                "SELECT id FROM issues WHERE parent_issue_id=:id ORDER BY manual_order,id"
+                            ),
+                            {"id": parent},
+                        )
+                    ).scalars()
+                )
+                row = (
+                    await db.execute(
+                        text("SELECT version,sub_issue_sort FROM issues WHERE id=:id"), {"id": parent}
+                    )
+                ).one()
+                return order, row.version, row.sub_issue_sort
+
+        _, version, _ = await stored()
+        arguments = {
+            "parentIssueId": self.issue["identifier"],
+            "expectedVersion": version,
+            "orderedIssueIds": [third, children[0]["identifier"], second],
+            "idempotencyKey": "reorder-key-1",
+        }
+        result = (await self.call("reorder_sub_issues", **arguments))["data"]
+        self.assertEqual([item["id"] for item in result["subIssues"]], [third, first, second])
+        self.assertEqual((result["subIssueSort"], result["version"]), ("manual", version + 1))
+        expected = ([third, hidden, first, second], version + 1, "manual")
+        self.assertEqual(await stored(), expected)
+
+        context = await self.call("get_issue_context", issueId=parent)
+        self.assertEqual(
+            [(item["id"], item["manualOrder"]) for item in context["subIssues"]["items"]],
+            [(third, "1024"), (first, "3072"), (second, "4096")],
+        )
+        short = await self.call("get_issue_context", issueId=parent, subIssueLimit=2)
+        self.assertEqual(
+            (len(short["subIssues"]["items"]), short["subIssues"]["truncated"]), (2, True)
+        )
+
+        # A replay returns the stored result and writes nothing, even with a stale version.
+        # VI: Gọi lại trả kết quả đã lưu và không ghi gì, kể cả khi version đã cũ.
+        self.assertEqual((await self.call("reorder_sub_issues", **arguments))["data"], result)
+        for key, ordered, expected_version, status in [
+            ("reorder-missing", [first, second], version + 1, 400),
+            ("reorder-extra", [first, second, third, hidden], version + 1, 400),
+            ("reorder-repeat", [first, first, second, third], version + 1, 400),
+            ("reorder-stale", [first, second, third], version, 409),
+        ]:
+            with self.subTest(key=key), self.assertRaises(ApiError) as error:
+                await self.call(
+                    "reorder_sub_issues",
+                    issueId=parent,
+                    expectedVersion=expected_version,
+                    orderedIssueIds=ordered,
+                    idempotencyKey=key,
+                )
+            self.assertEqual(error.exception.status_code, status)
+            if status == 409:
+                self.assertEqual(error.exception.details, {"currentVersion": version + 1})
+            self.assertEqual(await stored(), expected)
+
     async def test_document_links_history_restore_and_isolation(self):
         created = await self.call(
             "create_document",
