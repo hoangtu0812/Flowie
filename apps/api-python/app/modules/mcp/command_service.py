@@ -3,6 +3,7 @@ from __future__ import annotations
 from ...core.errors import ApiError
 from ...core.identifiers import cuid
 from ..work_items import comments, documents, issues
+from ..work_items.commands import REORDER_LOCK, reorder_update_unnest_sql
 from ..work_items.contracts import (
     CommentInput,
     CreateCommentInput,
@@ -11,6 +12,7 @@ from ..work_items.contracts import (
     UpdateDocumentInput,
     UpdateIssueInput,
 )
+from ..work_items.queries import reorder_select_sql
 from .commands import (
     ADD_LINK_INSERT_DOCUMENT_LINKS,
 )
@@ -20,6 +22,7 @@ from .queries import (
     EXECUTE_SELECT_DOCUMENT_REVISIONS,
     PREPARE_SELECT_ISSUE_STATUSES,
     STATUS_BY_NAME_SELECT_ISSUE_STATUSES,
+    context_select_issues_sql,
 )
 from .uploads import upload_link
 
@@ -45,7 +48,14 @@ class CommandService:
     async def prepare(self, name: str, payload) -> None:
         if name == "create_attachment_upload":
             self.target = await self.policy.issue(payload.issueId)
-        elif name in {"update_issue", "transition_issue", "add_comment", "start_issue", "finish_issue"}:
+        elif name in {
+            "update_issue",
+            "transition_issue",
+            "add_comment",
+            "start_issue",
+            "finish_issue",
+            "reorder_sub_issues",
+        }:
             self.target = await self.policy.issue(payload.issueId, lock=True)
             if name == "update_issue" and "projectId" in payload.model_fields_set:
                 await self.policy.destination(payload.projectId, self.target["team_id"])
@@ -265,6 +275,8 @@ class CommandService:
                     self.db,
                 )
             return result
+        if name == "reorder_sub_issues":
+            return await self.reorder_sub_issues(payload)
         if name == "add_comment":
             return (
                 await comments.create_comment(
@@ -345,6 +357,92 @@ class CommandService:
             await self.add_link(payload.documentId, payload)
             return {"documentId": payload.documentId, "linked": True}
         raise ApiError(404, "Tool not found.", "Not Found")
+
+    async def reorder_sub_issues(self, payload) -> dict:
+        """Writes the manual order of the locked parent's sub-issues from a complete list.
+
+        The list must name, by id or identifier, every sub-issue this connection can see exactly
+        once; anything else is a 400 raised before the first write. Sub-issues outside the
+        connection's scope keep their slots and only the visible slots are refilled, so a
+        restricted connection cannot move work it cannot read. The advisory lock and the
+        `position * 1024` numbering are the web drag-and-drop's, so both writers serialize and
+        produce ranks the web orders by. A parent on another sort switches to manual, which is
+        what makes the new order visible and raises the parent's version.
+        VI: Ghi thứ tự thủ công cho sub-issue của task cha đã khoá từ một danh sách đầy đủ.
+        VI: Danh sách phải nêu, theo id hoặc mã, mọi sub-issue kết nối nhìn thấy đúng một lần;
+        VI: trường hợp khác trả 400 trước lần ghi đầu tiên. Sub-issue ngoài phạm vi của kết nối
+        VI: giữ nguyên vị trí và chỉ các vị trí nhìn thấy được xếp lại, nên kết nối bị giới hạn
+        VI: không dời được việc nó không đọc được. Khoá advisory và cách đánh số `vị trí * 1024`
+        VI: là của kéo thả trên web, nên hai bên ghi tuần tự và cho ra rank mà web dùng để sắp.
+        VI: Task cha đang dùng kiểu sắp khác được chuyển sang manual, nhờ đó thứ tự mới hiển thị
+        VI: và version của task cha tăng.
+        """
+        parent, workspace = self.subject, self.principal.workspace_id
+        await self.db.execute(REORDER_LOCK, {"key": f"manual-order:{workspace}:issue"})
+        visible = (
+            await self.db.execute(
+                context_select_issues_sql(self),
+                {**self.policy.params, "issue": parent["id"], "limit": None},
+            )
+        ).mappings()
+        names = {row["id"]: row["identifier"] for row in visible}
+        by_key = {key: issue_id for issue_id, name in names.items() for key in (issue_id, name)}
+        asked = payload.orderedIssueIds
+        ordered = [by_key[key] for key in asked if key in by_key]
+        problems = {
+            "not sub-issues of this parent": list(
+                dict.fromkeys(key for key in asked if key not in by_key)
+            ),
+            "listed more than once": sorted(
+                {names[issue_id] for issue_id in ordered if ordered.count(issue_id) > 1}
+            ),
+            "missing": [name for issue_id, name in names.items() if issue_id not in ordered],
+        }
+        if any(problems.values()):
+            detail = "; ".join(
+                f"{label}: {', '.join(keys)}" for label, keys in problems.items() if keys
+            )
+            raise ApiError(
+                400,
+                "orderedIssueIds must list every sub-issue of the parent exactly once "
+                f"({detail}). Nothing was changed.",
+                "Bad Request",
+            )
+        slots = iter(ordered)
+        siblings = [
+            next(slots) if issue_id in names else issue_id
+            for issue_id in (
+                await self.db.execute(
+                    reorder_select_sql("issues", " AND parent_issue_id=:parent"),
+                    {"workspace": workspace, "parent": parent["id"]},
+                )
+            ).scalars()
+        ]
+        await self.db.execute(
+            reorder_update_unnest_sql("issues"), {"ids": siblings, "workspace": workspace}
+        )
+        version = parent["version"]
+        if parent["sub_issue_sort"] != "manual":
+            version = (
+                await issues.update_issue(
+                    parent["id"],
+                    UpdateIssueInput(subIssueSort="manual"),
+                    workspace,
+                    self.principal.user,
+                    self.db,
+                )
+            )["data"]["version"]
+        ranks = {issue_id: str((index + 1) * 1024) for index, issue_id in enumerate(siblings)}
+        return {
+            "id": parent["id"],
+            "identifier": parent["identifier"],
+            "version": version,
+            "subIssueSort": "manual",
+            "subIssues": [
+                {"id": issue_id, "identifier": names[issue_id], "manualOrder": ranks[issue_id]}
+                for issue_id in ordered
+            ],
+        }
 
     async def add_link(self, document_id: str, payload) -> None:
         issue_id, project_id = await self.link_target(payload)

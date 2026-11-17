@@ -235,8 +235,14 @@ CONTEXT_SELECT_ATTACHMENTS = text("""SELECT id,filename,mime_type AS "mimeType",
 
 
 def context_select_issues_sql(self) -> TextClause:
-    return text(f"""SELECT child.id,child.identifier,child.title FROM issues child
-            WHERE child.parent_issue_id=:issue AND {self.policy.issue_clause("child")} ORDER BY child.id LIMIT :limit""")
+    # Sub-issues in the manual order the web shows when the parent sorts manually; a NULL
+    # `:limit` returns all of them, which reorder_sub_issues needs to validate a full list.
+    # VI: Sub-issue theo thứ tự thủ công mà web hiển thị khi task cha sắp xếp thủ công; `:limit`
+    # VI: NULL trả về tất cả, là thứ reorder_sub_issues cần để kiểm tra một danh sách đầy đủ.
+    return text(f"""SELECT child.id,child.identifier,child.title,child.manual_order::text AS "manualOrder"
+            FROM issues child
+            WHERE child.parent_issue_id=:issue AND {self.policy.issue_clause("child")}
+            ORDER BY child.manual_order,child.id LIMIT :limit""")
 
 
 AUTHORIZED_ATTACHMENT_SELECT_ATTACHMENTS = text(

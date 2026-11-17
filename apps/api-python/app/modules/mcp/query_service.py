@@ -550,7 +550,7 @@ class QueryService:
                     {
                         **self.policy.params,
                         "issue": issue["id"],
-                        "limit": payload.limit + 1,
+                        "limit": payload.subIssueLimit + 1,
                     },
                 )
             ).mappings()
@@ -582,8 +582,8 @@ class QueryService:
                 "truncated": len(attachments) > payload.limit,
             },
             "subIssues": {
-                "items": [dict(row) for row in children[: payload.limit]],
-                "truncated": len(children) > payload.limit,
+                "items": [dict(row) for row in children[: payload.subIssueLimit]],
+                "truncated": len(children) > payload.subIssueLimit,
             },
             "documents": await self.documents(
                 SearchDocumentsInput(issueId=issue["id"], limit=25)
