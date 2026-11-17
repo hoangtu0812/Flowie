@@ -298,6 +298,10 @@ class CreateAttachmentUploadTool(WriteInput, IssueInput):
     filename: str = Field(min_length=1, max_length=180)
 
 
+class DeleteAttachmentTool(WriteInput):
+    attachmentId: str = Field(min_length=1)
+
+
 class UpdateCommentTool(VersionInput):
     commentId: str = Field(min_length=1)
     content: str = Field(min_length=1, max_length=20000)

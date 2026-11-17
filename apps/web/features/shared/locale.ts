@@ -135,6 +135,11 @@ const catalog = {
    attachments: ['Attachments', 'Tệp đính kèm'],
    attachFile: ['Attach file', 'Đính kèm tệp'],
    noAttachments: ['No attachments yet.', 'Chưa có tệp đính kèm.'],
+   deleteAttachment: ['Delete file', 'Xoá tệp'],
+   deleteAttachmentConfirm: [
+      'Permanently delete "{name}"? This cannot be undone.',
+      'Xoá vĩnh viễn "{name}"? Không thể khôi phục.',
+   ],
    newDocument: ['New', 'Mới'],
    newMarkdownDocument: ['New Markdown document', 'Tài liệu Markdown mới'],
    fileName: ['File name', 'Tên tệp'],

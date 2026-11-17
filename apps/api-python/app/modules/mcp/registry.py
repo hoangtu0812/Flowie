@@ -220,6 +220,15 @@ DEFINITIONS = (
         extra_scopes=("issues:read",),
     ),
     ToolDefinition(
+        "delete_attachment",
+        "Permanently delete an attachment (file and stored content) that you uploaded, or any attachment when the connection's user is a workspace owner or admin. It cannot be undone; take the id from get_issue_context attachments. Files on comments also need comments:write, on documents documents:write.",
+        c.DeleteAttachmentTool,
+        "issues:write",
+        "delete_attachment",
+        True,
+        extra_scopes=("issues:read",),
+    ),
+    ToolDefinition(
         "transition_issue",
         "Change a valid team status and record a reason comment atomically.",
         c.TransitionIssueTool,

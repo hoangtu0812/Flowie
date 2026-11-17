@@ -36,6 +36,15 @@ class MinioStorage:
             raise ApiError(502, 'Could not read attachment.', 'Bad Gateway')
         return response.content
 
+    async def delete(self, key: str) -> None:
+        """Removes an object; a missing object counts as removed so a retried delete succeeds.
+
+        VI: Xoá một object; object không còn được coi là đã xoá để lần xoá thử lại vẫn thành công.
+        """
+        response = await self._request('DELETE', f'/{self.bucket}/{self._escape_key(key)}')
+        if not response.is_success and response.status_code != 404:
+            raise ApiError(502, 'Could not delete attachment.', 'Bad Gateway')
+
     async def _ensure_bucket(self) -> None:
         if self._bucket_ready:
             return

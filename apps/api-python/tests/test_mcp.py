@@ -2709,6 +2709,74 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             ).scalar_one()
         self.assertEqual((stored, audited), (1, 1))
 
+    async def test_delete_attachment_checks_scope_and_uploader(self):
+        # Out-of-scope files are a 404; a member deletes only their own upload, an owner any
+        # upload; the row, its stored object and an audit entry go together, and a retry replays.
+        # VI: Tệp ngoài phạm vi trả 404; thành viên chỉ xoá tệp mình tải lên, owner xoá được mọi
+        # VI: tệp; dòng, object trong kho và bản ghi audit đi cùng nhau, gọi lại thì trả kết quả cũ.
+        from unittest.mock import AsyncMock, patch
+
+        other_user = cuid()
+        files = {}
+        async with self.factory() as db:
+            now = utcnow()
+            await db.execute(
+                text("""INSERT INTO users (id,name,email,status,created_at,updated_at)
+                VALUES (:id,'Other',:email,'ACTIVE',:now,:now)"""),
+                {"id": other_user, "email": f"{other_user}@example.test", "now": now},
+            )
+            for name, issue, uploader in [
+                ("mine", self.issue, self.user["id"]),
+                ("theirs", self.issue, other_user),
+                ("hidden", self.other_issue, self.user["id"]),
+            ]:
+                files[name] = cuid()
+                await db.execute(
+                    text("""INSERT INTO attachments (id,workspace_id,uploaded_by,entity_type,entity_id,
+                    object_key,filename,mime_type,size,created_at)
+                    VALUES (:id,:workspace,:uploader,'issue',:issue,:key,:name,'text/plain',1,:now)"""),
+                    {"id": files[name], "workspace": self.workspace, "uploader": uploader,
+                     "issue": issue["id"], "key": f"key-{files[name]}", "name": f"{name}.txt", "now": now},
+                )
+            await db.execute(
+                text("UPDATE workspace_members SET role='MEMBER' WHERE workspace_id=:w AND user_id=:u"),
+                {"w": self.workspace, "u": self.user["id"]},
+            )
+            await db.commit()
+        with patch("app.storage.minio.MinioStorage.delete", AsyncMock()) as storage:
+            for name, status in [("hidden", 404), ("theirs", 403)]:
+                with self.assertRaises(ApiError) as raised:
+                    await self.call("delete_attachment", attachmentId=files[name], idempotencyKey=f"delete-{name}")
+                self.assertEqual(raised.exception.status_code, status)
+            deleted = await self.call("delete_attachment", attachmentId=files["mine"], idempotencyKey="delete-mine")
+            self.assertEqual(deleted["data"], {"id": files["mine"], "filename": "mine.txt", "deleted": True})
+            again = await self.call("delete_attachment", attachmentId=files["mine"], idempotencyKey="delete-mine")
+            self.assertEqual(again["data"], deleted["data"])
+            async with self.factory() as db:
+                await db.execute(
+                    text("UPDATE workspace_members SET role='OWNER' WHERE workspace_id=:w AND user_id=:u"),
+                    {"w": self.workspace, "u": self.user["id"]},
+                )
+                await db.commit()
+            await self.call("delete_attachment", attachmentId=files["theirs"], idempotencyKey="delete-theirs-owner")
+            self.assertEqual(
+                [call.args[0] for call in storage.await_args_list],
+                [f"key-{files['mine']}", f"key-{files['theirs']}"],
+            )
+        async with self.factory() as db:
+            left = (
+                await db.execute(text("SELECT id FROM attachments WHERE workspace_id=:w"), {"w": self.workspace})
+            ).scalars().all()
+            audited = (
+                await db.execute(
+                    text("SELECT COUNT(*) FROM audit_logs WHERE workspace_id=:w AND action='attachment.deleted'"),
+                    {"w": self.workspace},
+                )
+            ).scalar_one()
+            await db.execute(text("DELETE FROM users WHERE id=:id"), {"id": other_user})
+            await db.commit()
+        self.assertEqual((left, audited), ([files["hidden"]], 2))
+
     async def test_mutation_budget_replays_and_inactive_retention(self):
         from app.modules.mcp.maintenance import cleanup
 
