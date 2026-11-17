@@ -13,6 +13,8 @@ from ..work_items.contracts import (
     UpdateIssueInput,
 )
 from ..work_items.queries import reorder_select_sql
+from ..worklogs import service as worklogs
+from ..worklogs.service import WorklogInput
 from .commands import (
     ADD_LINK_INSERT_DOCUMENT_LINKS,
 )
@@ -55,6 +57,7 @@ class CommandService:
             "start_issue",
             "finish_issue",
             "reorder_sub_issues",
+            "log_work",
         }:
             self.target = await self.policy.issue(payload.issueId, lock=True)
             if name == "update_issue" and "projectId" in payload.model_fields_set:
@@ -277,6 +280,15 @@ class CommandService:
             return result
         if name == "reorder_sub_issues":
             return await self.reorder_sub_issues(payload)
+        if name == "log_work":
+            return await worklogs.create_worklog(
+                self.db,
+                self.subject["id"],
+                WorklogInput(
+                    workspaceId=workspace, workDate=payload.workDate, hours=payload.hours, note=payload.note
+                ),
+                actor["id"],
+            )
         if name == "add_comment":
             return (
                 await comments.create_comment(

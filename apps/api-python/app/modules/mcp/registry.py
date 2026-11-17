@@ -202,6 +202,15 @@ DEFINITIONS = (
         extra_scopes=("issues:read",),
     ),
     ToolDefinition(
+        "log_work",
+        "Log hours you spent on an issue: workDate (YYYY-MM-DD, not in the future), hours (0.25 to 24 in steps of 0.25) and an optional note. The hours are recorded for the connection's user, and the issue's actualEffort becomes its total logged hours / 8 (man-days). Returns the issue's worklogs, totalHours and actualEffort.",
+        c.LogWorkTool,
+        "issues:write",
+        "log_work",
+        True,
+        extra_scopes=("issues:read",),
+    ),
+    ToolDefinition(
         "create_attachment_upload",
         "Get a one-time URL, valid for 10 minutes, to attach a local file (screenshot, log, document; at most 10 MB) to an issue. Then run the returned curl command with the file path, for example curl -F \"file=@shot.png\" <uploadUrl>; the response is the new attachment. Use a new idempotency key for each file.",
         c.CreateAttachmentUploadTool,

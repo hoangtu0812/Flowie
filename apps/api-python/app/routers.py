@@ -78,6 +78,7 @@ from .modules.work_items.issues_api import router as native_issues_router
 from .modules.work_items.manual_order import router as manual_order_router
 from .modules.work_items.pulse_api import router as pulse_router
 from .modules.work_items.workflow_api import router as workflow_router
+from .modules.worklogs.api import router as worklogs_router
 from .modules.workspaces.api import router as workspaces_router
 
 # Registered before the `/mcp` transport mount, so they come ahead of it in
@@ -112,6 +113,7 @@ ROUTERS: list[APIRouter] = [
     cycles_router,
     native_issues_router,
     issues_router,
+    worklogs_router,
     workflow_router,
     bulk_router,
     archive_router,

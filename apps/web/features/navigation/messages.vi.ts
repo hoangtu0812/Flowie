@@ -57,6 +57,7 @@ export const messages: Readonly<Record<string, string>> = {
    'Agent': 'Agent',
    'Dashboard': 'Báo cáo',
    'Views': 'Chế độ xem',
+   'Timesheet': 'Bảng chấm công',
    'Teams': 'Đội',
    'Members': 'Thành viên',
    'More': 'Thêm',
