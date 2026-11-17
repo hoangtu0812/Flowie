@@ -29,11 +29,12 @@ async function sandboxReport(frame: ReturnType<import('@playwright/test').Page['
    return JSON.parse((await frame.locator('#out').textContent()) ?? '{}');
 }
 
-test('HTML runs as an opaque origin that cannot reach Flowie; CSV stays static', async ({
-   page,
-   context,
-}) => {
-   test.setTimeout(90000);
+type Page = import('@playwright/test').Page;
+type Context = import('@playwright/test').BrowserContext;
+
+// Signs in and creates a throwaway issue holding the given files; returns the issue and file ids.
+// VI: Đăng nhập và tạo một issue tạm chứa các tệp đã cho; trả về issue và id các tệp.
+async function issueWithFiles(page: Page, context: Context, files: string[][]) {
    await page.goto('/auth/login');
    await page.getByLabel('Email', { exact: true }).fill(fixture.email);
    await page.getByLabel('Password', { exact: true }).fill(fixture.password);
@@ -50,10 +51,7 @@ test('HTML runs as an opaque origin that cannot reach Flowie; CSV stays static',
    const owner = (await ownerResponse.json()).data;
    owners.push(owner.id);
    const ids: Record<string, string> = {};
-   for (const [name, mimeType, text] of [
-      ['mockup.html', 'text/html', MOCKUP],
-      ['plan.csv', 'text/csv', 'Task,Owner\nReview,Lan'],
-   ]) {
+   for (const [name, mimeType, text] of files) {
       const response = await context.request.post(`${api}/attachments`, {
          multipart: {
             workspaceId: fixture.workspace_id,
@@ -65,6 +63,18 @@ test('HTML runs as an opaque origin that cannot reach Flowie; CSV stays static',
       expect(response.ok(), await response.text()).toBeTruthy();
       ids[name] = (await response.json()).data.id;
    }
+   return { owner, ids };
+}
+
+test('HTML runs as an opaque origin that cannot reach Flowie; CSV stays static', async ({
+   page,
+   context,
+}) => {
+   test.setTimeout(90000);
+   const { owner, ids } = await issueWithFiles(page, context, [
+      ['mockup.html', 'text/html', MOCKUP],
+      ['plan.csv', 'text/csv', 'Task,Owner\nReview,Lan'],
+   ]);
    await page.goto(`/${fixture.slug}/issue/${owner.identifier}?tab=attachments`);
 
    await page.getByRole('button', { name: /^mockup\.html/ }).click();
@@ -97,4 +107,37 @@ test('HTML runs as an opaque origin that cannot reach Flowie; CSV stays static',
    const wrapped = await sandboxReport(page.frameLocator('iframe[title="mockup.html"]'));
    expect(wrapped.origin).toBe('null');
    expect(wrapped.fetch).toBe('TypeError');
+});
+
+test('List view shows full file names and survives a reload', async ({ page, context }) => {
+   test.setTimeout(90000);
+   const long = 'FDS-03-Work-Execution-Chapter-Maintenance-Procedure-Revision-2026-final.pdf';
+   const { owner } = await issueWithFiles(page, context, [
+      [long, 'application/pdf', '%PDF-1.4\n%%EOF'],
+      ['plan.csv', 'text/csv', 'Task,Owner\nReview,Lan'],
+   ]);
+   await page.setViewportSize({ width: 375, height: 812 });
+   await page.goto(`/${fixture.slug}/issue/${owner.identifier}?tab=attachments`);
+   await page.getByRole('radio', { name: 'List' }).click();
+   const list = page.getByRole('list', { name: 'Attachments' });
+   const row = list.getByRole('listitem').filter({ hasText: long });
+   const name = row.getByRole('button', { name: long, exact: true });
+   await expect(name).toBeVisible();
+   // The whole name fits inside its box: it wraps instead of overflowing or being cut.
+   // VI: Toàn bộ tên nằm trong khung: xuống dòng chứ không tràn hay bị cắt.
+   expect(await name.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+   await expect(row).toContainText('Regression Owner');
+   await expect(row.getByRole('button', { name: `Delete file ${long}` })).toBeVisible();
+
+   await page.reload();
+   await expect(page.getByRole('radio', { name: 'List' })).toBeChecked();
+   await list.getByRole('button', { name: 'plan.csv', exact: true }).click();
+   const plan = page.getByRole('dialog').frameLocator('iframe[title="plan.csv"]');
+   await expect(plan.getByRole('cell', { name: 'Lan' })).toBeVisible();
+   await page.keyboard.press('Escape');
+
+   await page.getByRole('radio', { name: 'Grid' }).click();
+   await expect(list).toHaveCount(0);
+   await expect(page.getByText(long)).toHaveAttribute('title', long);
 });

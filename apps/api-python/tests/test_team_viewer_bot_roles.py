@@ -29,7 +29,6 @@ from app.modules.work_items.contracts import (
 from app.modules.work_items.documents import create_document
 from app.modules.work_items.issues import create_issue, update_issue
 from app.modules.work_items.issues_api import archive_issue, issue_options
-
 from tests.document_review_support import add_member
 
 
