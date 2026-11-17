@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel
 
+from ..agent_runs.contracts import ConfigureRepositoryTool
 from . import contracts as c
 
 
@@ -68,6 +69,15 @@ DEFINITIONS = (
         c.ProjectInput,
         "projects:read",
         "project_repositories",
+    ),
+    ToolDefinition(
+        "configure_project_repository",
+        "Add a repository to a project, or change one, with its name, credential-free HTTPS URL and base branch. Without repositoryId it adds the repository (an existing one with the same URL gets the new name and branch); with repositoryId (from get_project_repositories) it changes that repository. Test commands and instructions cannot be set here; a workspace owner or admin edits them in Settings. Needs a workspace owner or admin.",
+        ConfigureRepositoryTool,
+        "repositories:write",
+        "configure_project_repository",
+        True,
+        extra_scopes=("projects:read",),
     ),
     ToolDefinition(
         "get_my_access",

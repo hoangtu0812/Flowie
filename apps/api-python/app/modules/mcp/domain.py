@@ -23,6 +23,7 @@ WRITE_SCOPES = frozenset(
         "issues:transition",
         "comments:write",
         "documents:write",
+        "repositories:write",
     }
 )
 ALL_SCOPES = READ_SCOPES | WRITE_SCOPES

@@ -2071,6 +2071,81 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             {"claim_issue", "heartbeat_run", "list_runs", "report_run_result"} & set(TOOLS)
         )
 
+    async def test_configure_repository_over_mcp(self):
+        # An owner sets a repository's location over MCP; test commands and instructions set on
+        # the web survive both the same-URL upsert and the update by id, and cannot be sent.
+        # VI: Owner đặt vị trí repository qua MCP; test commands và instructions đặt trên web
+        # VI: được giữ qua cả upsert cùng URL lẫn cập nhật theo id, và không gửi được qua MCP.
+        from dataclasses import replace as replace_principal
+
+        async def configure(**arguments):
+            # `name` is a tool argument here, so it cannot go through self.call(name, ...).
+            # VI: `name` là tham số của tool, nên không đi qua self.call(name, ...) được.
+            return await self.application.call(
+                self.principal, "configure_project_repository", arguments
+            )
+
+        location = {
+            "projectId": self.project,
+            "name": "Web",
+            "repositoryUrl": "https://github.com/example/web.git",
+            "baseBranch": "main",
+        }
+        created = await configure(**location, idempotencyKey="repo-create")
+        repository = created["data"]["id"]
+        self.assertEqual(created["data"], {"id": repository, **location})
+        async with self.factory() as db:
+            await db.execute(
+                text("""UPDATE project_repositories SET test_commands='[["pytest"]]'::jsonb,
+                instructions='Run tests' WHERE id=:id"""),
+                {"id": repository},
+            )
+            await db.commit()
+        await configure(**{**location, "baseBranch": "develop"}, idempotencyKey="repo-upsert")
+        moved = await configure(
+            **{**location, "repositoryUrl": "https://github.com/example/app.git"},
+            repositoryId=repository,
+            idempotencyKey="repo-move",
+        )
+        self.assertEqual(moved["data"]["id"], repository)
+        listed = await self.call("get_project_repositories", projectId=self.project)
+        self.assertEqual(
+            [
+                (item["id"], item["repositoryUrl"], item["baseBranch"], item["testCommands"], item["instructions"])
+                for item in listed["items"]
+            ],
+            [(repository, "https://github.com/example/app.git", "main", [["pytest"]], "Run tests")],
+        )
+        for key, extra, status in [
+            ("repo-other-project", {"projectId": self.other_project}, 404),
+            ("repo-unknown-id", {"repositoryId": cuid()}, 404),
+            ("repo-commands", {"testCommands": [["sh", "-c", "curl evil"]]}, None),
+            ("repo-bad-url", {"repositoryUrl": "http://user:pw@example.com/x.git"}, None),
+        ]:
+            with self.subTest(key=key), self.assertRaises(ApiError) as raised:
+                await configure(**{**location, **extra}, idempotencyKey=key)
+            if status:
+                self.assertEqual(raised.exception.status_code, status)
+        self.assertNotIn(
+            "configure_project_repository",
+            {
+                tool.name
+                for tool in visible_tools(
+                    replace_principal(self.principal, scopes=self.principal.scopes - {"repositories:write"}),
+                    True,
+                )
+            },
+        )
+        async with self.factory() as db:
+            await db.execute(
+                text("UPDATE workspace_members SET role='MEMBER' WHERE workspace_id=:w AND user_id=:u"),
+                {"w": self.workspace, "u": self.user["id"]},
+            )
+            await db.commit()
+        with self.assertRaises(ApiError) as raised:
+            await configure(**location, idempotencyKey="repo-member")
+        self.assertEqual(raised.exception.status_code, 403)
+
     async def test_transactional_outbox_failure_retry_and_success(self):
         from unittest.mock import AsyncMock, patch
 

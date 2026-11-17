@@ -16,6 +16,8 @@ from ..mcp.policy import AccessPolicy
 from .audit import management_audit
 from .commands import (
     CONFIGURE_REPOSITORY_INSERT_PROJECT_REPOSITORIES,
+    LOCATE_REPOSITORY_INSERT_PROJECT_REPOSITORIES,
+    LOCATE_REPOSITORY_UPDATE_PROJECT_REPOSITORIES,
     REMOVE_REPOSITORY_DELETE_PROJECT_REPOSITORIES,
     UPDATE_REPOSITORY_UPDATE_PROJECT_REPOSITORIES,
 )
@@ -38,6 +40,62 @@ router = APIRouter(prefix="/api/v1/agent-runs", tags=["agent-run-management"])
 async def manager_policy(db, workspace, user):
     await manager(db, workspace, user["id"])
     return AccessPolicy(db, Principal("", workspace, user, frozenset(), (), ()))
+
+
+async def locate_repository(db, workspace: str, actor: str, payload) -> dict:
+    """Adds or moves a project repository for the MCP tool `configure_project_repository`.
+
+    The caller has already checked the administrator role and the project scope. Without
+    `repositoryId` it inserts, or renames and rebases the project's repository with the same
+    URL; with it, it changes that repository's name, URL and branch within the same project
+    (404 when absent, 409 when the URL belongs to another repository of the project). Test
+    commands and instructions are never written. It does not commit: the MCP call commits it
+    with its idempotency record.
+    VI: Thêm hoặc đổi vị trí repository của dự án cho tool MCP `configure_project_repository`.
+
+    VI: Nơi gọi đã kiểm tra quyền quản trị và phạm vi dự án. Không có `repositoryId` thì thêm
+    VI: mới, hoặc đổi tên và nhánh của repository cùng URL trong dự án; có thì đổi tên, URL và
+    VI: nhánh của repository đó trong cùng dự án (404 khi không có, 409 khi URL thuộc repository
+    VI: khác của dự án). Không bao giờ ghi test commands và instructions. Không commit: lời gọi
+    VI: MCP commit cùng bản ghi idempotency.
+    """
+    values = {
+        "workspace": workspace,
+        "project": payload.projectId,
+        "name": payload.name,
+        "url": payload.repositoryUrl,
+        "branch": payload.baseBranch,
+    }
+    if payload.repositoryId is None:
+        row = (
+            await db.execute(
+                LOCATE_REPOSITORY_INSERT_PROJECT_REPOSITORIES, {**values, "id": cuid()}
+            )
+        ).scalar_one()
+        action = "repository.configured"
+    else:
+        try:
+            row = (
+                await db.execute(
+                    LOCATE_REPOSITORY_UPDATE_PROJECT_REPOSITORIES,
+                    {**values, "id": payload.repositoryId},
+                )
+            ).scalar_one_or_none()
+        except IntegrityError as error:
+            raise ApiError(
+                409, "This project already has a repository with that URL.", "Conflict"
+            ) from error
+        if not row:
+            raise ApiError(404, "Repository not found.", "Not Found")
+        action = "repository.updated"
+    await management_audit(db, workspace, actor, action, row)
+    return {
+        "id": row,
+        "projectId": payload.projectId,
+        "name": payload.name,
+        "repositoryUrl": payload.repositoryUrl,
+        "baseBranch": payload.baseBranch,
+    }
 
 
 @router.post("/repositories", status_code=201)
