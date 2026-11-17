@@ -21,7 +21,7 @@ pull request and commit references, which are for us.
 
 ### Fixed
 
-- The backend check no longer fails at random when its AI quota test runs across a minute boundary; the test now holds one fixed clock for writing and reading the per-minute usage. Test only; nothing to rebuild.
+- The backend check no longer fails at random when its AI quota test runs across a minute boundary; the test now holds one fixed clock for writing and reading the per-minute usage. Test only; nothing to rebuild. (#296)
   VI: Bước kiểm tra backend không còn lỗi ngẫu nhiên khi test hạn mức AI chạy qua mốc phút; test nay dùng một đồng hồ cố định cho cả lúc ghi và lúc đọc mức dùng theo phút. Chỉ đổi test; không cần build lại.
 
 ## [0.22.0] — 2026-11-17 08:03 +07
