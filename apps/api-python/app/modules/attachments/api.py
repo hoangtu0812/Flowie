@@ -117,7 +117,7 @@ def _present(row: Any) -> dict[str, Any]:
 async def list_attachments(workspaceId: str = Query(min_length=1), entityType: EntityType = Query(), entityId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
     await _authorize_entity(db, workspaceId, entityType, entityId, user['id'])
     result = await db.execute(LIST_ATTACHMENTS_SELECT_ATTACHMENTS, {'workspace_id': workspaceId, 'entity_type': entityType, 'entity_id': entityId})
-    return {'data': [_present(row) for row in result.mappings().all()]}
+    return {'data': [{**_present(row), 'uploadedByName': row['uploader_name']} for row in result.mappings().all()]}
 
 
 @router.post('')

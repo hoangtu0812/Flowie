@@ -5,7 +5,7 @@ VI: Các câu SQL đọc của package này, gom một chỗ để rà khi schem
 
 from sqlalchemy import text
 
-LIST_ATTACHMENTS_SELECT_ATTACHMENTS = text('SELECT a.*, pub.web_url AS sp_web_url, pub.path AS sp_path, pub.last_error AS sp_last_error FROM attachments a LEFT JOIN attachment_publications pub ON pub.attachment_id = a.id WHERE a.workspace_id = :workspace_id AND a.entity_type = :entity_type AND a.entity_id = :entity_id ORDER BY a.created_at DESC')
+LIST_ATTACHMENTS_SELECT_ATTACHMENTS = text('SELECT a.*, u.name AS uploader_name, pub.web_url AS sp_web_url, pub.path AS sp_path, pub.last_error AS sp_last_error FROM attachments a LEFT JOIN users u ON u.id = a.uploaded_by LEFT JOIN attachment_publications pub ON pub.attachment_id = a.id WHERE a.workspace_id = :workspace_id AND a.entity_type = :entity_type AND a.entity_id = :entity_id ORDER BY a.created_at DESC')
 
 
 STORE_ATTACHMENT_SELECT_ATTACHMENTS = text('SELECT * FROM attachments WHERE id = :id')

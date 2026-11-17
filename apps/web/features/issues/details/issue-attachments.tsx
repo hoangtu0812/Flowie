@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
    Download,
    ExternalLink,
@@ -8,12 +8,15 @@ import {
    FileArchive,
    FileSpreadsheet,
    FileText,
+   LayoutGrid,
    Link2,
+   List,
    Paperclip,
    Plus,
    Trash2,
 } from 'lucide-react';
 import { Button } from '@astryxdesign/core/Button';
+import { SegmentedControl, SegmentedControlItem } from '@astryxdesign/core/SegmentedControl';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Text } from '@astryxdesign/core/Text';
 import { TextInput } from '@astryxdesign/core/TextInput';
@@ -45,7 +48,13 @@ function formatSize(bytes: number) {
    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function TypeIcon({ attachment }: { attachment: Attachment }) {
+function TypeIcon({
+   attachment,
+   className = 'size-8',
+}: {
+   attachment: Attachment;
+   className?: string;
+}) {
    const name = attachment.filename.toLowerCase();
    const Icon = /\.(zip|rar|7z|gz|tar)$/.test(name)
       ? FileArchive
@@ -57,26 +66,61 @@ function TypeIcon({ attachment }: { attachment: Attachment }) {
    return (
       <Icon
          aria-hidden
-         className={
-            name.endsWith('.pdf')
-               ? 'size-8 text-red-600 dark:text-red-400'
-               : 'size-8 text-muted-foreground'
-         }
+         className={`${className} ${
+            name.endsWith('.pdf') ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'
+         }`}
       />
    );
 }
 
+type AttachmentView = 'grid' | 'list';
+const VIEW_KEY = 'flowie.issueAttachments.view';
+
 /**
- * Attachments tab of an issue: a header with the file count, New (a Markdown document saved as
- * a `.md` attachment) and Attach file, then a grid of cards. Images show a thumbnail that opens
- * the image viewer; Markdown, PDF, HTML, XLSX, CSV, DOCX and text files open a preview dialog
- * (`attachmentPreviewKind`); other files download. The state comes from the parent so the tab
- * label can show the file count while this tab is closed.
- * VI: Tab tệp đính kèm của công việc: thanh đầu có số tệp, nút Mới (tài liệu Markdown lưu thành
- * VI: tệp `.md`) và Đính kèm tệp, rồi lưới thẻ tệp. Ảnh có thumbnail mở trình xem ảnh; tệp
+ * Grid or list layout of the Attachments tab, remembered per browser in `localStorage`. Grid is
+ * the default and is used whenever storage is empty, unreadable (private mode, blocked site data)
+ * or holds an unknown value; a failed write keeps the choice for the current page only.
+ * VI: Kiểu hiển thị lưới hoặc danh sách của tab Đính kèm, ghi nhớ theo trình duyệt trong
+ * VI: `localStorage`. Mặc định là lưới, dùng khi storage trống, không đọc được (chế độ ẩn danh, chặn
+ * VI: dữ liệu trang) hoặc chứa giá trị lạ; ghi lỗi thì lựa chọn chỉ giữ trong trang hiện tại.
+ */
+function useAttachmentView() {
+   const [view, setView] = useState<AttachmentView>('grid');
+   useEffect(() => {
+      try {
+         if (localStorage.getItem(VIEW_KEY) === 'list') setView('list');
+      } catch {
+         // Storage unavailable: keep the grid default. VI: Không có storage: giữ mặc định lưới.
+      }
+   }, []);
+   const choose = (next: AttachmentView) => {
+      setView(next);
+      try {
+         localStorage.setItem(VIEW_KEY, next);
+      } catch {
+         // Storage unavailable: the choice lasts for this page. VI: Không có storage: chỉ giữ trong trang.
+      }
+   };
+   return [view, choose] as const;
+}
+
+/**
+ * Attachments tab of an issue: a header with the file count, the Grid/List switch, New (a
+ * Markdown document saved as a `.md` attachment) and Attach file, then the files as a grid of
+ * cards or as a list of rows. The list shows the full file name (wrapped, never truncated), size,
+ * upload date and uploader; the grid truncates the name and shows it in full on hover. In both
+ * layouts images open the image viewer; Markdown, PDF, HTML, XLSX, CSV, DOCX and text files open a
+ * preview dialog (`attachmentPreviewKind`); other files download; every file has the delete button
+ * and the SharePoint link or copy error. The state comes from the parent so the tab label can show
+ * the file count while this tab is closed.
+ * VI: Tab tệp đính kèm của công việc: thanh đầu có số tệp, nút chuyển Lưới/Danh sách, nút Mới (tài
+ * VI: liệu Markdown lưu thành tệp `.md`) và Đính kèm tệp, rồi các tệp dạng lưới thẻ hoặc danh sách
+ * VI: dòng. Danh sách hiện đầy đủ tên tệp (xuống dòng, không cắt), dung lượng, ngày tải lên và người
+ * VI: tải lên; lưới cắt tên và hiện đầy đủ khi rê chuột. Ở cả hai kiểu, ảnh mở trình xem ảnh; tệp
  * VI: Markdown, PDF, HTML, XLSX, CSV, DOCX và văn bản mở hộp thoại xem trước
- * VI: (`attachmentPreviewKind`); tệp khác tải xuống. State do component cha giữ để nhãn tab hiện
- * VI: được số tệp cả khi tab này đang đóng.
+ * VI: (`attachmentPreviewKind`); tệp khác tải xuống; tệp nào cũng có nút xoá và link SharePoint
+ * VI: hoặc lỗi sao chép. State do component cha giữ để nhãn tab hiện được số tệp cả khi tab này
+ * VI: đang đóng.
  */
 export function IssueAttachments({
    workspaceId,
@@ -89,6 +133,52 @@ export function IssueAttachments({
    const picker = useRef<HTMLInputElement>(null);
    const [creating, setCreating] = useState(false);
    const [viewing, setViewing] = useState<Attachment>();
+   const [view, setView] = useAttachmentView();
+   const date = (attachment: Attachment) =>
+      attachment.createdAt && parseInstant(attachment.createdAt).toLocaleDateString(tag);
+   const remove = (attachment: Attachment) => {
+      if (window.confirm(t('deleteAttachmentConfirm').replace('{name}', attachment.filename)))
+         void state.remove(attachment);
+   };
+   // Opens the file the way its type allows: a preview dialog, or a download in a new tab. Images
+   // return the children as they are, since their thumbnail opens the image viewer itself.
+   // VI: Mở tệp theo cách loại tệp cho phép: hộp thoại xem trước, hoặc tải xuống ở tab mới. Ảnh trả
+   // VI: nguyên children vì thumbnail của ảnh tự mở trình xem ảnh.
+   const opener = (attachment: Attachment, className: string, children: ReactNode) =>
+      isEmbeddableImage(attachment.mimeType) ? (
+         children
+      ) : attachmentPreviewKind(attachment.filename) ? (
+         <button
+            type="button"
+            className={`${className} text-left`}
+            onClick={() => setViewing(attachment)}
+         >
+            {children}
+         </button>
+      ) : (
+         <a href={downloadUrl(attachment)} target="_blank" rel="noreferrer" className={className}>
+            {children}
+         </a>
+      );
+   const sharepoint = (attachment: Attachment, className: string) =>
+      attachment.sharepoint?.webUrl ? (
+         <a
+            href={attachment.sharepoint.webUrl}
+            target="_blank"
+            rel="noreferrer"
+            className={`flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground ${className}`}
+         >
+            <ExternalLink className="size-3" />
+            {t('openInSharepoint')}
+         </a>
+      ) : attachment.sharepoint?.lastError ? (
+         <span
+            className={`block truncate text-xs text-destructive ${className}`}
+            title={attachment.sharepoint.lastError}
+         >
+            {t('sharepointCopyFailed')}
+         </span>
+      ) : null;
    return (
       <VStack gap={4} className="min-w-0">
          <input
@@ -107,7 +197,24 @@ export function IssueAttachments({
                {state.attachments.length}{' '}
                {t(state.attachments.length === 1 ? 'fileCount' : 'filesCount')}
             </Text>
-            <HStack gap={2}>
+            <HStack gap={2} wrap="wrap">
+               <SegmentedControl
+                  label={t('attachmentView')}
+                  value={view}
+                  onChange={(value) => setView(value as AttachmentView)}
+                  size="sm"
+               >
+                  <SegmentedControlItem
+                     value="grid"
+                     label={t('gridView')}
+                     icon={<LayoutGrid size={14} />}
+                  />
+                  <SegmentedControlItem
+                     value="list"
+                     label={t('listView')}
+                     icon={<List size={14} />}
+                  />
+               </SegmentedControl>
                <Button
                   label={t('newDocument')}
                   icon={<Plus className="size-4" />}
@@ -132,17 +239,57 @@ export function IssueAttachments({
             <div className="grid h-32 place-items-center rounded-lg border border-dashed border-border text-sm text-muted-foreground">
                {t('noAttachments')}
             </div>
+         ) : view === 'list' ? (
+            <ul
+               aria-label={t('attachments')}
+               className="divide-y divide-border/70 overflow-hidden rounded-lg border border-border/70 bg-background"
+            >
+               {state.attachments.map((attachment) => (
+                  <li key={attachment.id} className="flex items-start gap-3 px-3 py-2">
+                     <span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-md bg-muted/40">
+                        {isEmbeddableImage(attachment.mimeType) ? (
+                           <AttachmentImage
+                              src={attachmentPreviewUrl(attachment.id)}
+                              alt={attachment.filename}
+                              className="size-10 object-cover"
+                           />
+                        ) : (
+                           <TypeIcon attachment={attachment} className="size-5" />
+                        )}
+                     </span>
+                     <span className="block min-w-0 flex-1">
+                        {opener(
+                           attachment,
+                           'block w-full break-words text-sm font-medium hover:underline',
+                           attachment.filename
+                        )}
+                        <span className="block text-xs text-muted-foreground">
+                           {[
+                              formatSize(attachment.size),
+                              date(attachment),
+                              attachment.uploadedByName,
+                           ]
+                              .filter(Boolean)
+                              .join(' · ')}
+                        </span>
+                        {sharepoint(attachment, 'pt-0.5')}
+                     </span>
+                     <button
+                        type="button"
+                        aria-label={`${t('deleteAttachment')} ${attachment.filename}`}
+                        title={t('deleteAttachment')}
+                        className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground hover:text-destructive"
+                        onClick={() => remove(attachment)}
+                     >
+                        <Trash2 className="size-4" aria-hidden />
+                     </button>
+                  </li>
+               ))}
+            </ul>
          ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                {state.attachments.map((attachment) => {
                   const image = isEmbeddableImage(attachment.mimeType);
-                  const meta = [
-                     formatSize(attachment.size),
-                     attachment.createdAt &&
-                        parseInstant(attachment.createdAt).toLocaleDateString(tag),
-                  ]
-                     .filter(Boolean)
-                     .join(' · ');
                   const label = (
                      <span className="block min-w-0 px-3 py-2">
                         <span
@@ -151,7 +298,11 @@ export function IssueAttachments({
                         >
                            {attachment.filename}
                         </span>
-                        <span className="block text-xs text-muted-foreground">{meta}</span>
+                        <span className="block text-xs text-muted-foreground">
+                           {[formatSize(attachment.size), date(attachment)]
+                              .filter(Boolean)
+                              .join(' · ')}
+                        </span>
                      </span>
                   );
                   return (
@@ -164,17 +315,7 @@ export function IssueAttachments({
                            aria-label={`${t('deleteAttachment')} ${attachment.filename}`}
                            title={t('deleteAttachment')}
                            className="absolute right-1.5 top-1.5 z-10 grid size-7 place-items-center rounded-md bg-background/90 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
-                           onClick={() => {
-                              if (
-                                 window.confirm(
-                                    t('deleteAttachmentConfirm').replace(
-                                       '{name}',
-                                       attachment.filename
-                                    )
-                                 )
-                              )
-                                 void state.remove(attachment);
-                           }}
+                           onClick={() => remove(attachment)}
                         >
                            <Trash2 className="size-4" aria-hidden />
                         </button>
@@ -189,48 +330,19 @@ export function IssueAttachments({
                               </div>
                               {label}
                            </>
-                        ) : attachmentPreviewKind(attachment.filename) ? (
-                           <button
-                              type="button"
-                              className="block w-full text-left"
-                              onClick={() => setViewing(attachment)}
-                           >
-                              <span className="grid h-28 place-items-center bg-muted/40">
-                                 <TypeIcon attachment={attachment} />
-                              </span>
-                              {label}
-                           </button>
                         ) : (
-                           <a
-                              href={downloadUrl(attachment)}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="block"
-                           >
-                              <span className="grid h-28 place-items-center bg-muted/40">
-                                 <TypeIcon attachment={attachment} />
-                              </span>
-                              {label}
-                           </a>
+                           opener(
+                              attachment,
+                              'block w-full',
+                              <>
+                                 <span className="grid h-28 place-items-center bg-muted/40">
+                                    <TypeIcon attachment={attachment} />
+                                 </span>
+                                 {label}
+                              </>
+                           )
                         )}
-                        {attachment.sharepoint?.webUrl ? (
-                           <a
-                              href={attachment.sharepoint.webUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="flex items-center gap-1 px-3 pb-2 text-xs text-muted-foreground hover:text-foreground"
-                           >
-                              <ExternalLink className="size-3" />
-                              {t('openInSharepoint')}
-                           </a>
-                        ) : attachment.sharepoint?.lastError ? (
-                           <span
-                              className="block truncate px-3 pb-2 text-xs text-destructive"
-                              title={attachment.sharepoint.lastError}
-                           >
-                              {t('sharepointCopyFailed')}
-                           </span>
-                        ) : null}
+                        {sharepoint(attachment, 'px-3 pb-2')}
                      </div>
                   );
                })}

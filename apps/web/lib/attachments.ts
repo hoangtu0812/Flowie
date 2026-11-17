@@ -13,6 +13,11 @@ export type Attachment = {
    /** Upload time (UTC) as the API returns it. VI: Thời điểm tải lên (UTC) do API trả về. */
    createdAt?: string;
    /**
+    * Name of the user who uploaded the file; absent on responses that do not join the user.
+    * VI: Tên người tải tệp lên; không có ở response không join bảng người dùng.
+    */
+   uploadedByName?: string | null;
+   /**
     * Copy made by the SharePoint job: its link, or the last error while it is retried; null
     * when not copied. VI: Bản sao do job SharePoint tạo: link, hoặc lỗi gần nhất khi đang thử
     * lại; null khi chưa sao chép.

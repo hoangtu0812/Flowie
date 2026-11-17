@@ -134,6 +134,9 @@ const catalog = {
    sendComment: ['Send comment', 'Gửi bình luận'],
    attachments: ['Attachments', 'Tệp đính kèm'],
    attachFile: ['Attach file', 'Đính kèm tệp'],
+   attachmentView: ['Attachment layout', 'Kiểu hiển thị tệp đính kèm'],
+   gridView: ['Grid', 'Lưới'],
+   listView: ['List', 'Danh sách'],
    noAttachments: ['No attachments yet.', 'Chưa có tệp đính kèm.'],
    deleteAttachment: ['Delete file', 'Xoá tệp'],
    deleteAttachmentConfirm: [
