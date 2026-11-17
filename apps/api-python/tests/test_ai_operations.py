@@ -11,6 +11,7 @@ from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.core.identifiers import cuid
+from app.modules.agent_runs import operations
 from app.modules.agent_runs.operations import (
     LimitsInput,
     get_limits,
@@ -18,6 +19,7 @@ from app.modules.agent_runs.operations import (
     put_limits,
 )
 from app.modules.identity.auth import create_workspace_bootstrap
+from app.modules.mcp import quotas
 from app.modules.mcp.quotas import consume_quota, update_limits
 
 
@@ -35,7 +37,17 @@ def test_budget_validation():
 @pytest.mark.skipif(
     not os.getenv("MCP_TEST_DATABASE_URL"), reason="Test database is not configured"
 )
-def test_workspace_quota_is_atomic_and_management_is_restricted():
+def test_workspace_quota_is_atomic_and_management_is_restricted(monkeypatch):
+    # consume_quota writes and get_limits reads the window of the current minute, so a run that
+    # crosses a minute boundary between them read a usage of 0. One fixed clock for both modules
+    # keeps every call in the same window.
+    # VI: consume_quota ghi và get_limits đọc cửa sổ của phút hiện tại, nên lần chạy vượt qua mốc
+    # VI: phút giữa hai bước từng đọc ra usage bằng 0. Một đồng hồ cố định cho cả hai module giữ
+    # VI: mọi lời gọi trong cùng một cửa sổ.
+    frozen = utcnow()
+    for module in (quotas, operations):
+        monkeypatch.setattr(module, "utcnow", lambda: frozen)
+
     async def run():
         engine = create_async_engine(
             _async_database_url(os.environ["MCP_TEST_DATABASE_URL"])
