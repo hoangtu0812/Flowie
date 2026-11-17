@@ -193,6 +193,11 @@ Per-workspace and per-tool aggregate budgets remain follow-up work.
 
 1. A workspace manager configures the selected project's credential-free HTTPS
    repository URL, base branch and test command argument arrays in Integrations.
+   An AI client of a workspace owner or admin can add or change a repository's
+   name, URL and base branch with `configure_project_repository`, which needs the
+   opt-in `repositories:write` scope (not in the Coding preset) and
+   `projects:read`. Test commands and instructions are never written over MCP,
+   because coding agents run and follow them.
 2. The coding client reads the issue with `get_issue_context` and the
    repositories with `get_project_repositories`, then follows the workflow in
    the MCP instructions: `start_issue`, feature documents, code and a pull

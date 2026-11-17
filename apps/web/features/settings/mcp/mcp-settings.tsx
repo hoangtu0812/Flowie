@@ -37,6 +37,7 @@ const SCOPE_LABELS: Record<string, string> = {
    'issues:transition': 'Change task status',
    'comments:write': 'Write comments',
    'documents:write': 'Write documents',
+   'repositories:write': 'Configure project repositories',
 };
 
 const reveal = {

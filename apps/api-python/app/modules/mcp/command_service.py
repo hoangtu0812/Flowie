@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from ...core.errors import ApiError
 from ...core.identifiers import cuid
+from ..access.membership import manager
+from ..agent_runs.api import locate_repository
 from ..attachments.api import delete_attachment_row
 from ..work_items import comments, documents, issues
 from ..work_items.commands import REORDER_LOCK, reorder_update_unnest_sql
@@ -95,6 +97,13 @@ class CommandService:
                 await self.link_target(payload)
         elif name == "upsert_feature_doc":
             self.target = await require_feature_project(self.policy, payload.issueId)
+        elif name == "configure_project_repository":
+            # Same rule as the web settings: only workspace owners and admins configure
+            # repositories, and the project must be inside this connection's grant.
+            # VI: Cùng quy tắc với trang cài đặt web: chỉ owner và admin workspace cấu hình
+            # VI: repository, và dự án phải nằm trong phạm vi cấp cho kết nối.
+            await manager(self.db, self.principal.workspace_id, self.principal.user["id"])
+            self.target = await self.policy.project(payload.projectId)
         elif name == "create_issue":
             await self.policy.destination(payload.projectId, payload.teamId)
             if payload.parentIssueId:
@@ -363,6 +372,10 @@ class CommandService:
                     self.db,
                 )
             )["data"]
+        if name == "configure_project_repository":
+            return await locate_repository(
+                self.db, self.principal.workspace_id, self.principal.user["id"], payload
+            )
         if name == "upsert_feature_doc":
             return await upsert_feature_doc(self.db, self.principal, self.subject, payload)
         if name == "delete_attachment":

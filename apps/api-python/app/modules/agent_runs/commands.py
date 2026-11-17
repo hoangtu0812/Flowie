@@ -19,5 +19,17 @@ UPDATE_REPOSITORY_UPDATE_PROJECT_REPOSITORIES = text("""UPDATE project_repositor
             WHERE id=:id AND workspace_id=:workspace AND project_id=:project RETURNING id""")
 
 
+# MCP writes only the repository location; test commands and instructions keep their values.
+# VI: MCP chỉ ghi vị trí repository; test commands và instructions giữ nguyên giá trị.
+LOCATE_REPOSITORY_INSERT_PROJECT_REPOSITORIES = text("""INSERT INTO project_repositories (id,workspace_id,project_id,name,repository_url,base_branch,test_commands,instructions)
+        VALUES (:id,:workspace,:project,:name,:url,:branch,'[]'::jsonb,'')
+        ON CONFLICT (project_id,repository_url) DO UPDATE SET name=EXCLUDED.name,base_branch=EXCLUDED.base_branch
+        RETURNING id""")
+
+
+LOCATE_REPOSITORY_UPDATE_PROJECT_REPOSITORIES = text("""UPDATE project_repositories SET name=:name,repository_url=:url,base_branch=:branch
+            WHERE id=:id AND workspace_id=:workspace AND project_id=:project RETURNING id""")
+
+
 MANAGEMENT_AUDIT_INSERT_AUDIT_LOGS = text("""INSERT INTO audit_logs (id,workspace_id,actor_id,action,entity_type,entity_id,metadata,created_at)
         VALUES (:id,:workspace,:actor,:action,'agent-run-management',:entity,'{}'::jsonb,:now)""")
