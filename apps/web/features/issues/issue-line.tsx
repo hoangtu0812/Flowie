@@ -75,7 +75,7 @@ export function IssueLine({ issue, layoutId = false }: { issue: Issue; layoutId?
          case 'dueDate':
             return <IssueDateCell issueId={issue.id} value={issue.dueDate} kind="due" accent />;
          case 'assignee':
-            return <AssigneeUser user={issue.assignee} issueId={issue.id} />;
+            return <AssigneeUser user={issue.assignee} issueId={issue.id} teamId={issue.teamId} />;
       }
    };
 

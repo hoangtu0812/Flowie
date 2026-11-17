@@ -394,6 +394,7 @@ export function IssueSubIssues({
                      <AssigneeUser
                         user={asUser(subIssue.assignee)}
                         issueId={subIssue.id}
+                        teamId={teamId}
                         onAssign={(assignee) =>
                            patchSubIssue(subIssue.id, { assigneeId: assignee?.id ?? null })
                         }

@@ -31,3 +31,8 @@ TEAM_ACCESS_SELECT_TEAMS = text(
 
 
 ENFORCE_READ_ONLY_ROLE_SELECT_WORKSPACE_MEMBERS = text("SELECT workspace_id, role FROM workspace_members WHERE user_id = :user AND status = 'ACTIVE'")
+
+
+TEAM_ROLE_SELECT_TEAM_MEMBERS = text(
+    "SELECT role FROM team_members WHERE team_id = :team_id AND user_id = :user_id"
+)

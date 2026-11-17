@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.errors import ApiError
 from ..access.membership import workspace_role
+from ..access.projects import team_write_role
 from .queries import (
     DOCUMENT_TEAM_ACCESS_SELECT_TEAMS,
     FOLDER_SELECT_DOCUMENT_FOLDERS,
@@ -26,6 +27,17 @@ async def document_team_access(
     )
     if member.scalar_one_or_none() is None:
         raise ApiError(403, "You do not have access to this team.", "Forbidden")
+
+
+
+async def document_team_writer(
+    db: AsyncSession, workspace_id: str, team_id: str | None, user_id: str
+) -> None:
+    """`document_team_access` for a write: a VIEWER of the team reads but never writes.
+    VI: `document_team_access` cho thao tác ghi: VIEWER của team đọc được nhưng không ghi.
+    """
+    await document_team_access(db, workspace_id, team_id, user_id)
+    await team_write_role(db, team_id, user_id)
 
 
 def _document(row: Any) -> dict[str, Any]:

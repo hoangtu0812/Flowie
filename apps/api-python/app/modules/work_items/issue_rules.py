@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...core.clock import utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import cuid
+from ..access.team_roles import TEAM_ASSIGNABLE_ROLES
 from .commands import (
     ENSURE_DEFAULT_ISSUE_STATUSES_INSERT_ISSUE_STATUSES,
     ENSURE_DEFAULT_ISSUE_STATUSES_UPDATE_ISSUE_STATUSES,
@@ -20,6 +21,7 @@ from .queries import (
     VALIDATE_REFERENCES_SELECT_ISSUE_STATUSES_2,
     VALIDATE_REFERENCES_SELECT_LABELS,
     VALIDATE_REFERENCES_SELECT_PROJECTS,
+    VALIDATE_REFERENCES_SELECT_TEAM_MEMBERS,
     VALIDATE_REFERENCES_SELECT_WORKSPACE_MEMBERS,
     VALIDATE_REFERENCES_SELECT_WORKSPACE_MEMBERS_2,
     VALIDATE_RELEASE_IDS_SELECT_RELEASES,
@@ -164,6 +166,20 @@ async def validate_references(
         )
         if assignee.scalar_one_or_none() is None:
             raise ApiError(404, "Assignee is not a workspace member.", "Not Found")
+        if team_id:
+            team_role = (
+                await db.execute(
+                    VALIDATE_REFERENCES_SELECT_TEAM_MEMBERS,
+                    {"team_id": team_id, "user_id": assignee_id},
+                )
+            ).scalar_one_or_none()
+            # People outside the team stay assignable as before; only a role that may not be
+            # assigned (VIEWER) is refused.
+            # VI: Người ngoài team vẫn được giao như trước; chỉ vai trò không được giao (VIEWER) bị từ chối.
+            if team_role is not None and team_role not in TEAM_ASSIGNABLE_ROLES:
+                raise ApiError(
+                    400, "Viewers of this team cannot be assigned issues.", "Bad Request"
+                )
 
     reporter_id = values.get("reporterId")
     if reporter_id:

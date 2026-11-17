@@ -57,6 +57,7 @@ import { loadJoinedWorkspaceTeams, WorkspaceTeam } from '@/features/teams/team-t
 import { useUiPreferencesStore } from '@/store/ui-preferences-store';
 import { loadCurrentUser } from '@/features/identity/current-user';
 import { initialAssignee, issueMember } from '@/features/issues/create-defaults';
+import type { TeamRoles } from '@/lib/team-roles';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
@@ -70,7 +71,13 @@ const DescriptionEditor = dynamic(
 type NativeIssueOptions = {
    statuses: Array<{ id: string; name: string; category: string; color: string }>;
    projects: Array<{ id: string; name: string; teamId: string | null }>;
-   members: Array<{ id: string; name: string; email: string; avatarUrl?: string | null }>;
+   members: Array<{
+      id: string;
+      name: string;
+      email: string;
+      avatarUrl?: string | null;
+      teamRoles?: TeamRoles;
+   }>;
    labels: LabelInterface[];
 };
 
@@ -181,7 +188,15 @@ export function CreateNewIssue() {
             loadJoinedWorkspaceTeams(),
             loadCurrentUser(),
          ]);
-         let team = joinedTeams.teams.find(
+         // A team where the person is a VIEWER cannot receive their issues (the API answers 403),
+         // so it is not offered; a route pointing at such a team falls back to no team.
+         // VI: Team mà người dùng là VIEWER không nhận issue của họ (API trả 403) nên không được
+         // VI: đưa ra chọn; route trỏ tới team đó quay về trạng thái không có team.
+         const writableTeams = joinedTeams.teams.filter(
+            (candidate) =>
+               candidate.members.find((member) => member.id === actor.id)?.role !== 'VIEWER'
+         );
+         let team = writableTeams.find(
             (candidate) =>
                candidate.id === teamIdentifier || candidate.identifier === teamIdentifier
          );
@@ -192,14 +207,14 @@ export function CreateNewIssue() {
             if (!response.ok) throw new Error(tx('Could not load issue options.'));
             const allOptions = ((await response.json()) as { data: NativeIssueOptions }).data;
             const project = allOptions.projects.find((item) => item.id === projectIdFromRoute);
-            team = joinedTeams.teams.find((item) => item.id === project?.teamId);
+            team = writableTeams.find((item) => item.id === project?.teamId);
          }
          const options = await loadOptions(workspace.id, team?.id);
          setContext({
             currentUserId: actor.id,
             workspaceId: workspace.id,
             team,
-            teams: joinedTeams.teams,
+            teams: writableTeams,
             options,
          });
          if (!initializedAssignee.current) {
@@ -643,6 +658,7 @@ export function CreateNewIssue() {
                               assignee={addIssueForm.assignee}
                               users={liveUsers}
                               teamIdentifier={context?.team?.identifier}
+                              teamId={context?.team?.id}
                               onChange={(newAssignee) =>
                                  setAddIssueForm({ ...addIssueForm, assignee: newAssignee })
                               }

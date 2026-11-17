@@ -4,7 +4,7 @@ from datetime import UTC
 from ...core.clock import utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import cuid
-from ..access.projects import team_access, workspace_access
+from ..access.projects import team_writer, workspace_access
 from ..work_items.lifecycle import actor_context
 from .commands import (
     ARCHIVE_PROJECT_INSERT_AUDIT_LOGS,
@@ -152,7 +152,7 @@ async def archive_project(db, workspace, user, identifier):
     if not project:
         raise ApiError(404, "Project unavailable.", "Not Found")
     if project["team_id"]:
-        await team_access(db, workspace, project["team_id"], user["id"])
+        await team_writer(db, workspace, project["team_id"], user["id"])
     unavailable = (
         await db.execute(
             ARCHIVE_PROJECT_SELECT_ISSUES,

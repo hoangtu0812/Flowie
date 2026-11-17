@@ -3,6 +3,7 @@ from __future__ import annotations
 from ...core.errors import ApiError
 from ...core.identifiers import cuid
 from ..access.membership import manager
+from ..access.projects import team_write_role
 from ..agent_runs.api import locate_repository
 from ..attachments.api import delete_attachment_row
 from ..work_items import comments, documents, issues
@@ -423,6 +424,7 @@ class CommandService:
         VI: và version của task cha tăng.
         """
         parent, workspace = self.subject, self.principal.workspace_id
+        await team_write_role(self.db, parent["team_id"], self.principal.user["id"])
         await self.db.execute(REORDER_LOCK, {"key": f"manual-order:{workspace}:issue"})
         visible = (
             await self.db.execute(

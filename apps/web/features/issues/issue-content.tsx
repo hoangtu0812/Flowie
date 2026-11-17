@@ -25,6 +25,7 @@ import { IssuePropertiesPanel } from '@/features/issues/details/issue-properties
 import { MobileIssueProperties } from '@/features/issues/details/mobile-issue-properties';
 import { IssueSlaPanel } from '@/features/sla/issue-sla-panel';
 import { IssueWorklogs } from '@/features/worklogs/issue-worklogs';
+import { useTeamViewOnly } from '@/features/teams/use-team-view-only';
 import {
    IssuePullRequests,
    useIssueReviews,
@@ -71,6 +72,11 @@ export function IssueContent({
    const setTab = (next: string) =>
       compact ? setLocalTab(next as IssueTab) : void setUrlTab(next as IssueTab);
    const [urlDocument, setUrlDocument] = useQueryState('doc', parseAsString);
+   // A team VIEWER reads the issue; its editors sit in disabled fieldsets while comments,
+   // reactions, worklogs and attachments stay usable.
+   // VI: VIEWER của team chỉ đọc issue; các vùng sửa nằm trong fieldset bị disable, còn comment,
+   // VI: reaction, worklog và đính kèm vẫn dùng được.
+   const viewOnly = useTeamViewOnly(issue.teamId);
    const openDocument = compact ? null : urlDocument;
    return (
       <HStack
@@ -123,12 +129,19 @@ export function IssueContent({
                <Heading level={compact ? 2 : 1} textWrap="balance" className="break-words">
                   {issue.title}
                </Heading>
-               <IssueParent issue={issue} orgId={orgId} />
-               <MobileIssueProperties
-                  issue={issue}
-                  reviews={reviews}
-                  allScreens={compact}
-               />
+               <fieldset disabled={viewOnly} className="contents">
+                  <IssueParent issue={issue} orgId={orgId} />
+                  <MobileIssueProperties
+                     issue={issue}
+                     reviews={reviews}
+                     allScreens={compact}
+                  />
+               </fieldset>
+               {viewOnly && (
+                  <p className="text-xs text-muted-foreground" role="note">
+                     {t('teamViewOnly')}
+                  </p>
+               )}
                <Tabs value={tab} onValueChange={setTab} className="gap-6">
                   <TabsList aria-label={t('issueSections')}>
                      <TabsTrigger value="overview">{t('overview')}</TabsTrigger>
@@ -150,8 +163,10 @@ export function IssueContent({
                      forceMount
                      className="flex flex-col gap-6 data-[state=inactive]:hidden"
                   >
-                     <IssueDescription issue={issue} />
-                     <BugDetails key={issue.id} issue={issue} />
+                     <fieldset disabled={viewOnly} className="contents">
+                        <IssueDescription issue={issue} />
+                        <BugDetails key={issue.id} issue={issue} />
+                     </fieldset>
                      <IssueTicketLink workspaceId={workspaceId} issueId={issue.id} orgId={orgId} />
                      <IssuePullRequests reviews={reviews} orgId={orgId} />
                      <IssueDocuments
@@ -161,13 +176,15 @@ export function IssueContent({
                      />
                      <IssueSlaPanel issue={issue} />
                      <IssueReactions issueId={issue.id} />
-                     <IssueSubIssues
-                        issue={issue}
-                        issueId={issue.id}
-                        identifier={issue.identifier}
-                        teamId={issue.teamId}
-                        orgId={orgId}
-                     />
+                     <fieldset disabled={viewOnly} className="contents">
+                        <IssueSubIssues
+                           issue={issue}
+                           issueId={issue.id}
+                           identifier={issue.identifier}
+                           teamId={issue.teamId}
+                           orgId={orgId}
+                        />
+                     </fieldset>
                      <IssueWorklogs issueId={issue.id} />
                      <CommentsSection issueId={issue.id} state={activity} />
                   </TabsContent>
@@ -190,7 +207,9 @@ export function IssueContent({
                className="hidden min-h-0 shrink-0 border-l border-border/60 bg-muted/10 lg:flex"
                inert={Boolean(openDocument)}
             >
-               <IssuePropertiesPanel issue={issue} reviews={reviews} />
+               <fieldset disabled={viewOnly} className="contents">
+                  <IssuePropertiesPanel issue={issue} reviews={reviews} />
+               </fieldset>
             </VStack>
          )}
       </HStack>

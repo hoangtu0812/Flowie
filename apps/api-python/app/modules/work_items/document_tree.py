@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...core.clock import utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import cuid
+from ..access.projects import team_write_role
 from ..sharepoint.graph import viewer_url
 from .commands import (
     CREATE_FOLDER_INSERT_DOCUMENT_FOLDERS,
@@ -34,7 +35,12 @@ from .commands import (
     UPDATE_FOLDER_UPDATE_DOCUMENT_FOLDERS,
     UPDATE_FOLDER_UPDATE_DOCUMENT_FOLDERS_2,
 )
-from .document_repository import _document_by_id, _documents, document_team_access
+from .document_repository import (
+    _document_by_id,
+    _documents,
+    document_team_access,
+    document_team_writer,
+)
 from .queries import (
     ANCESTORS_SELECT_DOCUMENT_FOLDERS,
     CREATE_FOLDER_SELECT_DOCUMENT_FOLDERS,
@@ -286,7 +292,7 @@ async def create_folder(
         team_id = project_team
     if not team_id:
         raise ApiError(400, "A team or parent folder is required.", "Bad Request")
-    await document_team_access(db, workspace_id, team_id, user_id)
+    await document_team_writer(db, workspace_id, team_id, user_id)
     await _lock_team_folders(db, team_id)
     if parent_id:
         parent = await _folder_row(db, workspace_id, parent_id)
@@ -341,7 +347,7 @@ async def update_folder(
     VI: hoặc thư mục cha sẽ phát hành lại các tài liệu bên dưới lên SharePoint theo đường dẫn mới.
     """
     folder = await _folder_row(db, workspace_id, folder_id)
-    await document_team_access(db, workspace_id, folder["team_id"], user_id)
+    await document_team_writer(db, workspace_id, folder["team_id"], user_id)
     await _lock_team_folders(db, folder["team_id"])
     folder = await _folder_row(db, workspace_id, folder_id)
     if "expectedParentId" in values and values["expectedParentId"] != folder["parent_id"]:
@@ -410,7 +416,7 @@ async def delete_folder(
     VI: Cha kỳ vọng rỗng biểu thị gốc; None giữ tương thích với bên gọi cũ.
     """
     folder = await _folder_row(db, workspace_id, folder_id)
-    await document_team_access(db, workspace_id, folder["team_id"], user_id)
+    await document_team_writer(db, workspace_id, folder["team_id"], user_id)
     await _lock_team_folders(db, folder["team_id"])
     folder = await _folder_row(db, workspace_id, folder_id)
     if expected_parent_id is not None and (folder["parent_id"] or "") != expected_parent_id:
@@ -437,7 +443,7 @@ async def mutate_folder_file(
     VI: thư mục rỗng. Nguồn kỳ vọng ngăn thao tác phá hủy dựa trên dữ liệu cũ.
     """
     source = await _folder_row(db, workspace_id, expected_folder_id)
-    await document_team_access(db, workspace_id, source["team_id"], user_id)
+    await document_team_writer(db, workspace_id, source["team_id"], user_id)
     await _lock_team_folders(db, source["team_id"])
     source = await _folder_row(db, workspace_id, expected_folder_id)
     file = (await db.execute(MUTATE_FOLDER_FILE_SELECT_ATTACHMENTS, {"id": file_id, "workspace": workspace_id})).mappings().first()
@@ -469,6 +475,7 @@ async def scaffold_project_tree(
     VI: mục khác dùng thì giữ cho thư mục đó, thư mục chuẩn còn thiếu nhận số trống kế tiếp.
     """
     team_id = await project_document_team(db, workspace_id, project_id, user_id)
+    await team_write_role(db, team_id, user_id)
     project_name = (
         await db.execute(SCAFFOLD_PROJECT_TREE_SELECT_PROJECTS, {"id": project_id})
     ).scalar_one()

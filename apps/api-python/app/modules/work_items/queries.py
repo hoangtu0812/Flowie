@@ -138,7 +138,11 @@ def comment_page_select_comments_sql(where) -> TextClause:
 
 
 def activity_page_select_activities_sql(clause, after) -> TextClause:
-    return text(f"""SELECT a.id,a.type,a.data,a.created_at,u.id AS actor_id,u.name AS actor_name,u.avatar_url AS actor_avatar_url
+    # `actor_is_bot`: the actor holds the BOT role in the team of the activity's issue or project.
+    # VI: `actor_is_bot`: người thực hiện có vai trò BOT trong team của issue hoặc dự án của activity.
+    return text(f"""SELECT a.id,a.type,a.data,a.created_at,u.id AS actor_id,u.name AS actor_name,u.avatar_url AS actor_avatar_url,
+        EXISTS(SELECT 1 FROM team_members tm WHERE tm.user_id=a.actor_id AND tm.role='BOT'
+            AND tm.team_id=COALESCE((SELECT team_id FROM issues WHERE id=a.issue_id),(SELECT team_id FROM projects WHERE id=a.project_id))) AS actor_is_bot
         FROM activities a LEFT JOIN users u ON u.id=a.actor_id WHERE a.workspace_id=:workspace AND {clause} {after}
         ORDER BY a.created_at DESC,a.id DESC LIMIT :limit""")
 
@@ -573,6 +577,11 @@ VALIDATE_REFERENCES_SELECT_PROJECTS = text(
 )
 
 
+VALIDATE_REFERENCES_SELECT_TEAM_MEMBERS = text(
+    "SELECT role FROM team_members WHERE team_id = :team_id AND user_id = :user_id"
+)
+
+
 VALIDATE_REFERENCES_SELECT_WORKSPACE_MEMBERS = text(
     """SELECT 1 FROM workspace_members WHERE workspace_id = :workspace_id
                    AND user_id = :user_id AND status = 'ACTIVE' LIMIT 1"""
@@ -781,7 +790,14 @@ def issue_options_select_projects_sql(project_read_scope, noTeam, teamId) -> Tex
             FROM projects p WHERE {project_read_scope(workspace='workspace_id', user='user_id')} {"AND p.team_id IS NULL" if noTeam else ("AND (p.team_id IS NULL OR p.team_id=:team_id)" if teamId else "")} ORDER BY p.name''')
 
 
-ISSUE_OPTIONS_SELECT_WORKSPACE_MEMBERS = text('''SELECT u.id, u.name, u.email, u.avatar_url, u.last_seen_at FROM workspace_members wm JOIN users u ON u.id = wm.user_id WHERE wm.workspace_id = :workspace_id AND wm.status = 'ACTIVE' ORDER BY u.name''')
+# `team_roles` maps each active team of the workspace the person belongs to onto their role there,
+# so pickers can hide VIEWERs and mark BOTs for the issue's own team.
+# VI: `team_roles` ánh xạ mỗi team đang hoạt động của workspace mà người đó thuộc về sang vai trò của
+# VI: họ ở team đó, để picker ẩn VIEWER và đánh dấu BOT theo đúng team của issue.
+ISSUE_OPTIONS_SELECT_WORKSPACE_MEMBERS = text('''SELECT u.id, u.name, u.email, u.avatar_url, u.last_seen_at,
+        COALESCE((SELECT jsonb_object_agg(tm.team_id, tm.role) FROM team_members tm JOIN teams t ON t.id = tm.team_id
+            WHERE tm.user_id = u.id AND t.workspace_id = :workspace_id AND t.archived_at IS NULL), '{}'::jsonb) AS team_roles
+        FROM workspace_members wm JOIN users u ON u.id = wm.user_id WHERE wm.workspace_id = :workspace_id AND wm.status = 'ACTIVE' ORDER BY u.name''')
 
 
 ISSUE_OPTIONS_SELECT_LABELS = text('SELECT id, name, color FROM labels WHERE workspace_id = :workspace_id ORDER BY name')
@@ -856,7 +872,7 @@ MUTATE_STATUS_SELECT_ISSUE_STATUSES_3 = text('SELECT * FROM issue_statuses WHERE
 
 def reorder_select_issues_sql(scope) -> TextClause:
     return text(
-        "SELECT i.id,i.manual_order,i.parent_issue_id "
+        "SELECT i.id,i.manual_order,i.parent_issue_id,i.team_id "
         + scope
         + " AND i.id=ANY(CAST(:ids AS text[])) FOR UPDATE OF i"
     )
@@ -864,7 +880,7 @@ def reorder_select_issues_sql(scope) -> TextClause:
 
 def reorder_select_projects_sql(project_clause) -> TextClause:
     return text(
-        "SELECT p.id,p.manual_order,NULL::text AS parent_issue_id FROM projects p WHERE "
+        "SELECT p.id,p.manual_order,NULL::text AS parent_issue_id,p.team_id FROM projects p WHERE "
         + project_clause
         + " AND p.id=ANY(CAST(:ids AS text[])) FOR UPDATE OF p"
     )

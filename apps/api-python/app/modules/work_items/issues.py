@@ -14,7 +14,7 @@ from ...services.notification_events import (
     issue_recipient_ids,
     team_recipient_ids,
 )
-from ..access.projects import team_access, workspace_access
+from ..access.projects import team_write_role, team_writer, workspace_access
 from ..sla.policies import select_policy
 from ..sla.synchronization import initialize_cycle, locked_issue, safe_clock, sync_issue
 from .bug_contracts import BUG_COLUMNS
@@ -55,7 +55,7 @@ async def create_issue(
 ) -> dict[str, dict[str, Any]]:
     await workspace_access(db, payload.workspaceId, user["id"])
     if payload.teamId:
-        await team_access(db, payload.workspaceId, payload.teamId, user["id"])
+        await team_writer(db, payload.workspaceId, payload.teamId, user["id"])
     await actor_context(db, user["id"])
     values = payload.model_dump()
     category = await validate_references(
@@ -223,6 +223,7 @@ async def update_issue(
         {"id": issue_id, "workspace": workspaceId},
     )
     issue = await issue_row(db, issue_id, workspaceId, user["id"])
+    await team_write_role(db, issue["teamId"], user["id"])
     await actor_context(db, user["id"])
     values = payload.model_dump(exclude_unset=True)
     expected_version = values.pop("expectedVersion", None)

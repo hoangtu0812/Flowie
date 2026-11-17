@@ -11,7 +11,7 @@ from ...core.errors import ApiError
 from ...core.utc_responses import UtcAPIRouter
 from ...db.session import get_session
 from ..access.project_scope import project_read_scope
-from ..access.projects import workspace_access
+from ..access.projects import team_write_role, workspace_access
 from ..identity.auth import current_user
 from .commands import (
     REORDER_LOCK,
@@ -93,6 +93,8 @@ async def reorder(
             "Not Found",
         )
     source, target = rows[payload.sourceId], rows[payload.targetId]
+    for row in (source, target):
+        await team_write_role(db, row["team_id"], user["id"])
     if source["parent_issue_id"] != target["parent_issue_id"]:
         raise ApiError(
             400, "Only items with the same parent can be reordered.", "Bad Request"

@@ -1,5 +1,6 @@
 'use client';
 import type { DocStatus, DocType } from '@/lib/document-tree';
+import type { TeamRole } from '@/lib/team-roles';
 
 import { useCallback, useEffect, useState } from 'react';
 import { authenticatedFetch, loadCurrentWorkspaceMembership } from '@/lib/workspaces';
@@ -176,7 +177,7 @@ export function useLiveTeam(teamReference: string) {
    );
 
    const addMember = useCallback(
-      async (userId: string, role: 'LEAD' | 'MEMBER') => {
+      async (userId: string, role: TeamRole) => {
          if (!canAddTeamMembers)
             throw new Error('Only the workspace owner can add people to a team.');
          const context = requireContext();
@@ -197,7 +198,7 @@ export function useLiveTeam(teamReference: string) {
    );
 
    const updateMember = useCallback(
-      async (userId: string, role: 'LEAD' | 'MEMBER') => {
+      async (userId: string, role: TeamRole) => {
          const context = requireContext();
          const response = await authenticatedFetch(
             `${api}/teams/${context.teamId}/members/${userId}?${new URLSearchParams({ workspaceId: context.workspaceId })}`,

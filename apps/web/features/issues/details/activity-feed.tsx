@@ -13,6 +13,7 @@ import { useIssuesStore } from '@/store/issues-store';
 import { useImagePaste } from '@/hooks/use-image-paste';
 import { DraftImages } from '@/components/common/markdown/draft-images';
 import { AgentBadge } from '@/features/issues/agent-badge';
+import { BotBadge } from '@/components/common/bot-badge';
 import { mentionOptions, type AgentIdentity } from '@/features/issues/comments-api';
 import {
    ArrowUp,
@@ -31,7 +32,7 @@ import {
 import { ReactNode, useEffect, useState } from 'react';
 import { relativeTime } from '@/lib/time';
 
-type Actor = { id: string; name: string; avatarUrl?: string | null } | null;
+type Actor = { id: string; name: string; avatarUrl?: string | null; isBot?: boolean } | null;
 type ActivityChange = { field: string; change: string };
 type NativeActivity = {
    id: string;
@@ -127,6 +128,11 @@ function EventRow({ activity }: { activity: NativeActivity }) {
          <VStack gap={1} className="min-w-0 flex-1">
             <Text type="supporting">
                <Text weight="medium">{activity.actor?.name ?? 'Flowie'}</Text>{' '}
+               {activity.actor?.isBot && (
+                  <>
+                     <BotBadge className="align-middle" />{' '}
+                  </>
+               )}
                {agent && (
                   <>
                      <AgentBadge agent={agent} />{' '}

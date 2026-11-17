@@ -14,6 +14,8 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useIssuesStore } from '@/store/issues-store';
 import type { User } from '@/types/users';
+import { BotBadge } from '@/components/common/bot-badge';
+import { isAssignable, isBot } from '@/lib/team-roles';
 import { CheckIcon, UserCircle } from 'lucide-react';
 import { useEffect, useId, useState } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -23,6 +25,8 @@ interface AssigneeSelectorProps {
    onChange: (assignee: User | null) => void;
    users: User[];
    teamIdentifier?: string;
+   /** Team the issue is created in; its VIEWERs are hidden. VI: Team của issue mới; ẩn VIEWER của team. */
+   teamId?: string | null;
 }
 
 export function AssigneeSelector({
@@ -30,6 +34,7 @@ export function AssigneeSelector({
    onChange,
    users: availableUsers,
    teamIdentifier = 'CORE',
+   teamId,
 }: AssigneeSelectorProps) {
    const tx = useMessages(messages);
 
@@ -120,7 +125,11 @@ export function AssigneeSelector({
                            </span>
                         </CommandItem>
                         {availableUsers
-                           .filter((user) => user.teamIds.includes(teamIdentifier))
+                           .filter(
+                              (user) =>
+                                 user.teamIds.includes(teamIdentifier) &&
+                                 isAssignable(user.teamRoles, teamId)
+                           )
                            .map((user) => (
                               <CommandItem
                                  key={user.id}
@@ -134,6 +143,7 @@ export function AssigneeSelector({
                                        <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
                                     </Avatar>
                                     {user.name}
+                                    {isBot(user.teamRoles, teamId) && <BotBadge />}
                                  </div>
                                  {value === user.id && <CheckIcon size={16} className="ml-auto" />}
                                  <span className="text-muted-foreground text-xs">
