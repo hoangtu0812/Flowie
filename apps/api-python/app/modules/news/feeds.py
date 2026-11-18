@@ -31,6 +31,8 @@ NEWS_FEED_HOSTS = frozenset(
 )
 MAX_FEED_BYTES = 4 * 1024 * 1024
 MAX_REDIRECTS = 3
+MAX_ARTICLE_BYTES = 1024 * 1024
+ARTICLE_CHARS = 12_000
 ITEMS_PER_FEED = 30
 CARD_ITEMS = 10
 HCM = ZoneInfo('Asia/Ho_Chi_Minh')
@@ -212,6 +214,41 @@ async def fetch_feed(url: str, client: httpx.AsyncClient) -> bytes:
                     raise ValueError('The feed is larger than 4 MiB.')
             return bytes(body)
     raise ValueError('The feed redirects too many times.')
+
+
+async def fetch_article(url: str, client: httpx.AsyncClient) -> str:
+    """Download an item's article page and return it as plain text cut to ``ARTICLE_CHARS``.
+
+    Article links come from feed content, so any public http(s) host is allowed, but every
+    redirect hop must resolve to public addresses (``public_url``), only HTML is read and at most
+    ``MAX_ARTICLE_BYTES``. The text reaches only the AI prompt as untrusted data, never the page.
+    shortcut: the host is resolved again when httpx connects (DNS rebinding is not blocked), as in
+    ``fetch_feed`` and link previews; pin the resolved address if the raw text is ever returned.
+    VI: Tải trang bài của tin và trả văn bản thuần cắt còn ``ARTICLE_CHARS``. Link bài lấy từ nội
+    VI: dung feed nên chấp nhận mọi host http(s) công khai, nhưng mỗi bước chuyển hướng phải phân
+    VI: giải ra IP công khai (``public_url``), chỉ đọc HTML và tối đa ``MAX_ARTICLE_BYTES``. Văn bản
+    VI: chỉ đi vào prompt AI như dữ liệu không tin cậy, không bao giờ ra trang.
+    VI: shortcut: httpx phân giải host lần nữa khi kết nối (chưa chặn DNS rebinding), giống
+    VI: ``fetch_feed`` và xem trước link; cần ghim địa chỉ nếu có lúc trả văn bản gốc ra ngoài.
+    """
+    target = url
+    for _ in range(MAX_REDIRECTS + 1):
+        await public_url(target)
+        async with client.stream('GET', target) as response:
+            if response.is_redirect and response.headers.get('location'):
+                target = urljoin(target, response.headers['location'])
+                continue
+            response.raise_for_status()
+            if 'html' not in response.headers.get('content-type', ''):
+                raise ValueError('The article is not an HTML page.')
+            body = bytearray()
+            async for chunk in response.aiter_bytes():
+                body += chunk
+                if len(body) >= MAX_ARTICLE_BYTES:
+                    break
+            html = bytes(body[:MAX_ARTICLE_BYTES]).decode(response.encoding or 'utf-8', 'replace')
+            return plain_text(html, ARTICLE_CHARS)
+    raise ValueError('The article redirects too many times.')
 
 
 def news_card(

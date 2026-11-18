@@ -15,6 +15,7 @@ from ...services.microsoft_teams import valid_teams_webhook
 from ..identity.auth import current_user
 from ..identity.password_reset import limit_request
 from ..integrations.api import send_teams_test
+from .ai import summarize_item
 from .commands import (
     CREATE_CATEGORY_INSERT_NEWS_CATEGORIES,
     CREATE_SOURCE_INSERT_NEWS_SOURCES,
@@ -27,7 +28,7 @@ from .feeds import feed_url
 from .queries import (
     TEST_CATEGORY_WEBHOOK_SELECT_NEWS_CATEGORIES,
 )
-from .service import news_page, refresh_workspace, require_manager
+from .service import member_role, news_page, refresh_workspace, require_manager
 
 router = UtcAPIRouter(prefix='/api/v1/news', tags=['news'])
 
@@ -232,6 +233,22 @@ async def delete_source(
     result = _found(row, 'News source')
     await db.commit()
     return {'data': result}
+
+
+@router.post('/items/{item_id}/summary')
+async def summarize(
+    item_id: str,
+    request: Request,
+    workspaceId: str = Query(min_length=1),
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+):
+    # Any member who can read the news may ask; each request is one paid AI call, so 30 an hour.
+    # VI: Thành viên đọc được tin đều được yêu cầu; mỗi lần là một lời gọi AI tốn phí, nên 30 lần/giờ.
+    await member_role(db, workspaceId, user['id'])
+    await limit_request(db, request.app.state.settings.auth_jwt_secret, 'news-summary', user['id'], 30)
+    summary = await summarize_item(db, workspaceId, item_id, request.app.state.settings)
+    return {'data': {'summary': summary}}
 
 
 @router.post('/refresh')
