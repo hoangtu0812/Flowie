@@ -13,6 +13,7 @@ from .queries import (
     CONTEXT_SELECT_ATTACHMENTS,
     OPTIONS_SELECT_ISSUE_STATUSES,
     OPTIONS_SELECT_LABELS,
+    OPTIONS_SELECT_PROJECT_MILESTONES,
     OPTIONS_SELECT_SUB_PROJECT_LABELS,
     OPTIONS_SELECT_USERS,
     PROJECT_REPOSITORIES_SELECT_PROJECT_REPOSITORIES,
@@ -252,6 +253,9 @@ class QueryService:
                 "EXISTS(SELECT 1 FROM issue_sub_project_labels isl WHERE isl.issue_id=i.id AND isl.label_id=:sub_project)"
             )
             params["sub_project"] = payload.subProjectLabelId
+        if payload.milestoneId:
+            filters.append("i.milestone_id=:milestone")
+            params["milestone"] = payload.milestoneId
         if payload.query:
             filters.append(
                 "(i.title ILIKE :query ESCAPE '\\' OR i.identifier ILIKE :query ESCAPE '\\' OR i.description ILIKE :query ESCAPE '\\')"
@@ -285,7 +289,9 @@ class QueryService:
             i.due_date AS "dueDate",i.updated_at AS "updatedAt",
             (SELECT COALESCE(json_agg(json_build_object('id',l.id,'name',l.name) ORDER BY lower(l.name)),'[]'::json)
                 FROM issue_sub_project_labels isl JOIN sub_project_labels l ON l.id=isl.label_id
-                WHERE isl.issue_id=i.id) AS "subProjectLabels"
+                WHERE isl.issue_id=i.id) AS "subProjectLabels",
+            (SELECT json_build_object('id',m.id,'title',m.title) FROM project_milestones m
+                WHERE m.id=i.milestone_id) AS "milestone"
             FROM issues i JOIN issue_statuses s ON s.id=i.status_id WHERE {self.policy.issue_clause()}{suffix}""",
             params,
         )
@@ -535,6 +541,12 @@ class QueryService:
                 )
             ).mappings()
             result["subProjectLabels"] = [dict(r) for r in sub_projects]
+            milestones = (
+                await self.db.execute(
+                    OPTIONS_SELECT_PROJECT_MILESTONES, {"project": project["id"]}
+                )
+            ).mappings()
+            result["milestones"] = [dict(r) for r in milestones]
         return result
 
     async def context(self, payload) -> dict:

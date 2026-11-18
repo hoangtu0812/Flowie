@@ -89,6 +89,9 @@ export type LiveMilestone = {
    title: string;
    targetDate: string | null;
    completedAt: string | null;
+   /** Active issues (not archived or canceled) and how many are completed. VI: Issue đang hoạt động (chưa lưu trữ/huỷ) và số đã hoàn thành. */
+   issueCount?: number;
+   completedIssueCount?: number;
 };
 
 export type LiveActivity = {

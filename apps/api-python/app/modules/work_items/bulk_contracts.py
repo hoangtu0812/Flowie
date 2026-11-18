@@ -16,6 +16,9 @@ class BulkChanges(BaseModel):
     # Replaces each issue's sub projects; an issue of another project fails on its own row.
     # VI: Thay sub project của từng issue; issue thuộc dự án khác lỗi riêng ở dòng của nó.
     subProjectLabelIds: list[str] | None = Field(default=None, max_length=100)
+    # Null removes the milestone; an issue of another project fails on its own row.
+    # VI: Null để gỡ milestone; issue thuộc dự án khác lỗi riêng ở dòng của nó.
+    milestoneId: str | None = None
 
     @model_validator(mode="after")
     def valid_changes(self):
@@ -34,6 +37,7 @@ class BulkChanges(BaseModel):
             "assigneeId",
             "projectId",
             "cycleId",
+            "milestoneId",
         }:
             value = getattr(self, field)
             if value is not None and (not value or len(value) > 100):

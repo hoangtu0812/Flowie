@@ -1133,6 +1133,7 @@ def _milestone(row: Any) -> dict[str, Any]:
         'title': row['title'], 'description': row['description'], 'targetDate': row['target_date'],
         'position': row['position'], 'completedAt': row['completed_at'],
         'createdAt': row['created_at'], 'updatedAt': row['updated_at'],
+        'issueCount': row['issue_count'], 'completedIssueCount': row['completed_issue_count'],
     }
 
 

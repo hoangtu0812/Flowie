@@ -9,7 +9,7 @@ import { priorities } from '@/lib/priority-presentations';
 import { Status } from '@/lib/status-presentations';
 import { useDisplaySettingsStore } from '@/store/display-settings-store';
 import { useFilterStore } from '@/store/filter-store';
-import { Box, ChevronDown, FolderTree, User, X } from 'lucide-react';
+import { Box, ChevronDown, FolderTree, Milestone, User, X } from 'lucide-react';
 import { FC, useMemo, useState } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -20,6 +20,7 @@ import { LoadingState } from '@/components/common/loading-state';
 import { QueryState } from '@/components/common/query-state';
 import { issueListMinWidth, useIssueColumns } from './issue-columns';
 import { groupBySubProject } from './sub-project-groups';
+import { compareMilestones, NO_MILESTONE } from './milestone-groups';
 
 interface GroupedIssuesViewProps {
    /** Issues to display (after the filter bar has been applied). */
@@ -243,6 +244,29 @@ export const GroupedIssuesView: FC<GroupedIssuesViewProps> = ({
                   issues: visible.get(group.id) ?? [],
                   total: group.issues.length,
                }));
+            }
+            case 'milestone': {
+               // One milestone per issue, so groups never overlap; "No milestone" comes last.
+               // VI: Mỗi issue một milestone nên các nhóm không trùng nhau; "No milestone" ở cuối.
+               const keyOf = (issue: Issue) => issue.milestone?.id ?? NO_MILESTONE;
+               const totals = groupByKey(scopeIssues, keyOf);
+               const visible = groupByKey(visibleIssues, keyOf);
+               return [...totals.entries()]
+                  .sort(([keyA, a], [keyB, b]) => {
+                     if (keyA === NO_MILESTONE || keyB === NO_MILESTONE)
+                        return keyA === NO_MILESTONE ? 1 : -1;
+                     return compareMilestones(a[0].milestone!, b[0].milestone!);
+                  })
+                  .map(([key, totalGroup]) => ({
+                     group: {
+                        id: key,
+                        name: totalGroup[0].milestone?.title ?? 'No milestone',
+                        color: '#8f9299',
+                        icon: <Milestone className="size-4 text-muted-foreground" />,
+                     },
+                     issues: visible.get(key) ?? [],
+                     total: totalGroup.length,
+                  }));
             }
             case 'none': {
                return [

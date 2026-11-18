@@ -18,8 +18,17 @@ import { createIssueFilterColumns } from './issue-filter-columns';
  * <IssueFilterTrigger/>), like Linear.
  */
 export function IssueFilterBar() {
-   const { issues, members, projects, statuses, labels, cycles, subProjectLabels, lastQuery } =
-      useIssuesStore();
+   const {
+      issues,
+      members,
+      projects,
+      statuses,
+      labels,
+      cycles,
+      subProjectLabels,
+      milestones,
+      lastQuery,
+   } = useIssuesStore();
    const projectId = lastQuery?.projectId;
    const { filters, setFilters } = useFilterStore();
    const columnsConfig = useMemo(
@@ -31,9 +40,10 @@ export function IssueFilterBar() {
             labels,
             cycles,
             subProjectLabels,
+            milestones,
             projectId,
          }),
-      [members, projects, statuses, labels, cycles, subProjectLabels, projectId]
+      [members, projects, statuses, labels, cycles, subProjectLabels, milestones, projectId]
    );
 
    const { columns, actions, strategy } = useDataTableFilters({

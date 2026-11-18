@@ -1,7 +1,7 @@
 'use client';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { barGeometry, dayWidthOf } from '@/components/common/timeline/timeline-scale';
+import { barGeometry, dayWidthOf, offsetFor } from '@/components/common/timeline/timeline-scale';
 import { TimelineFrame } from '@/components/common/timeline/timeline-frame';
 import { rescheduleIssue, useCanEditIssues } from '@/components/common/timeline/reschedule';
 import {
@@ -16,7 +16,7 @@ import { TimelineIssueBar } from '@/components/common/timeline/timeline-issue-ba
 import { IssuePeekPanel } from '@/features/issues/issue-peek-panel';
 import type { ProjectDetailUiIssue } from './project-detail-ui-adapter';
 import { format, parseISO } from 'date-fns';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Milestone } from 'lucide-react';
 import { type ReactNode, useMemo, useState } from 'react';
 
 function rangeLabel(issue: ProjectDetailUiIssue): string {
@@ -63,9 +63,18 @@ function orderedChildren(
  */
 export function ProjectIssuesTimeline({
    issues,
+   milestones = [],
    onIssueChanged,
 }: {
    issues: ProjectDetailUiIssue[];
+   /** Project milestones; dated ones show as markers on a row above the issues.
+    * VI: Milestone của dự án; mốc có ngày hiện thành điểm đánh dấu trên một hàng phía trên issue. */
+   milestones?: {
+      id: string;
+      title: string;
+      targetDate: string | null;
+      completedAt: string | null;
+   }[];
    /** Reloads the project after a save in the peek panel or a drag so bars move at once.
     * VI: Tải lại dự án sau khi lưu trong panel hoặc kéo thả để thanh timeline đổi ngay. */
    onIssueChanged?: () => void;
@@ -110,7 +119,9 @@ export function ProjectIssuesTimeline({
       return [...byStatus.values()];
    }, [tree]);
 
-   if (issues.length === 0) {
+   const datedMilestones = milestones.filter((milestone) => milestone.targetDate);
+
+   if (issues.length === 0 && datedMilestones.length === 0) {
       return (
          <div className="h-full grid place-items-center text-sm text-muted-foreground">
             No issues to place on the timeline yet.
@@ -219,8 +230,42 @@ export function ProjectIssuesTimeline({
             />
          )}
          <TimelineFrame className="h-full">
-            {(monthWidth) =>
-               groups.map((group) => (
+            {(monthWidth) => [
+               datedMilestones.length > 0 && (
+                  <div
+                     key="milestones"
+                     className="relative h-8 flex items-center border-b border-border/50"
+                  >
+                     {datedMilestones.map((milestone) => {
+                        const day = milestone.targetDate!.slice(0, 10);
+                        const label = `${milestone.title} — ${format(parseISO(day), 'MMM d')}`;
+                        return (
+                           <div
+                              key={milestone.id}
+                              className="absolute top-1/2 -translate-y-1/2 flex items-center gap-1 text-[11px] text-muted-foreground whitespace-nowrap"
+                              // Centre the 14px icon, not the whole label, on the target day.
+                              // VI: Canh giữa icon 14px, không phải cả nhãn, đúng ngày mục tiêu.
+                              style={{ left: offsetFor(day, monthWidth) - 7 }}
+                              title={label}
+                              aria-label={label}
+                           >
+                              <Milestone
+                                 className={cn(
+                                    'size-3.5 shrink-0',
+                                    milestone.completedAt ? 'text-violet-500' : 'text-foreground'
+                                 )}
+                              />
+                              <span className="max-w-32 truncate">{milestone.title}</span>
+                           </div>
+                        );
+                     })}
+                     <div className="sticky left-0 z-10 flex items-center gap-1.5 w-56 shrink-0 pl-4 pr-4 h-8 bg-container/95 backdrop-blur-sm text-xs font-medium border-r border-border/40">
+                        <Milestone className="size-3.5 text-muted-foreground" />
+                        Milestones
+                     </div>
+                  </div>
+               ),
+               ...groups.map((group) => (
                   <div key={group.name}>
                      <div className="sticky left-0 flex items-center gap-2 px-4 h-8 text-xs font-medium bg-container border-y border-border/50 w-screen max-w-full">
                         <span
@@ -236,8 +281,8 @@ export function ProjectIssuesTimeline({
                         )}
                      </div>
                   </div>
-               ))
-            }
+               )),
+            ]}
          </TimelineFrame>
       </>
    );

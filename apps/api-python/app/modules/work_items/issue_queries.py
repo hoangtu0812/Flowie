@@ -175,6 +175,15 @@ def _present_issue(row, labels, cycles, releases, user_id):
         }
         if row["project_id_value"]
         else None,
+        "milestoneId": row["milestone_id"],
+        "milestone": {
+            "id": row["milestone_id"],
+            "title": row["milestone_title"],
+            "targetDate": row["milestone_target_date"],
+            "completedAt": row["milestone_completed_at"],
+        }
+        if row["milestone_id"]
+        else None,
         "creator": {
             "id": row["creator_id_value"],
             "name": row["creator_name"],

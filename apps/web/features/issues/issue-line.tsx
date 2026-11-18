@@ -16,6 +16,7 @@ import {
 import { IssueDateCell, IssueEffortCell } from './issue-inline-cells';
 import { LabelBadge } from './label-badge';
 import { SubProjectBadge } from './sub-project-badge';
+import { MilestoneBadge } from './milestone-badge';
 import { PrioritySelector } from './priority-selector';
 import { ProjectBadge } from './project-badge';
 import { StatusSelector } from './status-selector';
@@ -64,6 +65,8 @@ export function IssueLine({ issue, layoutId = false }: { issue: Issue; layoutId?
                </>
             );
          }
+         case 'milestone':
+            return issue.milestone && <MilestoneBadge milestone={issue.milestone} />;
          case 'project':
             return issue.project && <ProjectBadge project={issue.project} />;
          case 'startDate':

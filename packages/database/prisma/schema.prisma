@@ -1501,6 +1501,7 @@ model ProjectMilestone {
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  issues    Issue[]
 
   @@index([projectId, position])
   @@map("project_milestones")
@@ -1948,6 +1949,11 @@ model Issue {
   teamId            String?           @map("team_id")
   statusId          String            @map("status_id")
   projectId         String?           @map("project_id")
+  /// Milestone of the issue's own project; the API refuses another project's milestone and clears
+  /// it when the issue leaves the project. Deleting the milestone sets it to NULL.
+  /// VI: Milestone thuộc chính dự án của issue; API từ chối milestone của dự án khác và gỡ khi issue
+  /// VI: rời dự án. Xoá milestone thì cột này về NULL.
+  milestoneId       String?           @map("milestone_id")
   parentIssueId     String?           @map("parent_issue_id")
   duplicateOfId     String?           @map("duplicate_of_id")
   identifier        String
@@ -1983,6 +1989,7 @@ model Issue {
   team              Team?                 @relation(fields: [teamId], references: [id], onDelete: Cascade)
   status            IssueStatus           @relation(fields: [statusId], references: [id], onDelete: Restrict)
   project           Project?              @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  milestone         ProjectMilestone?     @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
   parentIssue       Issue?                @relation("IssueSubIssues", fields: [parentIssueId], references: [id], onDelete: SetNull)
   subIssues         Issue[]               @relation("IssueSubIssues")
   duplicateOf       Issue?                @relation("IssueDuplicates", fields: [duplicateOfId], references: [id], onDelete: SetNull)
@@ -2020,6 +2027,7 @@ model Issue {
   @@index([workspaceId, issueType, severity])
   @@index([workspaceId, archivedAt, createdAt, id])
   @@index([projectId])
+  @@index([milestoneId])
   @@index([parentIssueId])
   @@index([duplicateOfId])
   @@index([assigneeId])

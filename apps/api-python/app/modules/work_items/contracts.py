@@ -35,6 +35,8 @@ class CreateIssueInput(BugCreateFields):
     labelIds: list[str] | None = Field(default=None, max_length=100)
     # Sub projects of the issue's project. VI: Sub project thuộc dự án của issue.
     subProjectLabelIds: list[str] | None = Field(default=None, max_length=100)
+    # Milestone of the issue's project. VI: Milestone thuộc dự án của issue.
+    milestoneId: str | None = Field(default=None, max_length=100)
     estimatedEffort: float | None = Field(default=None, ge=0)
     actualEffort: float | None = Field(default=None, ge=0)
 
@@ -65,6 +67,9 @@ class UpdateIssueInput(BugUpdateFields):
     # Replaces the whole list; a project change without it drops the old project's sub projects.
     # VI: Thay cả danh sách; đổi dự án mà không gửi trường này thì gỡ sub project của dự án cũ.
     subProjectLabelIds: list[str] | None = Field(default=None, max_length=100)
+    # Null removes it; a project change without it drops the old project's milestone.
+    # VI: Null để gỡ; đổi dự án mà không gửi trường này thì gỡ milestone của dự án cũ.
+    milestoneId: str | None = Field(default=None, max_length=100)
     releaseIds: list[str] | None = Field(default=None, max_length=100)
     estimatedEffort: float | None = Field(default=None, ge=0)
     actualEffort: float | None = Field(default=None, ge=0)

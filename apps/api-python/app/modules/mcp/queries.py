@@ -219,6 +219,10 @@ OPTIONS_SELECT_SUB_PROJECT_LABELS = text("""SELECT id,name,archived_at IS NOT NU
             FROM sub_project_labels WHERE project_id=:project ORDER BY lower(name),id LIMIT 100""")
 
 
+OPTIONS_SELECT_PROJECT_MILESTONES = text("""SELECT id,title,target_date AS "targetDate",completed_at IS NOT NULL AS completed
+            FROM project_milestones WHERE project_id=:project ORDER BY position,target_date NULLS LAST,id LIMIT 100""")
+
+
 OPTIONS_SELECT_USERS = text("""SELECT u.id,u.name FROM users u JOIN team_members tm ON tm.user_id=u.id
             JOIN workspace_members wm ON wm.user_id=u.id AND wm.workspace_id=:workspace
             WHERE tm.team_id=:team AND u.status='ACTIVE' AND wm.status='ACTIVE' ORDER BY u.name,u.id LIMIT 100""")

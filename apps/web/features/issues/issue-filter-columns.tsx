@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { createColumnConfigHelper } from '@/components/data-table-filter/core/filters';
 import type { ColumnOption, FiltersState } from '@/components/data-table-filter/core/types';
 import { multiOptionFilterFn, optionFilterFn } from '@/components/data-table-filter/lib/filter-fns';
-import { Issue } from '@/types/issues';
+import { Issue, IssueMilestone } from '@/types/issues';
 import type { LabelInterface, SubProjectLabel } from '@/types/labels';
 import { priorities } from '@/lib/priority-presentations';
 import type { Status, StatusCategory } from '@/lib/status-presentations';
@@ -18,6 +18,7 @@ import {
    CircleUserRound,
    Folder,
    FolderTree,
+   Milestone,
    RefreshCcw,
    Tag,
 } from 'lucide-react';
@@ -110,6 +111,32 @@ const subProjectOptions = (
          };
       });
 
+// Same scoping as sub projects: the page's project only, or each title with its project.
+// VI: Cùng cách giới hạn như sub project: chỉ dự án của trang, hoặc mỗi tên kèm dự án.
+const milestoneOptions = (
+   milestones: IssueMilestone[],
+   projects: Project[],
+   projectId?: string
+): ColumnOption[] => [
+   {
+      value: 'no-milestone',
+      label: 'No milestone',
+      icon: <Milestone className="size-4 text-muted-foreground" />,
+   },
+   ...milestones
+      .filter((milestone) => !projectId || milestone.projectId === projectId)
+      .map((milestone) => {
+         const project = projectId
+            ? undefined
+            : projects.find((candidate) => candidate.id === milestone.projectId);
+         return {
+            value: milestone.id,
+            label: project ? `${milestone.title} · ${project.name}` : milestone.title,
+            icon: <Milestone className="size-4 text-muted-foreground" />,
+         };
+      }),
+];
+
 const projectOptions = (projects: Project[]): ColumnOption[] =>
    projects.map((project) => ({
       value: project.id,
@@ -147,6 +174,7 @@ export interface IssueFilterOptions {
    labels: LabelInterface[];
    cycles: IssueCycle[];
    subProjectLabels?: SubProjectLabel[];
+   milestones?: IssueMilestone[];
    /** Project of the page, if any. VI: Dự án của trang, nếu có. */
    projectId?: string;
 }
@@ -167,6 +195,7 @@ export const createIssueFilterColumns = ({
    labels,
    cycles,
    subProjectLabels = [],
+   milestones = [],
    projectId,
 }: IssueFilterOptions) =>
    [
@@ -225,6 +254,14 @@ export const createIssueFilterColumns = ({
          .displayName('Project')
          .icon(Folder)
          .options(projectOptions(projects))
+         .build(),
+      dtf
+         .option()
+         .id('milestone')
+         .accessor((issue: Issue) => issue.milestone?.id ?? 'no-milestone')
+         .displayName('Milestone')
+         .icon(Milestone)
+         .options(milestoneOptions(milestones, projects, projectId))
          .build(),
       dtf
          .option()

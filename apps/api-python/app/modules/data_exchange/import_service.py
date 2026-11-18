@@ -22,6 +22,7 @@ from .csv_input import parse_csv, validate_mapping
 from .queries import (
     DUPLICATE_KEY_SELECT_ISSUE_IMPORT_KEYS,
     IMPORT_PREVIEW_SELECT_ISSUE_IMPORT_BATCHES,
+    IMPORT_PREVIEW_SELECT_PROJECT_MILESTONES,
     IMPORT_PREVIEW_SELECT_SUB_PROJECT_LABELS,
     IMPORT_RESULT_SELECT_ISSUE_IMPORT_ROWS,
     IMPORT_RESULT_SELECT_ISSUE_IMPORT_ROWS_2,
@@ -133,6 +134,23 @@ async def import_preview(db, user, payload):
                 values["subProjectLabelIds"] = list(
                     dict.fromkeys(known[name] for name in wanted)
                 )
+            # The milestone arrives as a title of the row's project; an unknown or ambiguous title,
+            # or a title without a project, makes the row INVALID.
+            # VI: Milestone đến dưới dạng tên thuộc dự án của dòng; tên lạ hoặc trùng nhiều mốc,
+            # VI: hay có tên mà không có dự án, làm dòng INVALID.
+            milestone = values.pop("milestone", "").strip().lower()
+            if milestone:
+                if not values.get("projectId"):
+                    raise ValueError("milestone")
+                matches = (
+                    await db.execute(
+                        IMPORT_PREVIEW_SELECT_PROJECT_MILESTONES,
+                        {"project_id": values["projectId"], "title": milestone},
+                    )
+                ).scalars().all()
+                if len(matches) != 1:
+                    raise ValueError("milestone")
+                values["milestoneId"] = matches[0]
             normalized = CreateIssueInput.model_validate(
                 {**values, "workspaceId": payload.workspaceId, "teamId": payload.teamId}
             )

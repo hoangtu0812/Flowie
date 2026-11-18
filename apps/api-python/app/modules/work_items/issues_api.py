@@ -78,6 +78,7 @@ from .queries import (
     MOVE_ISSUE_SELECT_PROJECTS,
     issue_options_select_cycles_sql,
     issue_options_select_issue_statuses_sql,
+    issue_options_select_milestones_sql,
     issue_options_select_projects_sql,
     issue_options_select_sub_project_labels_sql,
 )
@@ -287,12 +288,16 @@ async def issue_options(
     # filters show only the issue's or the page's project. VI: Sub project của mọi dự án người gọi
     # VI: đọc được, kèm projectId, để picker và bộ lọc chỉ hiện của dự án tương ứng.
     sub_projects = await db.execute(issue_options_select_sub_project_labels_sql(project_read_scope), params)
+    # Milestones of the same readable projects, tagged with projectId the same way.
+    # VI: Milestone của cùng các dự án đọc được, cũng kèm projectId.
+    milestones = await db.execute(issue_options_select_milestones_sql(project_read_scope), params)
     return {'data': {
         'statuses': [{'id': row['id'], 'name': row['name'], 'category': row['category'], 'color': row['color'], 'position': row['position']} for row in statuses.mappings().all()],
         'projects': [{'id': row['id'], 'name': row['name'], 'identifier': row['identifier'], 'status': row['status'], 'priority': row['priority'], 'health': row['health'], 'startDate': row['start_date'], 'targetDate': row['target_date'], 'leadId': row['lead_id'], 'teamId': row['team_id']} for row in projects.mappings().all()],
         'members': [{'id': row['id'], 'name': row['name'], 'email': row['email'], 'avatarUrl': row['avatar_url'], 'lastSeenAt': row['last_seen_at'], 'isOnline': bool(row['last_seen_at'] and row['last_seen_at'] >= utcnow() - timedelta(minutes=2)), 'teamRoles': row['team_roles']} for row in members.mappings().all()],
         'labels': [dict(row) for row in labels.mappings().all()],
         'subProjectLabels': [{'id': row['id'], 'projectId': row['project_id'], 'name': row['name'], 'color': row['color'], 'archivedAt': row['archived_at']} for row in sub_projects.mappings().all()],
+        'milestones': [{'id': row['id'], 'projectId': row['project_id'], 'title': row['title'], 'targetDate': row['target_date'], 'completedAt': row['completed_at']} for row in milestones.mappings().all()],
         'cycles': [{'id': row['id'], 'teamId': row['team_id'], 'name': row['name'], 'status': row['status'], 'startDate': row['start_date'], 'endDate': row['end_date']} for row in cycles.mappings().all()],
         'releases': [{'id': row['id'], 'name': row['name'], 'version': row['version'], 'status': row['status'], 'targetDate': row['target_date']} for row in releases.mappings().all()],
     }}
