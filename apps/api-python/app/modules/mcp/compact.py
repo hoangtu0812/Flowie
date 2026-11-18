@@ -25,6 +25,7 @@ LONG_TEXT = {
 RENAMED = {
     "assigneeId": "assignee", "reporterId": "reporter", "projectId": "project",
     "labelIds": "labelLinks", "subProjectLabelIds": "subProjectLabels",
+    "milestoneId": "milestone",
 }
 COMMENT_FIELDS = ("id", "issueId", "parentCommentId", "version", "createdAt")
 DOCUMENT_FIELDS = ("id", "title", "version", "docType", "status", "teamId", "folderId", "updatedAt")
@@ -48,6 +49,8 @@ def compact_issue(data: dict[str, Any], sent: set[str]) -> dict[str, Any]:
             key = "labels"
         elif key == "subProjectLabels":
             value = [label["name"] for label in value or []]
+        elif key == "milestone":
+            value = {"id": value.get("id"), "title": value.get("title")} if value else None
         elif key in {"assignee", "reporter", "project"}:
             value = _person(value)
         result[key] = value

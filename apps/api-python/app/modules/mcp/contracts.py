@@ -89,6 +89,7 @@ class SearchIssuesInput(PageInput):
     priority: Literal["NONE", "LOW", "MEDIUM", "HIGH", "URGENT"] | None = None
     labelId: str | None = None
     subProjectLabelId: str | None = None
+    milestoneId: str | None = None
     updatedAfter: datetime | None = None
     updatedBefore: datetime | None = None
     overdue: bool = False
@@ -169,7 +170,8 @@ class SearchDocumentsInput(PageInput):
 
 class IssueOptionsInput(StrictInput):
     teamId: str = Field(min_length=1)
-    # Adds that project's sub projects to the result. VI: Thêm sub project của dự án đó vào kết quả.
+    # Adds that project's sub projects and milestones to the result.
+    # VI: Thêm sub project và milestone của dự án đó vào kết quả.
     projectId: str | None = Field(default=None, min_length=1)
 
 
@@ -203,6 +205,8 @@ class CreateIssueTool(WriteInput, BugCreateFields):
     labelIds: list[str] = Field(default_factory=list, max_length=100)
     # Sub projects of projectId (list_issue_options with projectId). VI: Sub project của projectId.
     subProjectLabelIds: list[str] = Field(default_factory=list, max_length=100)
+    # Milestone of projectId (list_issue_options with projectId). VI: Milestone của projectId.
+    milestoneId: str | None = Field(default=None, min_length=1, max_length=100)
 
 
 class UpdateIssueTool(VersionInput, IssueInput, BugUpdateFields):
@@ -226,6 +230,9 @@ class UpdateIssueTool(VersionInput, IssueInput, BugUpdateFields):
     # Replaces the list; changing projectId alone drops the old project's sub projects.
     # VI: Thay cả danh sách; chỉ đổi projectId thì gỡ sub project của dự án cũ.
     subProjectLabelIds: list[str] | None = Field(default=None, max_length=100)
+    # Null removes it; changing projectId alone drops the old project's milestone.
+    # VI: Null để gỡ; chỉ đổi projectId thì gỡ milestone của dự án cũ.
+    milestoneId: str | None = Field(default=None, max_length=100)
 
     @model_validator(mode="after")
     def non_null_required_fields(self):

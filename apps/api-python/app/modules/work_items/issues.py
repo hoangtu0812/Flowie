@@ -42,6 +42,7 @@ from .issue_rules import (
     validate_schedule_dates,
 )
 from .lifecycle import actor_context
+from .milestones import validate_milestone
 from .queries import (
     CREATE_ISSUE_SELECT_ISSUES,
     UPDATE_ISSUE_SELECT_ISSUES,
@@ -73,6 +74,7 @@ async def create_issue(
     sub_projects = await validate_sub_projects(
         db, values.get("projectId"), values.get("subProjectLabelIds") or [], []
     )
+    milestone = await validate_milestone(db, values.get("projectId"), values.get("milestoneId"))
     explicit_due = bool(values.get("dueDate"))
     sla_policy = (
         await select_policy(db, payload.workspaceId, payload.teamId, values["priority"])
@@ -113,6 +115,7 @@ async def create_issue(
             "team_id": payload.teamId,
             "status_id": values["statusId"],
             "project_id": values.get("projectId"),
+            "milestone_id": milestone["id"] if milestone else None,
             "parent_issue_id": values.get("parentIssueId"),
             "identifier": identifier,
             "number": sequence["issue_sequence"],
@@ -279,6 +282,21 @@ async def update_issue(
         )
     elif final_project_id != issue["projectId"]:
         target_sub_projects = []
+    # Same rule for the milestone: checked against the final project, dropped on a project change.
+    # VI: Cùng quy tắc cho milestone: kiểm theo dự án sau cùng, gỡ khi đổi dự án.
+    milestone_transition = None
+    if "milestoneId" not in values and final_project_id != issue["projectId"] and issue["milestoneId"]:
+        values["milestoneId"] = None
+    if "milestoneId" in values:
+        milestone = await validate_milestone(db, final_project_id, values["milestoneId"])
+        values["milestoneId"] = milestone["id"] if milestone else None
+        if values["milestoneId"] == issue["milestoneId"]:
+            values.pop("milestoneId")
+        else:
+            milestone_transition = _transition(
+                issue["milestone"]["title"] if issue.get("milestone") else None,
+                milestone["title"] if milestone else None,
+            )
     # A parent change (set, move or remove with null) only rewrites this issue's parent, so its
     # own sub-issues stay under it; validate_parent rejects self, descendants and other teams.
     # VI: Đổi cha (đặt, chuyển hoặc gỡ bằng null) chỉ ghi lại cha của issue này nên các con của
@@ -308,6 +326,7 @@ async def update_issue(
         "description": "description",
         "statusId": "status_id",
         "projectId": "project_id",
+        "milestoneId": "milestone_id",
         "parentIssueId": "parent_issue_id",
         "assigneeId": "assignee_id",
         "reporterId": "reporter_id",
@@ -430,6 +449,8 @@ async def update_issue(
         changes.append(("Parent", parent_transition))
     if sub_project_change:
         changes.append(("Sub projects", sub_project_change))
+    if milestone_transition:
+        changes.append(("Milestone", milestone_transition))
     if "startDate" in values:
         before = (
             issue["startDate"].date().isoformat() if issue.get("startDate") else None

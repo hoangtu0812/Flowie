@@ -12,6 +12,7 @@ export default function ProjectTimeline({ projectId }: { projectId: string }) {
    const {
       project: liveProject,
       issues: liveIssues,
+      milestones,
       loading,
       error,
       reload,
@@ -34,5 +35,5 @@ export default function ProjectTimeline({ projectId }: { projectId: string }) {
          </div>
       );
 
-   return <ProjectIssuesTimeline issues={issues} onIssueChanged={reload} />;
+   return <ProjectIssuesTimeline issues={issues} milestones={milestones} onIssueChanged={reload} />;
 }

@@ -268,6 +268,8 @@ export function toProjectDetailUi(
          name: milestone.title,
          targetDate: milestone.targetDate ?? undefined,
          completed: Boolean(milestone.completedAt),
+         issueCount: milestone.issueCount ?? 0,
+         completedIssueCount: milestone.completedIssueCount ?? 0,
       })),
       updates: updates.map((update) => ({
          id: update.id,

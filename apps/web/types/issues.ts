@@ -4,6 +4,20 @@ import type { Project } from '@/types/projects';
 import type { Status } from '@/lib/status-presentations';
 import type { User } from '@/types/users';
 
+/**
+ * Milestone of a project as issues and pickers see it. `projectId`
+ * is set on picker options; `completedAt` set means the milestone itself is marked done.
+ * VI: Milestone của dự án theo góc nhìn issue và picker. `projectId` có trên lựa chọn của picker;
+ * VI: có `completedAt` nghĩa là chính milestone đã được đánh dấu xong.
+ */
+export interface IssueMilestone {
+   id: string;
+   title: string;
+   projectId?: string;
+   targetDate?: string | null;
+   completedAt?: string | null;
+}
+
 /** UI shape mapped from the Issue API. It contains no fixture records. */
 export interface Issue {
    manualOrder?: string;
@@ -18,6 +32,8 @@ export interface Issue {
    labels: LabelInterface[];
    /** Sub projects of the issue's project. VI: Sub project thuộc dự án của issue. */
    subProjectLabels?: SubProjectLabel[];
+   /** Milestone of the issue's project, or null. VI: Milestone thuộc dự án của issue, hoặc null. */
+   milestone?: IssueMilestone | null;
    createdAt: string;
    team?: { id: string; name: string; identifier: string };
    isSubscribed?: boolean;

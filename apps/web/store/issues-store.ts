@@ -6,7 +6,7 @@ import {
    type PageMetadata,
 } from '@/features/issues/issue-query';
 import type { BugFields } from '@/features/issues/bug-fields';
-import { groupIssuesByStatus, Issue } from '@/types/issues';
+import { groupIssuesByStatus, Issue, IssueMilestone } from '@/types/issues';
 import { LabelInterface, SubProjectLabel } from '@/types/labels';
 import { priorities, Priority } from '@/lib/priority-presentations';
 import { Project } from '@/types/projects';
@@ -81,6 +81,7 @@ type NativeIssue = BugFields & {
    project?: { id: string; name: string } | null;
    labelLinks?: { label: LabelInterface }[];
    subProjectLabels?: SubProjectLabel[];
+   milestone?: IssueMilestone | null;
    cycleLinks?: { cycleId: string }[];
    releaseLinks?: { releaseId: string }[];
    subscribers?: { userId: string }[];
@@ -109,6 +110,7 @@ type NativeIssueOptions = {
    }>;
    labels: LabelInterface[];
    subProjectLabels?: SubProjectLabel[];
+   milestones?: IssueMilestone[];
    cycles: Array<{
       id: string;
       teamId: string;
@@ -237,6 +239,7 @@ function asIssue(native: NativeIssue): Issue {
       priority,
       labels: (native.labelLinks ?? []).map(({ label }) => label),
       subProjectLabels: native.subProjectLabels ?? [],
+      milestone: native.milestone ?? null,
       createdAt: native.createdAt,
       manualOrder: native.manualOrder,
       subIssueSort: native.subIssueSort ?? 'manual',
@@ -299,6 +302,8 @@ interface IssuesState {
    labels: LabelInterface[];
    /** Sub projects of every readable project, each with its projectId. VI: Sub project của mọi dự án đọc được, kèm projectId. */
    subProjectLabels: SubProjectLabel[];
+   /** Milestones of every readable project, each with its projectId. VI: Milestone của mọi dự án đọc được, kèm projectId. */
+   milestones: IssueMilestone[];
    cycles: IssueCycle[];
    releases: NativeIssueOptions['releases'];
    issuesByStatus: Record<string, Issue[]>;
@@ -353,6 +358,8 @@ interface IssuesState {
    replaceIssueLabels: (issueId: string, labels: LabelInterface[]) => Promise<boolean>;
    /** Replaces the issue's sub projects; the API refuses ids of another project. VI: Thay sub project của issue; API từ chối id của dự án khác. */
    updateIssueSubProjects: (issueId: string, subProjectLabelIds: string[]) => Promise<Issue>;
+   /** Sets or clears (null) the milestone; the API refuses another project's one. VI: Đặt hoặc gỡ (null) milestone; API từ chối milestone của dự án khác. */
+   updateIssueMilestone: (issueId: string, milestoneId: string | null) => Promise<Issue>;
 
    // Project management
    updateIssueProject: (issueId: string, newProject: Project | undefined) => Promise<boolean>;
@@ -411,6 +418,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
    projects: [],
    labels: [],
    subProjectLabels: [],
+   milestones: [],
    cycles: [],
    releases: [],
    issuesByStatus: {},
@@ -441,6 +449,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
          projects: [],
          labels: [],
          subProjectLabels: [],
+         milestones: [],
          cycles: [],
          releases: [],
          issuesByStatus: {},
@@ -498,6 +507,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
             projects: options.projects.map(asProjectOption),
             labels: options.labels,
             subProjectLabels: options.subProjectLabels ?? [],
+            milestones: options.milestones ?? [],
             cycles: options.cycles ?? [],
             releases: options.releases ?? [],
             issuesByStatus: groupIssuesByStatus(issues),
@@ -608,6 +618,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
             projects: options.projects.map(asProjectOption),
             labels: options.labels,
             subProjectLabels: options.subProjectLabels ?? [],
+            milestones: options.milestones ?? [],
             cycles: options.cycles,
             releases: options.releases,
             loading: false,
@@ -1196,6 +1207,25 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
       if (!response.ok) {
          const body = (await response.json().catch(() => null)) as { message?: string } | null;
          throw new Error(body?.message ?? 'Could not update sub projects.');
+      }
+      const issue = asIssue(((await response.json()) as { data: NativeIssue }).data);
+      get().updateIssue(issueId, issue);
+      return issue;
+   },
+
+   updateIssueMilestone: async (issueId, milestoneId) => {
+      const workspaceId = get().workspaceId ?? (await loadCurrentWorkspace()).id;
+      const response = await authenticatedFetch(
+         `${api}/issues/${issueId}?${new URLSearchParams({ workspaceId })}`,
+         {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ milestoneId }),
+         }
+      );
+      if (!response.ok) {
+         const body = (await response.json().catch(() => null)) as { message?: string } | null;
+         throw new Error(body?.message ?? 'Could not update the milestone.');
       }
       const issue = asIssue(((await response.json()) as { data: NativeIssue }).data);
       get().updateIssue(issueId, issue);

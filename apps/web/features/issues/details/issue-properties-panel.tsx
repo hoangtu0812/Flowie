@@ -29,6 +29,7 @@ import {
    CalendarPlus,
    CalendarRange,
    Check,
+   Milestone,
    Plus,
    Timer,
    UserPen,
@@ -79,6 +80,7 @@ export function IssuePropertiesPanel({ issue, reviews }: IssuePropertiesPanelPro
       cycles,
       labels,
       subProjectLabels,
+      milestones,
       projects,
       addIssueLabel,
       removeIssueLabel,
@@ -90,6 +92,7 @@ export function IssuePropertiesPanel({ issue, reviews }: IssuePropertiesPanelPro
       updateIssueBug,
       updateIssueReporter,
       updateIssueSubProjects,
+      updateIssueMilestone,
    } = useIssuesStore();
    const [scheduleOpen, setScheduleOpen] = useState(false);
    const [startDate, setStartDate] = useState('');
@@ -206,6 +209,21 @@ export function IssuePropertiesPanel({ issue, reviews }: IssuePropertiesPanelPro
       } catch (caught) {
          toast.error(
             caught instanceof Error ? caught.message : tx('Could not update sub projects.')
+         );
+      }
+   };
+
+   // Only milestones of the issue's project are offered; the API refuses any other.
+   // VI: Chỉ đề xuất milestone của dự án chứa issue; API từ chối milestone khác.
+   const milestoneChoices = milestones.filter(
+      (milestone) => milestone.projectId === issue.project?.id
+   );
+   const setMilestone = async (milestoneId: string | null) => {
+      try {
+         await updateIssueMilestone(issue.id, milestoneId);
+      } catch (caught) {
+         toast.error(
+            caught instanceof Error ? caught.message : tx('Could not update the milestone.')
          );
       }
    };
@@ -574,6 +592,50 @@ export function IssuePropertiesPanel({ issue, reviews }: IssuePropertiesPanelPro
                </DropdownMenuContent>
             </DropdownMenu>
          </Section>
+
+         {issue.project && (
+            <Section title={tx('Milestone')}>
+               <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                     <button
+                        type="button"
+                        className="flex items-center gap-2 text-sm w-full text-left rounded-md -mx-1 px-1 py-0.5 hover:bg-accent/50 transition-colors"
+                     >
+                        <Milestone className="size-4 text-muted-foreground shrink-0" />
+                        {issue.milestone ? (
+                           <span className="truncate">{issue.milestone.title}</span>
+                        ) : (
+                           <span className="text-muted-foreground">{tx('Add to milestone')}</span>
+                        )}
+                     </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-56">
+                     <DropdownMenuLabel>{tx('Milestone')}</DropdownMenuLabel>
+                     <DropdownMenuItem onSelect={() => void setMilestone(null)}>
+                        <span className="text-muted-foreground">{tx('No milestone')}</span>
+                        {!issue.milestone && <Check className="ml-auto size-4 shrink-0" />}
+                     </DropdownMenuItem>
+                     {milestoneChoices.map((milestone) => (
+                        <DropdownMenuItem
+                           key={milestone.id}
+                           onSelect={() => void setMilestone(milestone.id)}
+                        >
+                           <Milestone className="size-4 text-muted-foreground shrink-0" />
+                           <span className="truncate">{milestone.title}</span>
+                           {issue.milestone?.id === milestone.id && (
+                              <Check className="ml-auto size-4 shrink-0" />
+                           )}
+                        </DropdownMenuItem>
+                     ))}
+                     {milestoneChoices.length === 0 && (
+                        <DropdownMenuItem disabled>
+                           {tx('No milestones in this project yet')}
+                        </DropdownMenuItem>
+                     )}
+                  </DropdownMenuContent>
+               </DropdownMenu>
+            </Section>
+         )}
 
          <IssueRelations issueId={issue.id} />
 

@@ -476,6 +476,7 @@ ISSUE_ROWS_SELECT_ISSUE_SUBSCRIPTIONS = text("""SELECT i.*, t.id AS team_id_valu
                       t.identifier AS team_identifier, s.id AS status_id_value,
                       s.name AS status_name, s.category AS status_category, s.color AS status_color,
                       p.id AS project_id_value, p.name AS project_name, p.identifier AS project_identifier,
+                      m.title AS milestone_title, m.target_date AS milestone_target_date, m.completed_at AS milestone_completed_at,
                       c.id AS creator_id_value, c.name AS creator_name, c.avatar_url AS creator_avatar_url,
                       r.id AS reporter_id_value, r.name AS reporter_name, r.avatar_url AS reporter_avatar_url,
                       parent.identifier AS parent_identifier, parent.title AS parent_title,
@@ -490,6 +491,7 @@ ISSUE_ROWS_SELECT_ISSUE_SUBSCRIPTIONS = text("""SELECT i.*, t.id AS team_id_valu
                LEFT JOIN teams t ON t.id = i.team_id
                JOIN issue_statuses s ON s.id = i.status_id
                LEFT JOIN projects p ON p.id = i.project_id
+               LEFT JOIN project_milestones m ON m.id = i.milestone_id
                JOIN users c ON c.id = i.creator_id
                JOIN users r ON r.id = COALESCE(i.reporter_id, i.creator_id)
                LEFT JOIN users a ON a.id = i.assignee_id
@@ -533,6 +535,11 @@ ISSUE_ROWS_SELECT_ISSUE_LABELS = text(
 
 ISSUE_ROWS_SELECT_ISSUE_SUB_PROJECT_LABELS = text(
     """SELECT isl.issue_id,l.id,l.name,l.color,l.archived_at FROM issue_sub_project_labels isl JOIN sub_project_labels l ON l.id=isl.label_id WHERE isl.issue_id=ANY(CAST(:ids AS text[])) ORDER BY lower(l.name),l.id"""
+)
+
+
+VALIDATE_MILESTONE_SELECT_PROJECT_MILESTONES = text(
+    "SELECT id,title FROM project_milestones WHERE id=:id AND project_id=:project_id"
 )
 
 
@@ -816,6 +823,11 @@ ISSUE_OPTIONS_SELECT_LABELS = text('SELECT id, name, color FROM labels WHERE wor
 def issue_options_select_sub_project_labels_sql(project_read_scope) -> TextClause:
     return text(f'''SELECT l.id, l.project_id, l.name, l.color, l.archived_at FROM sub_project_labels l JOIN projects p ON p.id = l.project_id
             WHERE {project_read_scope(workspace='workspace_id', user='user_id')} ORDER BY lower(l.name), l.id''')
+
+
+def issue_options_select_milestones_sql(project_read_scope) -> TextClause:
+    return text(f'''SELECT m.id, m.project_id, m.title, m.target_date, m.completed_at FROM project_milestones m JOIN projects p ON p.id = m.project_id
+            WHERE {project_read_scope(workspace='workspace_id', user='user_id')} ORDER BY m.position, m.target_date NULLS LAST, m.id''')
 
 
 def issue_options_select_cycles_sql(teamId) -> TextClause:

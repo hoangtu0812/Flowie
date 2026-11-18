@@ -14,8 +14,17 @@ import { createIssueFilterColumns } from './issue-filter-columns';
  * filter is active.
  */
 export function IssueFilterTrigger() {
-   const { issues, members, projects, statuses, labels, cycles, subProjectLabels, lastQuery } =
-      useIssuesStore();
+   const {
+      issues,
+      members,
+      projects,
+      statuses,
+      labels,
+      cycles,
+      subProjectLabels,
+      milestones,
+      lastQuery,
+   } = useIssuesStore();
    const projectId = lastQuery?.projectId;
    const { filters, setFilters } = useFilterStore();
    const columnsConfig = useMemo(
@@ -27,9 +36,10 @@ export function IssueFilterTrigger() {
             labels,
             cycles,
             subProjectLabels,
+            milestones,
             projectId,
          }),
-      [members, projects, statuses, labels, cycles, subProjectLabels, projectId]
+      [members, projects, statuses, labels, cycles, subProjectLabels, milestones, projectId]
    );
 
    const { columns, actions, strategy } = useDataTableFilters({

@@ -531,6 +531,7 @@ export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPrope
                      type="button"
                      onClick={() => openEditor('milestone')}
                      className="text-muted-foreground hover:text-foreground transition-colors"
+                     aria-label="Add milestone"
                   >
                      <Plus className="size-3.5" />
                   </button>
@@ -543,47 +544,92 @@ export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPrope
                   </p>
                ) : (
                   <div className="flex flex-col gap-1.5">
-                     {detail.milestones.map((milestone) => (
-                        <button
-                           type="button"
-                           onClick={() =>
-                              void toggleMilestone(milestone.id, !milestone.completed).catch(
-                                 (caught) =>
-                                    toast.error(
-                                       caught instanceof Error
-                                          ? caught.message
-                                          : 'Could not update milestone.'
-                                    )
-                              )
-                           }
-                           key={milestone.id}
-                           className="flex items-center justify-between gap-2 text-sm text-left hover:text-foreground transition-colors"
-                        >
-                           <span className="flex items-center gap-2 min-w-0">
-                              <span
-                                 className={
-                                    milestone.completed
-                                       ? 'size-4 rounded-full bg-violet-500 flex items-center justify-center shrink-0'
-                                       : 'size-4 rounded-full border border-muted-foreground/40 shrink-0'
-                                 }
-                              >
-                                 {milestone.completed && <Check className="size-2.5 text-white" />}
-                              </span>
-                              <span
-                                 className={
-                                    milestone.completed
-                                       ? 'truncate line-through text-muted-foreground'
-                                       : 'truncate'
-                                 }
-                              >
-                                 {milestone.name}
-                              </span>
-                           </span>
-                           <span className="text-xs text-muted-foreground whitespace-nowrap">
-                              {formatDay(milestone.targetDate)}
-                           </span>
-                        </button>
-                     ))}
+                     {detail.milestones.map((milestone) => {
+                        // The circle marks the milestone done; the title opens the project's issues
+                        // filtered by it. Progress counts active issues (canceled ones excluded).
+                        // VI: Vòng tròn đánh dấu milestone xong; tên mở danh sách issue của dự án lọc
+                        // VI: theo milestone. Tiến độ đếm issue đang hoạt động (bỏ issue đã huỷ).
+                        const percent = milestone.issueCount
+                           ? Math.round(
+                                (milestone.completedIssueCount / milestone.issueCount) * 100
+                             )
+                           : 0;
+                        const filters = JSON.stringify([
+                           {
+                              columnId: 'milestone',
+                              type: 'option',
+                              operator: 'is',
+                              values: [milestone.id],
+                           },
+                        ]);
+                        return (
+                           <div key={milestone.id} className="flex flex-col gap-1">
+                              <div className="flex items-center justify-between gap-2 text-sm">
+                                 <span className="flex items-center gap-2 min-w-0">
+                                    <button
+                                       type="button"
+                                       aria-label={
+                                          milestone.completed
+                                             ? `Mark ${milestone.name} as not done`
+                                             : `Mark ${milestone.name} as done`
+                                       }
+                                       onClick={() =>
+                                          void toggleMilestone(
+                                             milestone.id,
+                                             !milestone.completed
+                                          ).catch((caught) =>
+                                             toast.error(
+                                                caught instanceof Error
+                                                   ? caught.message
+                                                   : 'Could not update milestone.'
+                                             )
+                                          )
+                                       }
+                                       className={
+                                          milestone.completed
+                                             ? 'size-4 rounded-full bg-violet-500 flex items-center justify-center shrink-0'
+                                             : 'size-4 rounded-full border border-muted-foreground/40 shrink-0 hover:border-foreground'
+                                       }
+                                    >
+                                       {milestone.completed && (
+                                          <Check className="size-2.5 text-white" />
+                                       )}
+                                    </button>
+                                    <Link
+                                       href={`${projectPath(orgId, project, 'issues')}?${new URLSearchParams({ filters })}`}
+                                       className={
+                                          milestone.completed
+                                             ? 'truncate line-through text-muted-foreground hover:text-foreground'
+                                             : 'truncate hover:underline'
+                                       }
+                                    >
+                                       {milestone.name}
+                                    </Link>
+                                 </span>
+                                 <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                    {milestone.completedIssueCount}/{milestone.issueCount}
+                                    {milestone.targetDate &&
+                                       ` · ${formatDay(milestone.targetDate)}`}
+                                 </span>
+                              </div>
+                              {milestone.issueCount > 0 && (
+                                 <div
+                                    className="ml-6 h-1 rounded-full bg-muted overflow-hidden"
+                                    role="progressbar"
+                                    aria-label={`${milestone.name} progress`}
+                                    aria-valuenow={percent}
+                                    aria-valuemin={0}
+                                    aria-valuemax={100}
+                                 >
+                                    <div
+                                       className="h-full bg-violet-500"
+                                       style={{ width: `${percent}%` }}
+                                    />
+                                 </div>
+                              )}
+                           </div>
+                        );
+                     })}
                   </div>
                )}
             </div>

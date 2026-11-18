@@ -6,6 +6,9 @@ export interface ProjectMilestone {
    name: string;
    targetDate?: string;
    completed: boolean;
+   /** Active issues of the milestone and how many are completed. VI: Issue đang hoạt động của milestone và số đã hoàn thành. */
+   issueCount: number;
+   completedIssueCount: number;
 }
 
 export type ProjectUpdateHealth = 'on-track' | 'at-risk' | 'off-track';

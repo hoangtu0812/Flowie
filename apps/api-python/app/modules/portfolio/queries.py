@@ -240,16 +240,27 @@ SUBSCRIBE_SELECT_PROJECT_SUBSCRIPTIONS = text('SELECT created_at FROM project_su
 FAVORITE_SELECT_PROJECT_FAVORITES = text('SELECT created_at FROM project_favorites WHERE project_id = :project_id AND user_id = :user_id')
 
 
-LIST_MILESTONES_SELECT_PROJECT_MILESTONES = text('SELECT * FROM project_milestones WHERE project_id = :project_id AND workspace_id = :workspace_id ORDER BY position, target_date')
+# Milestone rows with their progress: active issues (not archived, not canceled) and how many of
+# them are completed. Canceled work is left out so it neither counts as done nor blocks 100%.
+# VI: Dòng milestone kèm tiến độ: issue đang hoạt động (chưa lưu trữ, chưa huỷ) và số đã hoàn
+# VI: thành. Việc đã huỷ bị loại để không tính là xong mà cũng không chặn 100%.
+MILESTONE_COLUMNS = """m.*,
+    (SELECT count(*) FROM issues i JOIN issue_statuses s ON s.id = i.status_id
+     WHERE i.milestone_id = m.id AND i.archived_at IS NULL AND s.category::text <> 'CANCELED') AS issue_count,
+    (SELECT count(*) FROM issues i JOIN issue_statuses s ON s.id = i.status_id
+     WHERE i.milestone_id = m.id AND i.archived_at IS NULL AND s.category::text = 'COMPLETED') AS completed_issue_count"""
 
 
-CREATE_MILESTONE_SELECT_PROJECT_MILESTONES = text('SELECT * FROM project_milestones WHERE id = :id')
+LIST_MILESTONES_SELECT_PROJECT_MILESTONES = text(f'SELECT {MILESTONE_COLUMNS} FROM project_milestones m WHERE m.project_id = :project_id AND m.workspace_id = :workspace_id ORDER BY m.position, m.target_date')
+
+
+CREATE_MILESTONE_SELECT_PROJECT_MILESTONES = text(f'SELECT {MILESTONE_COLUMNS} FROM project_milestones m WHERE m.id = :id')
 
 
 UPDATE_MILESTONE_SELECT_PROJECT_MILESTONES = text('SELECT 1 FROM project_milestones WHERE id = :id AND project_id = :project_id AND workspace_id = :workspace_id')
 
 
-UPDATE_MILESTONE_SELECT_PROJECT_MILESTONES_2 = text('SELECT * FROM project_milestones WHERE id = :id')
+UPDATE_MILESTONE_SELECT_PROJECT_MILESTONES_2 = text(f'SELECT {MILESTONE_COLUMNS} FROM project_milestones m WHERE m.id = :id')
 
 
 PROJECT_SELECT_TEAMS = text('SELECT * FROM teams WHERE id = :team_id')

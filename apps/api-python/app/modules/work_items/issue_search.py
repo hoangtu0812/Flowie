@@ -23,6 +23,7 @@ OPTION_COLUMNS = {
     "priority": "CASE WHEN i.priority='NONE' THEN 'no-priority' ELSE lower(i.priority::text) END",
     "issueType": "i.issue_type::text",
     "severity": "COALESCE(i.severity::text,'NONE')",
+    "milestone": "COALESCE(i.milestone_id,'no-milestone')",
     "cycle": "COALESCE((SELECT cycle_id FROM issue_cycles ic WHERE ic.issue_id=i.id ORDER BY created_at,cycle_id LIMIT 1),'no-cycle')",
 }
 # Link tables filtered by "has any / all / none of these ids"; both key the label as label_id.

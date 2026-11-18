@@ -23,7 +23,8 @@ def export_issues_select_projects_sql(scope) -> TextClause:
         t.name AS team_name,(SELECT p.name FROM projects p WHERE p.id=i.project_id) AS project_name,
         (SELECT u.name FROM users u WHERE u.id=i.assignee_id) AS assignee_name,i.estimated_effort,i.actual_effort,
         (SELECT string_agg(l.name,', ' ORDER BY l.name) FROM issue_labels il JOIN labels l ON l.id=il.label_id WHERE il.issue_id=i.id) AS label_names,
-        (SELECT string_agg(l.name,', ' ORDER BY lower(l.name)) FROM issue_sub_project_labels il JOIN sub_project_labels l ON l.id=il.label_id WHERE il.issue_id=i.id) AS sub_project_names """
+        (SELECT string_agg(l.name,', ' ORDER BY lower(l.name)) FROM issue_sub_project_labels il JOIN sub_project_labels l ON l.id=il.label_id WHERE il.issue_id=i.id) AS sub_project_names,
+        (SELECT m.title FROM project_milestones m WHERE m.id=i.milestone_id) AS milestone_title """
         + scope
         + " ORDER BY i.created_at DESC,i.id DESC LIMIT 10001"
     )
@@ -85,4 +86,11 @@ PROCESS_IMPORT_ROW_SELECT_ISSUE_IMPORT_ROWS = text(
 # VI: Sub project đang dùng của một dự án cho nhập CSV, khớp theo tên không phân biệt hoa thường.
 IMPORT_PREVIEW_SELECT_SUB_PROJECT_LABELS = text(
     "SELECT id,lower(name) AS name FROM sub_project_labels WHERE project_id=:project_id AND archived_at IS NULL"
+)
+
+
+# Milestones of one project for CSV import, matched by title without letter case.
+# VI: Milestone của một dự án cho nhập CSV, khớp theo tên không phân biệt hoa thường.
+IMPORT_PREVIEW_SELECT_PROJECT_MILESTONES = text(
+    "SELECT id FROM project_milestones WHERE project_id=:project_id AND lower(title)=:title"
 )

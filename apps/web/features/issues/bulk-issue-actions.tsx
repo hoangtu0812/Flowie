@@ -40,6 +40,7 @@ const fields = [
    'assigneeId',
    'projectId',
    'cycleId',
+   'milestoneId',
    'labelIds',
    'subProjectLabelIds',
 ];
@@ -49,6 +50,7 @@ const fieldLabels = [
    'Assignee',
    'Project',
    'Cycle',
+   'Milestone',
    'Replace labels',
    'Replace sub projects',
 ];
@@ -81,8 +83,23 @@ function BulkEditor({
    const tx = useMessages(messages);
    const enumLabel = useEnumLabel();
 
-   const { issues, statuses, members, projects, labels, cycles, subProjectLabels, retryIssues } =
-      useIssuesStore();
+   const {
+      issues,
+      statuses,
+      members,
+      projects,
+      labels,
+      cycles,
+      subProjectLabels,
+      milestones,
+      retryIssues,
+   } = useIssuesStore();
+   // Milestone titles carry their project; issues outside it fail on their own row.
+   // VI: Tên milestone kèm dự án; issue ngoài dự án đó lỗi riêng ở dòng của nó.
+   const milestoneRows = milestones.map((row) => ({
+      id: row.id,
+      name: `${row.title} · ${projects.find((project) => project.id === row.projectId)?.name ?? ''}`,
+   }));
    const alive = useRef(true);
    const requestKey = useRef('');
    const [selection, setSelection] = useState('selected');
@@ -146,9 +163,11 @@ function BulkEditor({
                 ? members
                 : field === 'projectId'
                   ? projects
-                  : cycles
+                  : field === 'milestoneId'
+                    ? milestoneRows
+                    : cycles
            ).map((row) => ({ value: row.id, label: row.name }));
-   if (['assigneeId', 'projectId', 'cycleId'].includes(field))
+   if (['assigneeId', 'projectId', 'cycleId', 'milestoneId'].includes(field))
       options.unshift({ value: '__clear__', label: tx('Clear value') });
    const resetPreview = () => {
       setOperation(undefined);
@@ -347,7 +366,9 @@ function BulkEditor({
                                         ? projects
                                         : key === 'cycleId'
                                           ? cycles
-                                          : labels;
+                                          : key === 'milestoneId'
+                                            ? milestoneRows
+                                            : labels;
                               const display = Array.isArray(next)
                                  ? next
                                       .map(

@@ -227,6 +227,29 @@ async def verify_exchange():
             )
             assert stored.scalar_one()["subProjectLabelIds"] == [sub_project]
         await command(named["id"], "cancel")
+        # The milestone is imported by title of the row's project, letter case ignored.
+        # VI: Milestone được nhập theo tên trong dự án của dòng, không phân biệt hoa thường.
+        milestone = cuid()
+        async with factory() as db:
+            await db.execute(
+                text(
+                    "INSERT INTO project_milestones(id,workspace_id,project_id,title,created_at,updated_at) VALUES (:id,:workspace,:project,'Beta',now(),now())"
+                ),
+                {"id": milestone, "workspace": workspace, "project": project},
+            )
+            await db.commit()
+        dated, _ = await preview(
+            f"key,title,project,milestone\nmile-ok,Mile ok,{project},beta\nmile-bad,Mile bad,{project},Gamma",
+            mapping={"externalId": "key", "title": "title", "projectId": "project", "milestone": "milestone"},
+        )
+        assert dated["counts"] == {"PENDING": 1, "INVALID": 1}
+        async with factory() as db:
+            stored = await db.execute(
+                text("SELECT payload FROM issue_import_rows WHERE batch_id=:id AND state='PENDING'"),
+                {"id": dated["id"]},
+            )
+            assert stored.scalar_one()["milestoneId"] == milestone
+        await command(dated["id"], "cancel")
         async with factory() as db:
             await db.execute(
                 text("UPDATE projects SET archived_at=:now WHERE id=:id"),

@@ -904,6 +904,36 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([item["id"] for item in found["items"]], [self.issue["id"]])
         self.assertEqual(found["items"][0]["subProjectLabels"], [{"id": labels["Web"], "name": "Web"}])
 
+    async def test_milestones_through_options_writes_and_search(self):
+        # Milestones come from list_issue_options(projectId), are written by id and searched.
+        # VI: Milestone lấy từ list_issue_options(projectId), ghi theo id và tìm kiếm được.
+        async with self.factory() as db:
+            milestones = {}
+            for project, title in [(self.project, "Beta"), (self.other_project, "Hidden")]:
+                milestones[title] = cuid()
+                await db.execute(
+                    text("""INSERT INTO project_milestones (id,workspace_id,project_id,title,created_at,updated_at)
+                    VALUES (:id,:workspace,:project,:title,now(),now())"""),
+                    {"id": milestones[title], "workspace": self.workspace, "project": project, "title": title},
+                )
+            await db.commit()
+        options = await self.call("list_issue_options", teamId=self.team, projectId=self.project)
+        self.assertEqual([row["title"] for row in options["milestones"]], ["Beta"])
+        with self.assertRaises(ApiError) as refused:
+            await self.call(
+                "update_issue", issueId=self.issue["id"], milestoneId=milestones["Hidden"],
+                expectedVersion=self.issue["version"], idempotencyKey="milestone-other",
+            )
+        self.assertEqual(refused.exception.status_code, 404)
+        updated = await self.call(
+            "update_issue", issueId=self.issue["id"], milestoneId=milestones["Beta"],
+            expectedVersion=self.issue["version"], idempotencyKey="milestone-beta",
+        )
+        self.assertEqual(updated["data"]["milestone"], {"id": milestones["Beta"], "title": "Beta"})
+        found = await self.call("search_issues", milestoneId=milestones["Beta"])
+        self.assertEqual([item["id"] for item in found["items"]], [self.issue["id"]])
+        self.assertEqual(found["items"][0]["milestone"], {"id": milestones["Beta"], "title": "Beta"})
+
     async def test_update_issue_parent_uses_scope_version_and_cycle_rules(self):
         child = (
             await self.call(

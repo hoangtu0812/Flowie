@@ -13,6 +13,7 @@ import { getEmptyImage } from 'react-dnd-html5-backend';
 import { AssigneeUser } from './assignee-user';
 import { LabelBadge } from './label-badge';
 import { SubProjectBadge } from './sub-project-badge';
+import { MilestoneBadge } from './milestone-badge';
 import { PrioritySelector } from './priority-selector';
 import { ProjectBadge } from './project-badge';
 import { StatusSelector } from './status-selector';
@@ -41,6 +42,7 @@ function IssueDragPreview({ issue }: { issue: Issue }) {
          <div className="flex flex-wrap gap-1.5 mb-3 min-h-[1.5rem]">
             <LabelBadge label={issue.labels} />
             <SubProjectBadge labels={issue.subProjectLabels ?? []} />
+            {issue.milestone && <MilestoneBadge milestone={issue.milestone} />}
             {issue.project && <ProjectBadge project={issue.project} />}
          </div>
 
@@ -144,6 +146,9 @@ export function IssueGrid({ issue }: IssueGridProps) {
                   {displayProperties.labels && <LabelBadge label={issue.labels} />}
                   {displayProperties.subProjects && (
                      <SubProjectBadge labels={issue.subProjectLabels ?? []} />
+                  )}
+                  {displayProperties.milestone && issue.milestone && (
+                     <MilestoneBadge milestone={issue.milestone} />
                   )}
                   {displayProperties.project && issue.project && (
                      <ProjectBadge project={issue.project} />

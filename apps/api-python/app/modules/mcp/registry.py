@@ -116,7 +116,7 @@ DEFINITIONS = (
     ),
     ToolDefinition(
         "search_issues",
-        "Search tasks and bugs by project, label, sub project, state, assignee and dates.",
+        "Search tasks and bugs by project, label, sub project, milestone, state, assignee and dates.",
         c.SearchIssuesInput,
         "issues:read",
         "issues",
@@ -130,7 +130,7 @@ DEFINITIONS = (
     ),
     ToolDefinition(
         "list_issue_options",
-        "Read valid team statuses, labels and assignees before writing; with projectId, also that project's sub projects.",
+        "Read valid team statuses, labels and assignees before writing; with projectId, also that project's sub projects and milestones.",
         c.IssueOptionsInput,
         "issues:read",
         "options",

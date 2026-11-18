@@ -11,6 +11,7 @@ const api = 'http://localhost:4000/api/v1';
 const DEFAULT_ORDER = [
    'labels',
    'subProjects',
+   'milestone',
    'project',
    'startDate',
    'targetDate',
@@ -141,6 +142,7 @@ test('issue columns resize, hide and reorder, persist per account and reset', as
          'assignee',
          'labels',
          'subProjects',
+         'milestone',
          'startDate',
          'targetDate',
          'estimatedEffort',
@@ -166,6 +168,7 @@ test('issue columns resize, hide and reorder, persist per account and reset', as
          'assignee',
          'labels',
          'subProjects',
+         'milestone',
          'startDate',
          'targetDate',
          'estimatedEffort',
