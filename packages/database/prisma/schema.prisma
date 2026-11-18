@@ -274,6 +274,8 @@ model User {
   codeReviewIssueLinks     CodeReviewIssueLink[]    @relation("CodeReviewIssueLinkCreator")
   codeReviewViewStates     CodeReviewViewState[]
 
+  outgoingWebhooks OutgoingWebhook[] @relation("OutgoingWebhookCreator")
+
   @@index([lastSeenAt])
   @@map("users")
 }
@@ -630,6 +632,7 @@ model Workspace {
   notifications           Notification[]
   notificationPreferences NotificationPreference[]
   discordWebhook          DiscordWebhook?
+  outgoingWebhooks        OutgoingWebhook[]
   teamsWebhook            TeamsWebhook?
   newsCategories          NewsCategory[]
   newsSources             NewsSource[]
@@ -1022,6 +1025,58 @@ model ScmWebhookDelivery {
   @@unique([connectionId, externalDeliveryId])
   @@index([status, nextAttemptAt, receivedAt])
   @@map("scm_webhook_deliveries")
+}
+
+/// A workspace endpoint that receives signed JSON events (DTD-904).
+/// VI: Endpoint của workspace nhận sự kiện JSON có chữ ký (DTD-904).
+model OutgoingWebhook {
+  id                  String    @id @default(cuid())
+  workspaceId         String    @map("workspace_id")
+  name                String
+  url                 String
+  /// HMAC-SHA256 key; returned only when created or rotated.
+  /// VI: Khoá HMAC-SHA256; chỉ trả về khi tạo hoặc đổi.
+  secret              String
+  events              String[]
+  enabled             Boolean   @default(true)
+  consecutiveFailures Int       @default(0) @map("consecutive_failures")
+  disabledAt          DateTime? @map("disabled_at")
+  disabledReason      String?   @map("disabled_reason")
+  createdById         String?   @map("created_by_id")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  workspace  Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy  User?                     @relation("OutgoingWebhookCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  deliveries OutgoingWebhookDelivery[]
+
+  @@index([workspaceId])
+  @@map("outgoing_webhooks")
+}
+
+/// One event sent to one webhook, with its retry lease and last result.
+/// VI: Một sự kiện gửi tới một webhook, kèm lease thử lại và kết quả gần nhất.
+model OutgoingWebhookDelivery {
+  id             String    @id @default(cuid())
+  webhookId      String    @map("webhook_id")
+  event          String
+  payload        Json
+  attempts       Int       @default(0)
+  availableAt    DateTime  @default(now()) @map("available_at")
+  leaseUntil     DateTime? @map("lease_until")
+  leaseToken     String?   @map("lease_token")
+  responseStatus Int?      @map("response_status")
+  durationMs     Int?      @map("duration_ms")
+  lastError      String?   @map("last_error")
+  deliveredAt    DateTime? @map("delivered_at")
+  failedAt       DateTime? @map("failed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  webhook OutgoingWebhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId, createdAt])
+  @@index([availableAt])
+  @@map("outgoing_webhook_deliveries")
 }
 
 model DiscordWebhook {

@@ -68,6 +68,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         sharepoint_task=tracked('sharepoint-publish',sharepoint_loop(session_factory,runtime,outbox_stop),outbox_stop)
         from .modules.news.worker import news_loop
         news_task=tracked('news',news_loop(session_factory,outbox_stop,runtime),outbox_stop)
+        from .modules.integrations.outgoing_webhooks import outgoing_webhook_loop
+        webhook_task=tracked('outgoing-webhooks',outgoing_webhook_loop(session_factory,outbox_stop),outbox_stop)
         reminder_stop = asyncio.Event()
         reminder_task = tracked('reminders',reminder_loop(session_factory, reminder_stop),reminder_stop)
         digest_stop = asyncio.Event()
@@ -92,7 +94,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             dispatch_stop.set()
             team_policy_stop.set()
             scm_stop.set()
-            await asyncio.gather(*[task for task in [reminder_task,digest_task,dispatch_task,team_policy_task,scm_task,scm_sync_task,outbox_task,channel_task,maintenance_task,bulk_task,import_task,recurring_task,sla_task,ticket_status_task,sharepoint_task,news_task] if task],return_exceptions=True)
+            await asyncio.gather(*[task for task in [reminder_task,digest_task,dispatch_task,team_policy_task,scm_task,scm_sync_task,outbox_task,channel_task,maintenance_task,bulk_task,import_task,recurring_task,sla_task,ticket_status_task,sharepoint_task,news_task,webhook_task] if task],return_exceptions=True)
             await mcp_stack.aclose()
             await engine.dispose()
 
