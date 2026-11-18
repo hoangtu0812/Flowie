@@ -22,7 +22,14 @@ ANALYZE_WORKSPACE_SELECT_NEWS_ITEMS = text(
 )
 
 
-TEST_CATEGORY_WEBHOOK_SELECT_NEWS_CATEGORIES = text('SELECT webhook_url FROM news_categories WHERE id = :id AND workspace_id = :workspace_id')
+SUMMARIZE_ITEM_SELECT_NEWS_ITEMS = text(
+    '''SELECT i.title, i.url, i.summary, i.published_at, s.name AS source_name
+                   FROM news_items i JOIN news_sources s ON s.id = i.source_id
+                   WHERE i.id = :id AND i.workspace_id = :workspace_id'''
+)
+
+
+TEST_CATEGORY_WEBHOOK_SELECT_NEWS_CATEGORIES =text('SELECT webhook_url FROM news_categories WHERE id = :id AND workspace_id = :workspace_id')
 
 
 DUE_WORKSPACES_SELECT_NEWS_SOURCES = text(

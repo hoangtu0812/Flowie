@@ -1,7 +1,7 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { ExternalLink, RefreshCw, Settings2, Sparkles } from 'lucide-react';
+import { ExternalLink, Loader2, RefreshCw, Settings2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { SidebarTrigger } from '@/components/ui/sidebar';
@@ -52,6 +52,11 @@ const RISK_STYLES: Record<RiskLevel, { label: string; className: string }> = {
  * VI: Trường AI (mức rủi ro, điểm, tóm tắt tiếng Việt, bản tin nhóm) là tuỳ chọn: tin chưa có nhãn
  * VI: giữ tóm tắt gốc và nằm cuối khi sắp "Rủi ro cao nhất", nên trang vẫn chạy như cũ khi workspace
  * VI: không có provider AI. Bộ lọc rủi ro bật/tắt từng mức một.
+ *
+ * The "AI" button beside each item asks POST /news/items/{id}/summary for a Vietnamese summary
+ * of the article and shows it under the item; pressing it again hides or shows the same text.
+ * VI: Nút "AI" cạnh mỗi tin gọi POST /news/items/{id}/summary để lấy tóm tắt tiếng Việt của bài
+ * VI: và hiện dưới tin; bấm lại thì ẩn hoặc hiện lại đúng nội dung đó.
  */
 export function NewsFeed() {
    const tx = useMessages(messages);
@@ -65,6 +70,12 @@ export function NewsFeed() {
    const [risk, setRisk] = useState<RiskLevel>();
    const [manageOpen, setManageOpen] = useState(false);
    const [refreshing, setRefreshing] = useState(false);
+   // Per-item AI summaries: undefined = never asked, null = loading. Kept for the visit so
+   // hiding and showing again costs no second AI call.
+   // VI: Tóm tắt AI theo tin: undefined = chưa hỏi, null = đang tải. Giữ trong lượt xem để ẩn rồi
+   // VI: hiện lại không tốn thêm lời gọi AI.
+   const [summaries, setSummaries] = useState<Record<string, string | null>>({});
+   const [open, setOpen] = useState<Record<string, boolean>>({});
 
    const load = useCallback(async () => {
       setError(undefined);
@@ -95,6 +106,31 @@ export function NewsFeed() {
          toast.error(reason instanceof Error ? reason.message : tx('Could not load news.'));
       } finally {
          setRefreshing(false);
+      }
+   };
+
+   const summarize = async (id: string) => {
+      if (!workspaceId || summaries[id] === null) return;
+      setOpen((current) => ({ ...current, [id]: !current[id] }));
+      if (summaries[id] !== undefined) return;
+      setSummaries((current) => ({ ...current, [id]: null }));
+      try {
+         const result = await newsRequest<{ summary: string }>(
+            workspaceId,
+            `/items/${encodeURIComponent(id)}/summary`,
+            'POST'
+         );
+         setSummaries((current) => ({ ...current, [id]: result.summary }));
+      } catch (reason) {
+         setSummaries((current) => {
+            const rest = { ...current };
+            delete rest[id];
+            return rest;
+         });
+         setOpen((current) => ({ ...current, [id]: false }));
+         toast.error(
+            reason instanceof Error ? reason.message : tx('Could not summarise this item.')
+         );
       }
    };
 
@@ -192,36 +228,66 @@ export function NewsFeed() {
             <ul>
                {items.map((item) => (
                   <li key={item.id} className="border-b border-border/50">
-                     <a
-                        href={item.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex flex-col gap-0.5 px-6 py-2.5 hover:bg-sidebar/50 transition-colors"
-                     >
-                        <span className="flex items-center gap-1.5 text-sm font-medium">
-                           {item.riskLevel && (
-                              <span
-                                 data-testid="news-risk"
-                                 className={cn(
-                                    'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase',
-                                    RISK_STYLES[item.riskLevel].className
-                                 )}
-                              >
-                                 {tx(RISK_STYLES[item.riskLevel].label)}
+                     <div className="flex items-start hover:bg-sidebar/50 transition-colors">
+                        <a
+                           href={item.url}
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           className="flex flex-1 min-w-0 flex-col gap-0.5 pl-6 pr-2 py-2.5"
+                        >
+                           <span className="flex items-center gap-1.5 text-sm font-medium">
+                              {item.riskLevel && (
+                                 <span
+                                    data-testid="news-risk"
+                                    className={cn(
+                                       'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase',
+                                       RISK_STYLES[item.riskLevel].className
+                                    )}
+                                 >
+                                    {tx(RISK_STYLES[item.riskLevel].label)}
+                                 </span>
+                              )}
+                              <span className="truncate">{item.title}</span>
+                              <ExternalLink className="size-3 shrink-0 text-muted-foreground" />
+                           </span>
+                           {(item.aiSummary || item.summary) && (
+                              <span className="text-xs text-muted-foreground line-clamp-2">
+                                 {item.aiSummary || item.summary}
                               </span>
                            )}
-                           <span className="truncate">{item.title}</span>
-                           <ExternalLink className="size-3 shrink-0 text-muted-foreground" />
-                        </span>
-                        {(item.aiSummary || item.summary) && (
-                           <span className="text-xs text-muted-foreground line-clamp-2">
-                              {item.aiSummary || item.summary}
+                           <span className="text-xs text-muted-foreground">
+                              {item.sourceName} · {dateLabel(item.publishedAt)}
                            </span>
-                        )}
-                        <span className="text-xs text-muted-foreground">
-                           {item.sourceName} · {dateLabel(item.publishedAt)}
-                        </span>
-                     </a>
+                        </a>
+                        <Button
+                           size="xs"
+                           variant="ghost"
+                           className="mt-2 mr-4 shrink-0 text-muted-foreground"
+                           aria-expanded={open[item.id] === true}
+                           title={tx('Summarise in Vietnamese with AI')}
+                           disabled={summaries[item.id] === null}
+                           onClick={() => void summarize(item.id)}
+                        >
+                           {summaries[item.id] === null ? (
+                              <Loader2 className="size-3.5 animate-spin" />
+                           ) : (
+                              <Sparkles className="size-3.5" />
+                           )}
+                           {tx('AI')}
+                        </Button>
+                     </div>
+                     {open[item.id] && summaries[item.id] && (
+                        <div
+                           data-testid="news-item-summary"
+                           className="mx-6 mb-2.5 rounded-md border bg-sidebar/40 px-3 py-2"
+                        >
+                           <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                              <Sparkles className="size-3.5" />
+                              {tx('AI summary')}
+                           </div>
+                           <p className="mt-1 text-sm">{summaries[item.id]}</p>
+                        </div>
+                     )}
                   </li>
                ))}
             </ul>

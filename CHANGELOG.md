@@ -19,6 +19,11 @@ pull request and commit references, which are for us.
 
 ## Unreleased
 
+### Added
+
+- Each item on the News page has an AI button that summarises the article in Vietnamese and shows the summary under the item. Flowie reads the article page (or falls back to the feed text when the page cannot be read) and asks the workspace's AI provider; any member can use it, up to 30 summaries an hour, and summaries are not stored. No migration: rebuild `api` and `web`. (DTD-945)
+  VI: Mỗi tin trên trang News có nút AI tóm tắt bài viết bằng tiếng Việt và hiện tóm tắt ngay dưới tin. Flowie đọc trang bài (không đọc được thì dùng nội dung từ feed) rồi hỏi provider AI của workspace; mọi thành viên đều dùng được, tối đa 30 lần mỗi giờ, và tóm tắt không được lưu lại. Không có migration: build lại `api` và `web`. (DTD-945)
+
 ## [0.23.0] — 2026-11-18 08:08 +07
 
 ### Added

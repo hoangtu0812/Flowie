@@ -7,6 +7,7 @@ import pytest
 from app.core.errors import ApiError
 from app.modules.news.feeds import (
     feed_url,
+    fetch_article,
     fetch_feed,
     news_card,
     news_cutoff_utc,
@@ -97,6 +98,36 @@ def test_fetch_feed_rechecks_redirect_target():
             asyncio.run(run())
     finally:
         feeds.public_url = original
+
+
+def test_fetch_article_rechecks_redirects_and_reads_only_html(monkeypatch):
+    import app.modules.news.feeds as feeds
+
+    async def public(url):
+        if '169.254' in url:
+            raise ApiError(400, 'Only public http(s) links can be previewed.', 'Bad Request')
+        return url
+
+    def page(request):
+        if request.url.path == '/moved':
+            return httpx.Response(302, headers={'location': 'http://169.254.169.254/latest'})
+        if request.url.path == '/pdf':
+            return httpx.Response(200, headers={'content-type': 'application/pdf'}, content=b'%PDF')
+        return httpx.Response(
+            200, headers={'content-type': 'text/html; charset=utf-8'},
+            content=b'<html><script>x()</script><h1>Title</h1><p>Body &amp; more</p></html>',
+        )
+
+    async def run(path):
+        async with httpx.AsyncClient(transport=httpx.MockTransport(page)) as client:
+            return await fetch_article(f'https://news.example{path}', client)
+
+    monkeypatch.setattr(feeds, 'public_url', public)
+    assert asyncio.run(run('/story')) == 'Title Body & more'
+    with pytest.raises(ApiError):
+        asyncio.run(run('/moved'))
+    with pytest.raises(ValueError):
+        asyncio.run(run('/pdf'))
 
 
 def test_cutoff_is_latest_0630_vietnam_time():
