@@ -15,6 +15,7 @@ from ...services.notification_events import (
     team_recipient_ids,
 )
 from ..access.projects import team_write_role, team_writer, workspace_access
+from ..automation.engine import stage_automation
 from ..sla.policies import select_policy
 from ..sla.synchronization import initialize_cycle, locked_issue, safe_clock, sync_issue
 from .bug_contracts import BUG_COLUMNS
@@ -212,6 +213,14 @@ async def create_issue(
     )
     await stage_notifications(
         db, created_batch, assignment_batch, workspace_id=payload.workspaceId
+    )
+    await stage_automation(
+        db,
+        payload.teamId,
+        issue_id,
+        ["issue.created"]
+        + (["issue.assigned"] if values.get("assigneeId") else [])
+        + (["issue.labeled"] if values.get("labelIds") else []),
     )
     return {"data": await issue_row(db, issue_id, payload.workspaceId, user["id"])}
 
@@ -520,5 +529,16 @@ async def update_issue(
     )
     await stage_notifications(
         db, change_batch, assignment_batch, workspace_id=workspaceId
+    )
+    # Only added labels count as "labeled"; removing one does not fire label rules.
+    # VI: Chỉ label được thêm mới tính là "gắn label"; bỏ label không kích hoạt rule label.
+    previous_labels = {link["label"]["id"] for link in issue["labelLinks"]}
+    await stage_automation(
+        db,
+        issue["teamId"],
+        issue_id,
+        (["issue.status_changed"] if status_changed else [])
+        + (["issue.assigned"] if assignee_changed else [])
+        + (["issue.labeled"] if set(values.get("labelIds") or []) - previous_labels else []),
     )
     return {"data": await issue_row(db, issue_id, workspaceId, user["id"])}

@@ -28,6 +28,7 @@ import {
    RefreshCcw,
    Tag,
    Unlock,
+   Zap,
 } from 'lucide-react';
 import { ReactNode, useEffect, useState } from 'react';
 import { relativeTime } from '@/lib/time';
@@ -42,6 +43,7 @@ type NativeActivity = {
       fields?: string[];
       source?: string;
       agent?: AgentIdentity;
+      automation?: { ruleId: string; name: string };
    } & Record<string, unknown>;
    createdAt: string;
    actor: Actor;
@@ -136,6 +138,18 @@ function EventRow({ activity }: { activity: NativeActivity }) {
                {agent && (
                   <>
                      <AgentBadge agent={agent} />{' '}
+                  </>
+               )}
+               {/* Changes a team automation rule made as the person who saved it. VI: Thay đổi do rule tự động hoá của team thực hiện với tư cách người lưu rule. */}
+               {activity.data?.automation && (
+                  <>
+                     <span
+                        className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300"
+                        title="Made by a team automation rule"
+                     >
+                        <Zap className="size-3" aria-hidden="true" />
+                        Automation · {activity.data.automation.name}
+                     </span>{' '}
                   </>
                )}
                {text}

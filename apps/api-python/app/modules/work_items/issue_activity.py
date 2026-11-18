@@ -5,7 +5,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...core.audit_context import audit_agent, audit_source
+from ...core.audit_context import audit_agent, audit_automation, audit_source
 from ...core.clock import utcnow
 from ...core.identifiers import cuid
 from .commands import (
@@ -34,6 +34,13 @@ async def _write_activity(
                     **data,
                     "source": audit_source.get(),
                     **({"agent": agent} if (agent := audit_agent.get()) else {}),
+                    # Changes made by a team automation rule name it in the feed.
+                    # VI: Thay đổi do rule tự động hoá của team thực hiện ghi tên rule trong feed.
+                    **(
+                        {"automation": {"ruleId": run["ruleId"], "name": run["name"]}}
+                        if (run := audit_automation.get())
+                        else {}
+                    ),
                 }
             ),
             "now": utcnow(),

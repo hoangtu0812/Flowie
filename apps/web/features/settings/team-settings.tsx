@@ -26,6 +26,7 @@ import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { TeamSettingsDialog, type TeamSettingsEditKind } from './team-settings-dialog';
+import { TeamAutomationRules } from './team-automation-rules';
 import { TeamDispatcherSettings } from './team-dispatcher-settings';
 import { SettingsCard, SettingsRow, SettingsSection, SettingsShell } from './shared';
 import { withBasePath } from '@/lib/base-path';
@@ -276,6 +277,14 @@ export default function TeamSettings({ teamId }: { teamId: string }) {
                description="Let Flowie assign unassigned work and nudge overdue owners on its own."
             >
                <TeamDispatcherSettings workspaceId={workspaceId} teamId={team.id} />
+            </SettingsSection>
+         )}
+         {workspaceId && (
+            <SettingsSection
+               title="Automation rules"
+               description="When something happens to an issue in this team, let Flowie do the follow-up."
+            >
+               <TeamAutomationRules workspaceId={workspaceId} teamId={team.id} />
             </SettingsSection>
          )}
          <SettingsSection
