@@ -24,6 +24,7 @@ from .modules.archive.api import router as archive_router
 from .modules.attachments.api import public_router as attachments_router
 from .modules.attachments.api import router as native_attachments_router
 from .modules.audit.api import router as audit_router
+from .modules.automation.api import router as automation_rules_router
 from .modules.cycles.api import public_router as cycles_router
 from .modules.cycles.api import router as native_cycles_router
 from .modules.data_exchange.api import router as data_exchange_router
@@ -140,6 +141,7 @@ ROUTERS: list[APIRouter] = [
     channels_router,
     integrations_router,
     outgoing_webhooks_router,
+    automation_rules_router,
     views_router,
     manual_order_router,
     native_projects_router,

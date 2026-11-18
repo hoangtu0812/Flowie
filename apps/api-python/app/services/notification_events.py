@@ -32,7 +32,7 @@ import httpx
 from fastapi import WebSocket
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.audit_context import audit_agent
+from ..core.audit_context import audit_agent, audit_automation
 from ..core.clock import utcnow
 from ..core.identifiers import cuid
 from .commands import (
@@ -411,9 +411,14 @@ async def create_notification_batch(
     agent = audit_agent.get()
     if agent:
         data['agent'] = agent
+    # A rule acts as the person who saved it, who still wants to hear what the rule did.
+    # VI: Rule chạy với tư cách người lưu rule, và người đó vẫn cần biết rule đã làm gì.
+    automation = audit_automation.get()
+    if automation:
+        data['automation'] = {'ruleId': automation['ruleId'], 'name': automation['name']}
     records: list[dict[str, Any]] = []
     from ..modules.notifications.access import readable_recipients
-    recipients=await readable_recipients(db,workspace_id,entity_type,entity_id,set(recipient_ids)-(set() if agent else {actor['id']}))
+    recipients=await readable_recipients(db,workspace_id,entity_type,entity_id,set(recipient_ids)-(set() if agent or automation else {actor['id']}))
     for recipient_id in recipients:
         notification_id = cuid()
         await db.execute(

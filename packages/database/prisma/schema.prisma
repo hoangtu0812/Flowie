@@ -275,6 +275,7 @@ model User {
   codeReviewViewStates     CodeReviewViewState[]
 
   outgoingWebhooks OutgoingWebhook[] @relation("OutgoingWebhookCreator")
+  automationRules  AutomationRule[]  @relation("AutomationRuleActor")
 
   @@index([lastSeenAt])
   @@map("users")
@@ -1079,6 +1080,67 @@ model OutgoingWebhookDelivery {
   @@map("outgoing_webhook_deliveries")
 }
 
+/// A team rule "when <trigger> and <conditions> then <actions>" on its issues (DTD-903).
+/// VI: Rule của team "khi <trigger> và <điều kiện> thì <hành động>" trên issue của team (DTD-903).
+model AutomationRule {
+  id         String   @id @default(cuid())
+  teamId     String   @map("team_id")
+  name       String
+  enabled    Boolean  @default(true)
+  trigger    String
+  conditions Json     @default("{}")
+  actions    Json     @default("[]")
+  /// Person who saved the rule last; the rule acts with their rights.
+  /// VI: Người lưu rule gần nhất; rule chạy với quyền của người này.
+  actorId    String?  @map("actor_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  team  Team                @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  actor User?               @relation("AutomationRuleActor", fields: [actorId], references: [id], onDelete: SetNull)
+  runs  AutomationRuleRun[]
+
+  @@index([teamId, trigger])
+  @@map("automation_rules")
+}
+
+/// Issue event waiting for the automation worker, staged with the change that caused it.
+/// VI: Sự kiện issue chờ worker automation, ghi cùng transaction với thay đổi gây ra nó.
+model AutomationEvent {
+  id           String    @id @default(cuid())
+  issueId      String    @map("issue_id")
+  trigger      String
+  depth        Int       @default(0)
+  sourceRuleId String?   @map("source_rule_id")
+  attempts     Int       @default(0)
+  leaseUntil   DateTime? @map("lease_until")
+  leaseToken   String?   @map("lease_token")
+  processedAt  DateTime? @map("processed_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@index([processedAt, createdAt])
+  @@map("automation_events")
+}
+
+/// One execution of a rule on an issue, kept 30 days for the run history.
+/// VI: Một lần rule chạy trên một issue, giữ 30 ngày cho lịch sử chạy.
+model AutomationRuleRun {
+  id        String   @id @default(cuid())
+  ruleId    String   @map("rule_id")
+  issueId   String   @map("issue_id")
+  status    String
+  message   String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  rule  AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  issue Issue          @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@index([ruleId, createdAt])
+  @@map("automation_rule_runs")
+}
+
 model DiscordWebhook {
   id                 String    @id @default(cuid())
   workspaceId        String    @unique @map("workspace_id")
@@ -1249,6 +1311,7 @@ model Team {
   dispatcherSettings   TeamDispatcherSettings?
   issueImports         IssueImportBatch[]
   recurringSchedules   RecurringSchedule[]
+  automationRules      AutomationRule[]
 
   @@unique([workspaceId, identifier])
   @@index([workspaceId])
@@ -1948,6 +2011,8 @@ model Issue {
   lifecycleEvents   IssueLifecycleEvent[]
   slaOptOut         Boolean               @default(false) @map("sla_opt_out")
   slaCycles         IssueSlaCycle[]
+  automationEvents  AutomationEvent[]
+  automationRuns    AutomationRuleRun[]
 
   @@unique([workspaceId, identifier])
   @@unique([teamId, number])
