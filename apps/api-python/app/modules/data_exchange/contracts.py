@@ -21,6 +21,8 @@ IMPORT_FIELDS = (
     "startDate",
     "targetDate",
     "dueDate",
+    # Comma-separated sub project names of the row's project. VI: Tên sub project của dự án trong dòng, cách nhau dấu phẩy.
+    "subProjects",
 )
 
 
@@ -34,7 +36,7 @@ class CsvInput(BaseModel):
 class ImportPreview(CsvInput):
     requestKey: str = Field(min_length=8, max_length=128)
     sourceKey: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.-]+$")
-    mapping: dict[str, str] = Field(min_length=2, max_length=16)
+    mapping: dict[str, str] = Field(min_length=2, max_length=20)
     duplicateMode: Literal["skip", "error"] = "skip"
 
 

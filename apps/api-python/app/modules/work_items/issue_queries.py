@@ -14,6 +14,7 @@ from .queries import (
     ISSUE_ROWS_SELECT_ISSUE_CYCLES,
     ISSUE_ROWS_SELECT_ISSUE_LABELS,
     ISSUE_ROWS_SELECT_ISSUE_RELEASES,
+    ISSUE_ROWS_SELECT_ISSUE_SUB_PROJECT_LABELS,
     ISSUE_ROWS_SELECT_ISSUE_SUBSCRIPTIONS,
     PERSON_NAME_SELECT_USERS,
     PROJECT_NAME_SELECT_PROJECTS,
@@ -38,6 +39,16 @@ async def _issue_rows(
         (
             await db.execute(
                 ISSUE_ROWS_SELECT_ISSUE_LABELS,
+                {"ids": ids},
+            )
+        )
+        .mappings()
+        .all()
+    )
+    sub_projects = (
+        (
+            await db.execute(
+                ISSUE_ROWS_SELECT_ISSUE_SUB_PROJECT_LABELS,
                 {"ids": ids},
             )
         )
@@ -72,6 +83,7 @@ async def _issue_rows(
         return result
 
     label_map, cycle_map, release_map = group(labels), group(cycles), group(releases)
+    sub_project_map = group(sub_projects)
     return [
         _present_issue(
             row,
@@ -80,6 +92,17 @@ async def _issue_rows(
             release_map[row["id"]],
             user_id,
         )
+        | {
+            "subProjectLabels": [
+                {
+                    "id": label["id"],
+                    "name": label["name"],
+                    "color": label["color"],
+                    "archivedAt": label["archived_at"],
+                }
+                for label in sub_project_map[row["id"]]
+            ]
+        }
         for row in rows
     ]
 

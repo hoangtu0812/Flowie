@@ -6,6 +6,7 @@ const fixture = JSON.parse(readFileSync('.e2e-fixture.json', 'utf8')) as {
    email: string;
    password: string;
    projectId: string;
+   issues: { id: string; identifier: string; title: string }[];
 };
 const api = 'http://localhost:4000/api/v1';
 
@@ -118,4 +119,58 @@ test('Project settings changes the URL slug and old links redirect to it', async
    dialog = await openSettings();
    await save(dialog, 'reg');
    await expect(page).toHaveURL(new RegExp(`${base}/reg/overview$`));
+});
+
+// Sub projects are added in Project settings, picked on an issue of the project (shown as chips
+// that survive a reload), and deleting them removes them from the issue. Names carry a stamp so
+// browser projects sharing the database never collide, and the test deletes what it created.
+// VI: Sub project được thêm trong Project settings, chọn trên issue của dự án (hiện dạng chip, còn
+// VI: sau khi tải lại), và xoá thì issue mất chúng. Tên kèm dấu thời gian để các project trình
+// VI: duyệt dùng chung database không trùng nhau; test xoá những gì nó tạo.
+test('Project settings manages sub projects that issues of the project carry', async ({ page }) => {
+   const stamp = Date.now();
+   const names = [`Web ${stamp}`, `Mobile ${stamp}`];
+   const overview = `/${fixture.slug}/project/${fixture.projectId}/overview`;
+   const issue = fixture.issues[0];
+   const openSettings = async () => {
+      await page.getByRole('button', { name: 'Project actions' }).click();
+      await page.getByRole('menuitem', { name: 'Project settings' }).click();
+      return page.getByRole('dialog', { name: 'Project settings' });
+   };
+
+   await page.goto(overview);
+   let dialog = await openSettings();
+   for (const name of names) {
+      await dialog.getByRole('textbox', { name: 'New sub project', exact: true }).fill(name);
+      await dialog.getByRole('button', { name: 'Add', exact: true }).click();
+      await expect(dialog.getByRole('textbox', { name: `Rename ${name}` })).toHaveValue(name);
+   }
+   await page.keyboard.press('Escape');
+
+   await page.goto(`/${fixture.slug}/issue/${issue.identifier}`);
+   for (const name of names) {
+      await page.getByRole('button', { name: 'Edit sub projects' }).click();
+      const saved = page.waitForResponse(
+         (response) =>
+            response.url().startsWith(`${api}/issues/${issue.id}?`) &&
+            response.request().method() === 'PATCH' &&
+            response.ok()
+      );
+      await page.getByRole('menuitem', { name }).click();
+      await saved;
+      await page.keyboard.press('Escape');
+   }
+   await page.reload();
+   for (const name of names) await expect(page.getByText(name, { exact: true })).toBeVisible();
+
+   await page.goto(overview);
+   dialog = await openSettings();
+   for (const name of names) {
+      await dialog.getByRole('button', { name: `Delete ${name}` }).click();
+      await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
+      await expect(dialog.getByRole('textbox', { name: `Rename ${name}` })).toHaveCount(0);
+   }
+   await page.goto(`/${fixture.slug}/issue/${issue.identifier}`);
+   await expect(page.getByRole('button', { name: 'Edit sub projects' })).toBeVisible();
+   for (const name of names) await expect(page.getByText(name, { exact: true })).toHaveCount(0);
 });

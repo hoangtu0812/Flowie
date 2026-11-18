@@ -7,7 +7,7 @@ import {
 } from '@/features/issues/issue-query';
 import type { BugFields } from '@/features/issues/bug-fields';
 import { groupIssuesByStatus, Issue } from '@/types/issues';
-import { LabelInterface } from '@/types/labels';
+import { LabelInterface, SubProjectLabel } from '@/types/labels';
 import { priorities, Priority } from '@/lib/priority-presentations';
 import { Project } from '@/types/projects';
 import { status as statusPresentation, Status, StatusCategory } from '@/lib/status-presentations';
@@ -80,6 +80,7 @@ type NativeIssue = BugFields & {
    } | null;
    project?: { id: string; name: string } | null;
    labelLinks?: { label: LabelInterface }[];
+   subProjectLabels?: SubProjectLabel[];
    cycleLinks?: { cycleId: string }[];
    releaseLinks?: { releaseId: string }[];
    subscribers?: { userId: string }[];
@@ -107,6 +108,7 @@ type NativeIssueOptions = {
       teamRoles?: TeamRoles;
    }>;
    labels: LabelInterface[];
+   subProjectLabels?: SubProjectLabel[];
    cycles: Array<{
       id: string;
       teamId: string;
@@ -234,6 +236,7 @@ function asIssue(native: NativeIssue): Issue {
       assignee,
       priority,
       labels: (native.labelLinks ?? []).map(({ label }) => label),
+      subProjectLabels: native.subProjectLabels ?? [],
       createdAt: native.createdAt,
       manualOrder: native.manualOrder,
       subIssueSort: native.subIssueSort ?? 'manual',
@@ -294,6 +297,8 @@ interface IssuesState {
    teams: WorkspaceTeam[];
    projects: Project[];
    labels: LabelInterface[];
+   /** Sub projects of every readable project, each with its projectId. VI: Sub project của mọi dự án đọc được, kèm projectId. */
+   subProjectLabels: SubProjectLabel[];
    cycles: IssueCycle[];
    releases: NativeIssueOptions['releases'];
    issuesByStatus: Record<string, Issue[]>;
@@ -346,6 +351,8 @@ interface IssuesState {
    addIssueLabel: (issueId: string, label: LabelInterface) => Promise<boolean>;
    removeIssueLabel: (issueId: string, labelId: string) => Promise<boolean>;
    replaceIssueLabels: (issueId: string, labels: LabelInterface[]) => Promise<boolean>;
+   /** Replaces the issue's sub projects; the API refuses ids of another project. VI: Thay sub project của issue; API từ chối id của dự án khác. */
+   updateIssueSubProjects: (issueId: string, subProjectLabelIds: string[]) => Promise<Issue>;
 
    // Project management
    updateIssueProject: (issueId: string, newProject: Project | undefined) => Promise<boolean>;
@@ -403,6 +410,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
    teams: [],
    projects: [],
    labels: [],
+   subProjectLabels: [],
    cycles: [],
    releases: [],
    issuesByStatus: {},
@@ -432,6 +440,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
          teams: [],
          projects: [],
          labels: [],
+         subProjectLabels: [],
          cycles: [],
          releases: [],
          issuesByStatus: {},
@@ -488,6 +497,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
             teams: joinedWorkspaceTeams.teams,
             projects: options.projects.map(asProjectOption),
             labels: options.labels,
+            subProjectLabels: options.subProjectLabels ?? [],
             cycles: options.cycles ?? [],
             releases: options.releases ?? [],
             issuesByStatus: groupIssuesByStatus(issues),
@@ -597,6 +607,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
             members: options.members.map(asMember),
             projects: options.projects.map(asProjectOption),
             labels: options.labels,
+            subProjectLabels: options.subProjectLabels ?? [],
             cycles: options.cycles,
             releases: options.releases,
             loading: false,
@@ -1172,6 +1183,25 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
       get().updateIssue(issueId, issue);
       return issue;
    },
+   updateIssueSubProjects: async (issueId, subProjectLabelIds) => {
+      const workspaceId = get().workspaceId ?? (await loadCurrentWorkspace()).id;
+      const response = await authenticatedFetch(
+         `${api}/issues/${issueId}?${new URLSearchParams({ workspaceId })}`,
+         {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ subProjectLabelIds }),
+         }
+      );
+      if (!response.ok) {
+         const body = (await response.json().catch(() => null)) as { message?: string } | null;
+         throw new Error(body?.message ?? 'Could not update sub projects.');
+      }
+      const issue = asIssue(((await response.json()) as { data: NativeIssue }).data);
+      get().updateIssue(issueId, issue);
+      return issue;
+   },
+
    updateIssueTitle: async (issueId, title) => {
       const workspaceId = get().workspaceId ?? (await loadCurrentWorkspace()).id;
       const response = await authenticatedFetch(

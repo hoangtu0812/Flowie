@@ -38,6 +38,7 @@ import { format } from 'date-fns';
 import { useState } from 'react';
 import { AssigneeUser } from '../assignee-user';
 import { LabelBadge } from '../label-badge';
+import { SubProjectBadge } from '../sub-project-badge';
 import { PrioritySelector } from '../priority-selector';
 import { StatusSelector } from '../status-selector';
 import type { CodeReview } from '@/lib/scm';
@@ -77,6 +78,7 @@ export function IssuePropertiesPanel({ issue, reviews }: IssuePropertiesPanelPro
    const {
       cycles,
       labels,
+      subProjectLabels,
       projects,
       addIssueLabel,
       removeIssueLabel,
@@ -87,6 +89,7 @@ export function IssuePropertiesPanel({ issue, reviews }: IssuePropertiesPanelPro
       updateIssueProject,
       updateIssueBug,
       updateIssueReporter,
+      updateIssueSubProjects,
    } = useIssuesStore();
    const [scheduleOpen, setScheduleOpen] = useState(false);
    const [startDate, setStartDate] = useState('');
@@ -181,6 +184,30 @@ export function IssuePropertiesPanel({ issue, reviews }: IssuePropertiesPanelPro
          return;
       }
       await addIssueLabel(issue.id, label);
+   };
+
+   // Archived sub projects stay on the issue but are not offered; the API refuses new ones too.
+   // VI: Sub project đã lưu trữ vẫn nằm trên issue nhưng không được đề xuất; API cũng từ chối gán mới.
+   const issueSubProjects = issue.subProjectLabels ?? [];
+   const subProjectChoices = subProjectLabels.filter(
+      (label) => label.projectId === issue.project?.id && !label.archivedAt
+   );
+   const toggleSubProject = async (labelId: string) => {
+      // Read the stored issue, not this render's props, so a toggle right after another keeps it.
+      // VI: Đọc issue trong store thay vì props của lần render này, để lần bật ngay sau vẫn giữ lần trước.
+      const current =
+         useIssuesStore.getState().getIssueById(issue.id)?.subProjectLabels ?? issueSubProjects;
+      const ids = current.map((label) => label.id);
+      try {
+         await updateIssueSubProjects(
+            issue.id,
+            ids.includes(labelId) ? ids.filter((id) => id !== labelId) : [...ids, labelId]
+         );
+      } catch (caught) {
+         toast.error(
+            caught instanceof Error ? caught.message : tx('Could not update sub projects.')
+         );
+      }
    };
 
    return (
@@ -450,6 +477,56 @@ export function IssuePropertiesPanel({ issue, reviews }: IssuePropertiesPanelPro
                </DropdownMenu>
             </div>
          </Section>
+
+         {issue.project && (
+            <Section title={tx('Sub projects')}>
+               <div className="flex items-center flex-wrap gap-1.5">
+                  <SubProjectBadge labels={issueSubProjects} />
+                  <DropdownMenu>
+                     <DropdownMenuTrigger asChild>
+                        <Button
+                           variant="ghost"
+                           size="icon"
+                           className="size-6 rounded-full border"
+                           aria-label={tx('Edit sub projects')}
+                        >
+                           <Plus className="size-3.5" />
+                        </Button>
+                     </DropdownMenuTrigger>
+                     <DropdownMenuContent align="start" className="w-56">
+                        <DropdownMenuLabel>{tx('Sub projects')}</DropdownMenuLabel>
+                        {subProjectChoices.map((label) => (
+                           <DropdownMenuItem
+                              key={label.id}
+                              onSelect={(event) => {
+                                 // Keep the menu open to toggle several in one pass.
+                                 // VI: Giữ menu mở để bật/tắt nhiều mục một lượt.
+                                 event.preventDefault();
+                                 void toggleSubProject(label.id);
+                              }}
+                           >
+                              <span
+                                 className="inline-block size-3 rounded-sm"
+                                 style={{ backgroundColor: label.color }}
+                                 aria-hidden="true"
+                              />
+                              <span className="truncate">{label.name}</span>
+                              {issueSubProjects.some((candidate) => candidate.id === label.id) && (
+                                 <Check className="ml-auto size-4 shrink-0" />
+                              )}
+                           </DropdownMenuItem>
+                        ))}
+                        {subProjectChoices.length === 0 && (
+                           <DropdownMenuItem disabled>
+                              {tx('No sub projects in this project yet')}{' '}
+                              {tx('Add them in Project settings.')}
+                           </DropdownMenuItem>
+                        )}
+                     </DropdownMenuContent>
+                  </DropdownMenu>
+               </div>
+            </Section>
+         )}
 
          <Section title={tx('Project')}>
             <DropdownMenu>

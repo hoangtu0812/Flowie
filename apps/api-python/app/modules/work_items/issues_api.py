@@ -37,6 +37,7 @@ from .commands import (
     MOVE_ISSUE_UPDATE_ISSUES_2,
     REMOVE_ISSUE_REACTION_DELETE_ISSUE_REACTIONS,
     REMOVE_ISSUE_RELATION_DELETE_ISSUE_RELATIONS,
+    REPLACE_SUB_PROJECTS_DELETE_ISSUE_SUB_PROJECT_LABELS,
     SET_ISSUE_REMINDER_INSERT_ISSUE_REMINDERS,
     SUBSCRIBE_ISSUE_INSERT_ISSUE_SUBSCRIPTIONS,
     TOGGLE_ISSUE_REACTION_DELETE_ISSUE_REACTIONS,
@@ -78,6 +79,7 @@ from .queries import (
     issue_options_select_cycles_sql,
     issue_options_select_issue_statuses_sql,
     issue_options_select_projects_sql,
+    issue_options_select_sub_project_labels_sql,
 )
 
 # Mutations remain staged under the private prefix. Read endpoints are exposed
@@ -281,11 +283,16 @@ async def issue_options(
         ISSUE_OPTIONS_SELECT_RELEASES,
         {'workspace_id': workspaceId},
     )
+    # Sub projects of every project the caller may read, tagged with projectId, so pickers and
+    # filters show only the issue's or the page's project. VI: Sub project của mọi dự án người gọi
+    # VI: đọc được, kèm projectId, để picker và bộ lọc chỉ hiện của dự án tương ứng.
+    sub_projects = await db.execute(issue_options_select_sub_project_labels_sql(project_read_scope), params)
     return {'data': {
         'statuses': [{'id': row['id'], 'name': row['name'], 'category': row['category'], 'color': row['color'], 'position': row['position']} for row in statuses.mappings().all()],
         'projects': [{'id': row['id'], 'name': row['name'], 'identifier': row['identifier'], 'status': row['status'], 'priority': row['priority'], 'health': row['health'], 'startDate': row['start_date'], 'targetDate': row['target_date'], 'leadId': row['lead_id'], 'teamId': row['team_id']} for row in projects.mappings().all()],
         'members': [{'id': row['id'], 'name': row['name'], 'email': row['email'], 'avatarUrl': row['avatar_url'], 'lastSeenAt': row['last_seen_at'], 'isOnline': bool(row['last_seen_at'] and row['last_seen_at'] >= utcnow() - timedelta(minutes=2)), 'teamRoles': row['team_roles']} for row in members.mappings().all()],
         'labels': [dict(row) for row in labels.mappings().all()],
+        'subProjectLabels': [{'id': row['id'], 'projectId': row['project_id'], 'name': row['name'], 'color': row['color'], 'archivedAt': row['archived_at']} for row in sub_projects.mappings().all()],
         'cycles': [{'id': row['id'], 'teamId': row['team_id'], 'name': row['name'], 'status': row['status'], 'startDate': row['start_date'], 'endDate': row['end_date']} for row in cycles.mappings().all()],
         'releases': [{'id': row['id'], 'name': row['name'], 'version': row['version'], 'status': row['status'], 'targetDate': row['target_date']} for row in releases.mappings().all()],
     }}
@@ -640,6 +647,10 @@ async def move_issue(
         )
         project_team_id = project_team.scalar_one_or_none()
     now = utcnow()
+    clear_project = bool(project_team_id and project_team_id != team['id'])
+    # Leaving the project also leaves its sub projects. VI: Rời dự án thì cũng rời sub project của nó.
+    if clear_project:
+        await db.execute(REPLACE_SUB_PROJECTS_DELETE_ISSUE_SUB_PROJECT_LABELS, {'issue_id': issue_id})
     await db.execute(MOVE_ISSUE_DELETE_ISSUE_CYCLES, {'issue_id': issue_id})
     await db.execute(
         MOVE_ISSUE_UPDATE_ISSUES,
@@ -652,7 +663,7 @@ async def move_issue(
             'status_id': destination_status['id'],
             'identifier': team['issue_identifier'],
             'number': team['issue_sequence'],
-            'clear_project': bool(project_team_id and project_team_id != team['id']),
+            'clear_project': clear_project,
             'now': now,
             'issue_id': issue_id,
             'workspace_id': payload.workspaceId,

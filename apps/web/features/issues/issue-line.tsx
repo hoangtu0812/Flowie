@@ -15,6 +15,7 @@ import {
 } from './issue-columns';
 import { IssueDateCell, IssueEffortCell } from './issue-inline-cells';
 import { LabelBadge } from './label-badge';
+import { SubProjectBadge } from './sub-project-badge';
 import { PrioritySelector } from './priority-selector';
 import { ProjectBadge } from './project-badge';
 import { StatusSelector } from './status-selector';
@@ -50,6 +51,19 @@ export function IssueLine({ issue, layoutId = false }: { issue: Issue; layoutId?
                   )}
                </>
             );
+         case 'subProjects': {
+            const subProjects = issue.subProjectLabels ?? [];
+            return (
+               <>
+                  <SubProjectBadge labels={subProjects.slice(0, 1)} />
+                  {subProjects.length > 1 && (
+                     <span className="text-xs text-muted-foreground shrink-0">
+                        +{subProjects.length - 1}
+                     </span>
+                  )}
+               </>
+            );
+         }
          case 'project':
             return issue.project && <ProjectBadge project={issue.project} />;
          case 'startDate':

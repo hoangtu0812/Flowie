@@ -872,6 +872,38 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 idempotencyKey="move-outside-key",
             )
 
+    async def test_sub_projects_through_options_writes_and_search(self):
+        # Sub projects come from list_issue_options(projectId), are written by id and searched.
+        # VI: Sub project lấy từ list_issue_options(projectId), ghi theo id và tìm kiếm được.
+        async with self.factory() as db:
+            labels = {}
+            for project, name in [(self.project, "Web"), (self.other_project, "Hidden")]:
+                labels[name] = cuid()
+                await db.execute(
+                    text("""INSERT INTO sub_project_labels (id,project_id,name,color,created_at,updated_at)
+                    VALUES (:id,:project,:name,'#123456',now(),now())"""),
+                    {"id": labels[name], "project": project, "name": name},
+                )
+            await db.commit()
+        options = await self.call("list_issue_options", teamId=self.team, projectId=self.project)
+        self.assertEqual([row["name"] for row in options["subProjectLabels"]], ["Web"])
+        with self.assertRaises(ApiError):
+            await self.call("list_issue_options", teamId=self.team, projectId=self.other_project)
+        with self.assertRaises(ApiError) as refused:
+            await self.call(
+                "update_issue", issueId=self.issue["id"], subProjectLabelIds=[labels["Hidden"]],
+                expectedVersion=self.issue["version"], idempotencyKey="sub-project-other",
+            )
+        self.assertEqual(refused.exception.status_code, 404)
+        updated = await self.call(
+            "update_issue", issueId=self.issue["id"], subProjectLabelIds=[labels["Web"]],
+            expectedVersion=self.issue["version"], idempotencyKey="sub-project-web",
+        )
+        self.assertEqual(updated["data"]["subProjectLabels"], ["Web"])
+        found = await self.call("search_issues", subProjectLabelId=labels["Web"])
+        self.assertEqual([item["id"] for item in found["items"]], [self.issue["id"]])
+        self.assertEqual(found["items"][0]["subProjectLabels"], [{"id": labels["Web"], "name": "Web"}])
+
     async def test_update_issue_parent_uses_scope_version_and_cycle_rules(self):
         child = (
             await self.call(

@@ -22,6 +22,7 @@ from .csv_input import parse_csv, validate_mapping
 from .queries import (
     DUPLICATE_KEY_SELECT_ISSUE_IMPORT_KEYS,
     IMPORT_PREVIEW_SELECT_ISSUE_IMPORT_BATCHES,
+    IMPORT_PREVIEW_SELECT_SUB_PROJECT_LABELS,
     IMPORT_RESULT_SELECT_ISSUE_IMPORT_ROWS,
     IMPORT_RESULT_SELECT_ISSUE_IMPORT_ROWS_2,
     owned_batch_select_issue_import_batches_sql,
@@ -106,6 +107,32 @@ async def import_preview(db, user, payload):
             for field in ("priority", "issueType", "severity"):
                 if field in values:
                     values[field] = values[field].upper()
+            # Sub projects arrive as names of the row's project; an unknown or archived name, or
+            # names without a project, make the row INVALID.
+            # VI: Sub project đến dưới dạng tên thuộc dự án của dòng; tên lạ hoặc đã lưu trữ, hay có
+            # VI: tên mà không có dự án, làm dòng INVALID.
+            wanted = [
+                name.strip().lower()
+                for name in values.pop("subProjects", "").split(",")
+                if name.strip()
+            ]
+            if wanted:
+                if not values.get("projectId"):
+                    raise ValueError("sub projects")
+                known = {
+                    row["name"]: row["id"]
+                    for row in (
+                        await db.execute(
+                            IMPORT_PREVIEW_SELECT_SUB_PROJECT_LABELS,
+                            {"project_id": values["projectId"]},
+                        )
+                    ).mappings()
+                }
+                if any(name not in known for name in wanted):
+                    raise ValueError("sub projects")
+                values["subProjectLabelIds"] = list(
+                    dict.fromkeys(known[name] for name in wanted)
+                )
             normalized = CreateIssueInput.model_validate(
                 {**values, "workspaceId": payload.workspaceId, "teamId": payload.teamId}
             )

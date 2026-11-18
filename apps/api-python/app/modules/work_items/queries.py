@@ -531,6 +531,16 @@ ISSUE_ROWS_SELECT_ISSUE_LABELS = text(
 )
 
 
+ISSUE_ROWS_SELECT_ISSUE_SUB_PROJECT_LABELS = text(
+    """SELECT isl.issue_id,l.id,l.name,l.color,l.archived_at FROM issue_sub_project_labels isl JOIN sub_project_labels l ON l.id=isl.label_id WHERE isl.issue_id=ANY(CAST(:ids AS text[])) ORDER BY lower(l.name),l.id"""
+)
+
+
+SUB_PROJECT_LABELS_SELECT_SUB_PROJECT_LABELS = text(
+    "SELECT id,name,archived_at FROM sub_project_labels WHERE project_id=:project_id AND id=ANY(CAST(:ids AS text[]))"
+)
+
+
 ISSUE_ROWS_SELECT_ISSUE_CYCLES = text(
     "SELECT issue_id,cycle_id,created_at FROM issue_cycles WHERE issue_id=ANY(CAST(:ids AS text[])) ORDER BY created_at,cycle_id"
 )
@@ -801,6 +811,11 @@ ISSUE_OPTIONS_SELECT_WORKSPACE_MEMBERS = text('''SELECT u.id, u.name, u.email, u
 
 
 ISSUE_OPTIONS_SELECT_LABELS = text('SELECT id, name, color FROM labels WHERE workspace_id = :workspace_id ORDER BY name')
+
+
+def issue_options_select_sub_project_labels_sql(project_read_scope) -> TextClause:
+    return text(f'''SELECT l.id, l.project_id, l.name, l.color, l.archived_at FROM sub_project_labels l JOIN projects p ON p.id = l.project_id
+            WHERE {project_read_scope(workspace='workspace_id', user='user_id')} ORDER BY lower(l.name), l.id''')
 
 
 def issue_options_select_cycles_sql(teamId) -> TextClause:

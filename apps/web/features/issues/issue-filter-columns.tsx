@@ -5,7 +5,7 @@ import { createColumnConfigHelper } from '@/components/data-table-filter/core/fi
 import type { ColumnOption, FiltersState } from '@/components/data-table-filter/core/types';
 import { multiOptionFilterFn, optionFilterFn } from '@/components/data-table-filter/lib/filter-fns';
 import { Issue } from '@/types/issues';
-import type { LabelInterface } from '@/types/labels';
+import type { LabelInterface, SubProjectLabel } from '@/types/labels';
 import { priorities } from '@/lib/priority-presentations';
 import type { Status, StatusCategory } from '@/lib/status-presentations';
 import type { Project } from '@/types/projects';
@@ -17,6 +17,7 @@ import {
    CircleDashed,
    CircleUserRound,
    Folder,
+   FolderTree,
    RefreshCcw,
    Tag,
 } from 'lucide-react';
@@ -87,6 +88,28 @@ const labelOptions = (labels: LabelInterface[]): ColumnOption[] =>
       icon: <span className="size-2.5 rounded-full" style={{ backgroundColor: label.color }} />,
    }));
 
+// Inside one project only its sub projects are offered; on wider pages each name carries its
+// project so equal names of different projects stay apart.
+// VI: Trong một dự án chỉ đề xuất sub project của dự án đó; ở trang rộng hơn mỗi tên kèm dự án
+// VI: để các tên giống nhau của dự án khác nhau không lẫn.
+const subProjectOptions = (
+   subProjectLabels: SubProjectLabel[],
+   projects: Project[],
+   projectId?: string
+): ColumnOption[] =>
+   subProjectLabels
+      .filter((label) => !projectId || label.projectId === projectId)
+      .map((label) => {
+         const project = projectId
+            ? undefined
+            : projects.find((candidate) => candidate.id === label.projectId);
+         return {
+            value: label.id,
+            label: project ? `${label.name} · ${project.name}` : label.name,
+            icon: <FolderTree className="size-4" style={{ color: label.color }} />,
+         };
+      });
+
 const projectOptions = (projects: Project[]): ColumnOption[] =>
    projects.map((project) => ({
       value: project.id,
@@ -123,6 +146,9 @@ export interface IssueFilterOptions {
    statuses: Status[];
    labels: LabelInterface[];
    cycles: IssueCycle[];
+   subProjectLabels?: SubProjectLabel[];
+   /** Project of the page, if any. VI: Dự án của trang, nếu có. */
+   projectId?: string;
 }
 
 /**
@@ -140,6 +166,8 @@ export const createIssueFilterColumns = ({
    statuses,
    labels,
    cycles,
+   subProjectLabels = [],
+   projectId,
 }: IssueFilterOptions) =>
    [
       dtf
@@ -181,6 +209,14 @@ export const createIssueFilterColumns = ({
          .displayName('Labels')
          .icon(Tag)
          .options(labelOptions(labels))
+         .build(),
+      dtf
+         .multiOption()
+         .id('subProjects')
+         .accessor((issue: Issue) => (issue.subProjectLabels ?? []).map((label) => label.id))
+         .displayName('Sub project')
+         .icon(FolderTree)
+         .options(subProjectOptions(subProjectLabels, projects, projectId))
          .build(),
       dtf
          .option()

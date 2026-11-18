@@ -13,6 +13,7 @@ from .queries import (
     CONTEXT_SELECT_ATTACHMENTS,
     OPTIONS_SELECT_ISSUE_STATUSES,
     OPTIONS_SELECT_LABELS,
+    OPTIONS_SELECT_SUB_PROJECT_LABELS,
     OPTIONS_SELECT_USERS,
     PROJECT_REPOSITORIES_SELECT_PROJECT_REPOSITORIES,
     context_select_issue_relations_sql,
@@ -246,6 +247,11 @@ class QueryService:
                 "EXISTS(SELECT 1 FROM issue_labels il WHERE il.issue_id=i.id AND il.label_id=:label)"
             )
             params["label"] = payload.labelId
+        if payload.subProjectLabelId:
+            filters.append(
+                "EXISTS(SELECT 1 FROM issue_sub_project_labels isl WHERE isl.issue_id=i.id AND isl.label_id=:sub_project)"
+            )
+            params["sub_project"] = payload.subProjectLabelId
         if payload.query:
             filters.append(
                 "(i.title ILIKE :query ESCAPE '\\' OR i.identifier ILIKE :query ESCAPE '\\' OR i.description ILIKE :query ESCAPE '\\')"
@@ -276,7 +282,10 @@ class QueryService:
             f"""SELECT i.id,i.identifier,i.title,i.priority,i.issue_type AS "issueType",i.severity,
             i.project_id AS "projectId",i.team_id AS "teamId",i.assignee_id AS "assigneeId",
             i.status_id AS "statusId",s.name AS "statusName",s.category,i.version,
-            i.due_date AS "dueDate",i.updated_at AS "updatedAt"
+            i.due_date AS "dueDate",i.updated_at AS "updatedAt",
+            (SELECT COALESCE(json_agg(json_build_object('id',l.id,'name',l.name) ORDER BY lower(l.name)),'[]'::json)
+                FROM issue_sub_project_labels isl JOIN sub_project_labels l ON l.id=isl.label_id
+                WHERE isl.issue_id=i.id) AS "subProjectLabels"
             FROM issues i JOIN issue_statuses s ON s.id=i.status_id WHERE {self.policy.issue_clause()}{suffix}""",
             params,
         )
@@ -510,12 +519,23 @@ class QueryService:
                 params,
             )
         ).mappings()
-        return {
+        result = {
             "statuses": [dict(r) for r in statuses],
             "labels": [dict(r) for r in labels],
             "members": [dict(r) for r in members],
             "limitPerSection": 100,
         }
+        if payload.projectId:
+            # The project is checked against the caller's scope like every other project read.
+            # VI: Dự án được kiểm theo phạm vi của người gọi như mọi lần đọc dự án khác.
+            project = await self.policy.project(payload.projectId)
+            sub_projects = (
+                await self.db.execute(
+                    OPTIONS_SELECT_SUB_PROJECT_LABELS, {"project": project["id"]}
+                )
+            ).mappings()
+            result["subProjectLabels"] = [dict(r) for r in sub_projects]
+        return result
 
     async def context(self, payload) -> dict:
         from .contracts import IssuePageInput, SearchDocumentsInput

@@ -92,6 +92,16 @@ CREATE_MILESTONE_INSERT_PROJECT_MILESTONES = text('''INSERT INTO project_milesto
 REMOVE_MILESTONE_DELETE_PROJECT_MILESTONES = text('DELETE FROM project_milestones WHERE id = :id AND project_id = :project_id AND workspace_id = :workspace_id RETURNING id')
 
 
+CREATE_SUB_PROJECT_LABEL_INSERT_SUB_PROJECT_LABELS = text('''INSERT INTO sub_project_labels (id, project_id, name, color, created_at, updated_at) VALUES (:id, :project_id, :name, :color, :now, :now)''')
+
+
+def update_sub_project_label_update_sub_project_labels_sql(sets) -> TextClause:
+    return text(f"UPDATE sub_project_labels SET {', '.join(sets)}, updated_at = :now WHERE id = :id")
+
+
+REMOVE_SUB_PROJECT_LABEL_DELETE_SUB_PROJECT_LABELS = text('DELETE FROM sub_project_labels WHERE id = :id AND project_id = :project_id RETURNING id')
+
+
 CREATE_UPDATE_INSERT_PROJECT_UPDATES = text('''INSERT INTO project_updates (id, workspace_id, project_id, author_id, body, kind, health, created_at, updated_at) VALUES (:id, :workspace_id, :project_id, :author_id, :body, :kind, :health, :now, :now)''')
 
 

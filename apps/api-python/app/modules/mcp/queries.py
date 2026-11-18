@@ -213,6 +213,12 @@ OPTIONS_SELECT_LABELS = text("""SELECT id,name FROM labels WHERE workspace_id=:w
             ORDER BY name,id LIMIT 100""")
 
 
+# Archived sub projects are listed (archived=true) because issues may still carry them.
+# VI: Sub project đã lưu trữ vẫn được liệt kê (archived=true) vì issue có thể còn mang chúng.
+OPTIONS_SELECT_SUB_PROJECT_LABELS = text("""SELECT id,name,archived_at IS NOT NULL AS archived
+            FROM sub_project_labels WHERE project_id=:project ORDER BY lower(name),id LIMIT 100""")
+
+
 OPTIONS_SELECT_USERS = text("""SELECT u.id,u.name FROM users u JOIN team_members tm ON tm.user_id=u.id
             JOIN workspace_members wm ON wm.user_id=u.id AND wm.workspace_id=:workspace
             WHERE tm.team_id=:team AND u.status='ACTIVE' AND wm.status='ACTIVE' ORDER BY u.name,u.id LIMIT 100""")

@@ -35,6 +35,7 @@ const GROUPINGS: { value: GroupingKey; label: string }[] = [
    { value: 'assignee', label: 'Assignee' },
    { value: 'priority', label: 'Priority' },
    { value: 'project', label: 'Project' },
+   { value: 'subProject', label: 'Sub project' },
    { value: 'none', label: 'No grouping' },
 ];
 

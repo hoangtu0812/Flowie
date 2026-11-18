@@ -12,6 +12,7 @@ from .queries import (
 SORT_COLUMNS = {
     "title": "lower(i.title)",
     "labels": "(SELECT string_agg(lower(l.name), ', ' ORDER BY lower(l.name),l.id) FROM issue_labels il JOIN labels l ON l.id=il.label_id WHERE il.issue_id=i.id)",
+    "subProjects": "(SELECT string_agg(lower(l.name), ', ' ORDER BY lower(l.name),l.id) FROM issue_sub_project_labels il JOIN sub_project_labels l ON l.id=il.label_id WHERE il.issue_id=i.id)",
     "project": "(SELECT lower(p.name) FROM projects p WHERE p.id=i.project_id)",
     "startDate": "i.start_date",
     "targetDate": "i.target_date",

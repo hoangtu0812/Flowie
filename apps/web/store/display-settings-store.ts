@@ -6,7 +6,7 @@ import {
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-export type GroupingKey = 'status' | 'assignee' | 'priority' | 'project' | 'none';
+export type GroupingKey = 'status' | 'assignee' | 'priority' | 'project' | 'subProject' | 'none';
 export type OrderingKey = 'priority' | 'created' | 'title' | 'manual';
 export type CompletedIssuesFilter = 'all' | 'none';
 
@@ -16,6 +16,7 @@ export type DisplayPropertyKey =
    | 'priority'
    | 'assignee'
    | 'labels'
+   | 'subProjects'
    | 'project'
    | 'startDate'
    | 'targetDate'
@@ -31,6 +32,7 @@ export const DEFAULT_DISPLAY_PROPERTIES: Record<DisplayPropertyKey, boolean> = {
    priority: true,
    assignee: true,
    labels: true,
+   subProjects: true,
    project: true,
    startDate: true,
    targetDate: true,

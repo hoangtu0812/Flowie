@@ -204,6 +204,29 @@ async def verify_exchange():
         )
         assert changed["counts"] == {"PENDING": 1}
         await command(changed["id"], "apply")
+        # Sub projects are imported by name of the row's project, letter case ignored.
+        # VI: Sub project được nhập theo tên trong dự án của dòng, không phân biệt hoa thường.
+        sub_project = cuid()
+        async with factory() as db:
+            await db.execute(
+                text(
+                    "INSERT INTO sub_project_labels(id,project_id,name,color,created_at,updated_at) VALUES (:id,:project,'Web','#123456',now(),now())"
+                ),
+                {"id": sub_project, "project": project},
+            )
+            await db.commit()
+        named, _ = await preview(
+            f"key,title,project,sub\nsub-ok,Sub ok,{project},web\nsub-bad,Sub bad,{project},Missing",
+            mapping={"externalId": "key", "title": "title", "projectId": "project", "subProjects": "sub"},
+        )
+        assert named["counts"] == {"PENDING": 1, "INVALID": 1}
+        async with factory() as db:
+            stored = await db.execute(
+                text("SELECT payload FROM issue_import_rows WHERE batch_id=:id AND state='PENDING'"),
+                {"id": named["id"]},
+            )
+            assert stored.scalar_one()["subProjectLabelIds"] == [sub_project]
+        await command(named["id"], "cancel")
         async with factory() as db:
             await db.execute(
                 text("UPDATE projects SET archived_at=:now WHERE id=:id"),
