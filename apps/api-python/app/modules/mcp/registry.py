@@ -51,7 +51,7 @@ DEFINITIONS = (
     ),
     ToolDefinition(
         "read_attachment_text",
-        "Read a bounded page of UTF-8 text from an independently authorized attachment; binary documents are not decoded.",
+        "Read a bounded page of text from an independently authorized attachment: UTF-8 text files up to 1 MiB, or the plain text of a DOCX file up to 10 MiB (images and formatting dropped). Other binary documents are not decoded.",
         c.AttachmentInput,
         "issues:read",
         "attachment",

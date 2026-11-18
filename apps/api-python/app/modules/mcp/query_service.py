@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 from datetime import UTC, date
+from io import BytesIO
 from typing import Any
 
 from ...core.errors import ApiError
@@ -24,6 +25,8 @@ from .queries import (
 
 IMAGE_TYPES = frozenset({"image/png", "image/jpeg", "image/gif", "image/webp"})
 IMAGE_LIMIT = 5 * 1048576
+DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+DOCX_LIMIT = 10 * 1048576
 
 
 class QueryService:
@@ -129,12 +132,12 @@ class QueryService:
         return row
 
     async def attachment(self, payload) -> dict:
-        from ...storage.minio import MinioStorage
-
         row = await self._authorized_attachment(payload.attachmentId)
         mime = row["mime_type"].split(";", 1)[0].lower()
         suffix = row["filename"].rsplit(".", 1)[-1].lower()
-        if not (
+        if mime == DOCX_TYPE or suffix == "docx":
+            content = await self._docx_text(row)
+        elif not (
             mime.startswith("text/")
             or mime == "application/json"
             or (
@@ -144,24 +147,17 @@ class QueryService:
         ):
             raise ApiError(
                 415,
-                "Only UTF-8 text attachments are supported.",
+                "Only UTF-8 text and DOCX attachments are supported.",
                 "Unsupported Media Type",
             )
-        if row["size"] > 1048576:
-            raise ApiError(
-                413, "Text attachments must be at most 1 MiB.", "Payload Too Large"
-            )
-        body = await MinioStorage(self.settings).get(row["object_key"])
-        if len(body) > 1048576:
-            raise ApiError(
-                413, "Text attachments must be at most 1 MiB.", "Payload Too Large"
-            )
-        try:
-            content = body.decode("utf-8-sig")
-        except UnicodeDecodeError as error:
-            raise ApiError(
-                415, "The attachment is not UTF-8 text.", "Unsupported Media Type"
-            ) from error
+        else:
+            body = await self._attachment_body(row, 1048576, "Text attachments must be at most 1 MiB.")
+            try:
+                content = body.decode("utf-8-sig")
+            except UnicodeDecodeError as error:
+                raise ApiError(
+                    415, "The attachment is not UTF-8 text.", "Unsupported Media Type"
+                ) from error
         end = payload.offset + payload.limit
         return {
             "attachmentId": row["id"],
@@ -170,6 +166,43 @@ class QueryService:
             "nextOffset": end if end < len(content) else None,
             "truncated": end < len(content),
         }
+
+    async def _attachment_body(self, row, limit: int, message: str) -> bytes:
+        """Downloads an attachment after checking its stored size, then checks the real size.
+
+        The stored size is checked first so an oversized file is never fetched; the downloaded
+        length is checked again because the stored size comes from the uploader.
+        VI: Tải file đính kèm sau khi kiểm tra kích thước đã lưu, rồi kiểm tra lại kích thước
+        VI: thật. Kiểm tra kích thước đã lưu trước để không tải file quá lớn; kiểm tra lại số
+        VI: byte tải về vì kích thước đã lưu do người tải lên khai báo.
+        """
+        from ...storage.minio import MinioStorage
+
+        if row["size"] > limit:
+            raise ApiError(413, message, "Payload Too Large")
+        body = await MinioStorage(self.settings).get(row["object_key"])
+        if len(body) > limit:
+            raise ApiError(413, message, "Payload Too Large")
+        return body
+
+    async def _docx_text(self, row) -> str:
+        """Returns the plain text of a DOCX attachment of at most 10 MiB, paragraphs split by blank lines.
+
+        mammoth is the reader the DOCX preview and the planning agent already use; it drops
+        images and formatting. A file that is not a readable DOCX is refused with 415.
+        VI: Trả văn bản thuần của file DOCX tối đa 10 MiB, các đoạn cách nhau bằng dòng trống.
+        VI: mammoth là bộ đọc mà trang xem trước DOCX và agent lập kế hoạch đang dùng; nó bỏ
+        VI: hình ảnh và định dạng. File không đọc được như DOCX bị từ chối với mã 415.
+        """
+        import mammoth
+
+        body = await self._attachment_body(row, DOCX_LIMIT, "DOCX attachments must be at most 10 MiB.")
+        try:
+            return mammoth.extract_raw_text(BytesIO(body)).value
+        except Exception as error:  # mammoth raises zipfile, XML and its own errors for a bad file.
+            raise ApiError(
+                415, "The DOCX attachment could not be read.", "Unsupported Media Type"
+            ) from error
 
     async def attachment_image(self, payload) -> dict:
         """Returns an image attachment as base64 so the transport can send it as MCP image content.

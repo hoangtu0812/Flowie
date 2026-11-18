@@ -2365,6 +2365,58 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(result["text"], "one\n")
             self.assertEqual(result["nextOffset"], 4)
 
+    async def test_docx_attachment_text_is_extracted(self):
+        # A DOCX attachment comes back as plain text; a broken one is refused, not decoded as bytes.
+        # VI: File DOCX đính kèm được trả về dạng văn bản thuần; file hỏng bị từ chối.
+        from io import BytesIO
+        from unittest.mock import AsyncMock, patch
+        from zipfile import ZipFile
+
+        docx, broken = cuid(), cuid()
+        async with self.factory() as db:
+            for identifier in (docx, broken):
+                await db.execute(
+                    text("""INSERT INTO attachments (id,workspace_id,uploaded_by,entity_type,entity_id,object_key,filename,mime_type,size,created_at)
+                    VALUES (:id,:workspace,:user,'issue',:issue,:id,'Quy-dinh.docx',:mime,64,:now)"""),
+                    {
+                        "id": identifier,
+                        "workspace": self.workspace,
+                        "user": self.user["id"],
+                        "issue": self.issue["id"],
+                        "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        "now": utcnow(),
+                    },
+                )
+            await db.commit()
+        archive = BytesIO()
+        with ZipFile(archive, "w") as book:
+            book.writestr(
+                "[Content_Types].xml",
+                '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+                '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+                '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>',
+            )
+            book.writestr(
+                "_rels/.rels",
+                '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                '<Relationship Id="r1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>',
+            )
+            book.writestr(
+                "word/document.xml",
+                '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'
+                "<w:p><w:r><w:t>Quy định BEC</w:t></w:r></w:p><w:p><w:r><w:t>Điều 1</w:t></w:r></w:p>"
+                "</w:body></w:document>",
+            )
+        with patch(
+            "app.storage.minio.MinioStorage.get",
+            AsyncMock(side_effect=[archive.getvalue(), b"not a zip"]),
+        ):
+            result = await self.call("read_attachment_text", attachmentId=docx)
+            self.assertEqual(result["text"].split(), ["Quy", "định", "BEC", "Điều", "1"])
+            self.assertIsNone(result["nextOffset"])
+            with self.assertRaises(ApiError):
+                await self.call("read_attachment_text", attachmentId=broken)
+
     async def test_image_attachment_reader_checks_access_type_and_size(self):
         from unittest.mock import AsyncMock, patch
 
