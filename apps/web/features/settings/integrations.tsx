@@ -16,8 +16,13 @@ import {
    loadSharepointConnection,
    type SharepointConnection,
 } from '@/features/settings/sharepoint-integration';
+import {
+   OutgoingWebhooksDialog,
+   loadOutgoingWebhooks,
+   type OutgoingWebhook,
+} from '@/features/settings/outgoing-webhooks';
 import { Button } from '@/components/ui/button';
-import { ArrowUpRight, FolderUp, MessagesSquare } from 'lucide-react';
+import { ArrowUpRight, FolderUp, MessagesSquare, Webhook } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { INTEGRATION_LOGOS } from './integration-logos';
 import { McpSettings } from '@/features/settings/mcp/mcp-settings';
@@ -33,8 +38,13 @@ export default function Integrations() {
    const [teamsStatus, setTeamsStatus] = useState<TeamsStatus>();
    const [sharepointOpen, setSharepointOpen] = useState(false);
    const [sharepoint, setSharepoint] = useState<SharepointConnection>();
+   const [webhooksOpen, setWebhooksOpen] = useState(false);
+   const [webhooks, setWebhooks] = useState<OutgoingWebhook[]>([]);
 
    useEffect(() => {
+      void loadOutgoingWebhooks()
+         .then((loaded) => setWebhooks(loaded.data))
+         .catch(() => setWebhooks([]));
       void loadSharepointConnection()
          .then(setSharepoint)
          .catch(() => setSharepoint(undefined));
@@ -54,7 +64,7 @@ export default function Integrations() {
       <>
          <SettingsShell
             title="Integrations"
-            description="Connect Discord or Microsoft Teams notifications, SharePoint publishing, and authorize AI access to project work."
+            description="Connect Discord or Microsoft Teams notifications, signed webhooks, SharePoint publishing, and authorize AI access to project work."
          >
             <section className="flex flex-col gap-3">
                <h2 className="text-base font-medium">Discord</h2>
@@ -96,6 +106,24 @@ export default function Integrations() {
                </section>
             )}
             <section className="flex flex-col gap-3">
+               <h2 className="text-base font-medium">Webhooks</h2>
+               <div className="flex items-center gap-3 rounded-lg border bg-container p-4">
+                  <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-md border bg-background">
+                     <Webhook className="size-5 text-muted-foreground" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                     <p className="text-sm font-medium">Webhooks</p>
+                     <p className="mt-0.5 text-xs text-muted-foreground">
+                        Post signed JSON events about issues and projects to other systems.
+                     </p>
+                  </div>
+                  <Button size="xs" variant="ghost" onClick={() => setWebhooksOpen(true)}>
+                     {webhooks.length ? `${webhooks.length} configured` : 'Add'}
+                     <ArrowUpRight className="size-3.5" />
+                  </Button>
+               </div>
+            </section>
+            <section className="flex flex-col gap-3">
                <h2 className="text-base font-medium">SharePoint</h2>
                <div className="flex items-center gap-3 rounded-lg border bg-container p-4">
                   <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-md border bg-background">
@@ -116,6 +144,11 @@ export default function Integrations() {
             </section>
             <McpSettings />
          </SettingsShell>
+         <OutgoingWebhooksDialog
+            open={webhooksOpen}
+            onOpenChange={setWebhooksOpen}
+            onChanged={setWebhooks}
+         />
          <SharepointIntegrationDialog
             open={sharepointOpen}
             onOpenChange={setSharepointOpen}

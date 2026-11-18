@@ -448,13 +448,36 @@ async def create_notification_batch(
 
     slug = await _workspace_route_id(db, workspace_id)
     app_url = _app_url()
+    link = f'{app_url}/{slug}{entity_path}' if app_url and slug else None
+    if discord:
+        # Outgoing webhooks get the events the shared channels get, minus the body text: a
+        # receiver that needs a comment reads it through the API with its own access.
+        # VI: Webhook gửi ra ngoài nhận đúng các sự kiện mà kênh chung nhận, trừ phần nội dung:
+        # VI: bên nhận cần nội dung comment thì đọc qua API bằng quyền của chính nó.
+        from ..modules.integrations.outgoing_webhooks import stage_outgoing_event
+
+        await stage_outgoing_event(
+            db,
+            workspace_id,
+            event_type,
+            {
+                'entityType': entity_type,
+                'entityId': entity_id,
+                'entityLabel': entity_label,
+                'title': title,
+                'message': message,
+                'url': link,
+                'actor': {'id': actor_data['id'], 'name': actor_data['name']},
+                'details': data.get('details', []),
+            },
+        )
     embed = _embed(
         event_type=event_type,
         entity_type=entity_type,
         entity_label=entity_label,
         title=title,
         message=message,
-        url=f'{app_url}/{slug}{entity_path}' if app_url and slug else None,
+        url=link,
         actor_data=actor_data,
         details=details,
         body=body_excerpt,

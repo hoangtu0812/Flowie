@@ -36,6 +36,7 @@ from .modules.identity.security.api import router as account_security_router
 from .modules.identity.security.mfa.api import router as mfa_router
 from .modules.identity.users_api import router as users_router
 from .modules.integrations.api import router as integrations_router
+from .modules.integrations.webhooks_api import router as outgoing_webhooks_router
 from .modules.labels.api import router as labels_router
 from .modules.link_metadata.api import router as link_metadata_router
 from .modules.mcp.api import router as mcp_management_router
@@ -138,6 +139,7 @@ ROUTERS: list[APIRouter] = [
     notifications_router,
     channels_router,
     integrations_router,
+    outgoing_webhooks_router,
     views_router,
     manual_order_router,
     native_projects_router,
