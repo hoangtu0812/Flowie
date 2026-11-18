@@ -2417,6 +2417,86 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(ApiError):
                 await self.call("read_attachment_text", attachmentId=broken)
 
+    async def test_xlsx_and_pdf_attachment_text_is_extracted(self):
+        # XLSX comes back one section per sheet; PDF one marker per page; a PDF without a text
+        # layer (a scan) is refused rather than returned empty.
+        # VI: XLSX trả về mỗi sheet một phần; PDF mỗi trang một dấu trang; PDF không có lớp
+        # VI: văn bản (bản scan) bị từ chối thay vì trả về rỗng.
+        from io import BytesIO
+        from unittest.mock import AsyncMock, patch
+        from zipfile import ZipFile
+
+        def pdf(content: bytes) -> bytes:
+            objects = [
+                b"<< /Type /Catalog /Pages 2 0 R >>",
+                b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+                b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 100] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
+                b"<< /Length %d >>\nstream\n%s\nendstream" % (len(content), content),
+                b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+            ]
+            out, offsets = bytearray(b"%PDF-1.4\n"), []
+            for number, body in enumerate(objects, 1):
+                offsets.append(len(out))
+                out += b"%d 0 obj\n%s\nendobj\n" % (number, body)
+            xref = len(out)
+            out += b"xref\n0 6\n0000000000 65535 f \n" + b"".join(b"%010d 00000 n \n" % o for o in offsets)
+            out += b"trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % xref
+            return bytes(out)
+
+        main = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+        book = BytesIO()
+        with ZipFile(book, "w") as archive:
+            archive.writestr(
+                "xl/workbook.xml",
+                f'<workbook xmlns="{main}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+                '<sheets><sheet name="Plan" sheetId="1" r:id="rId1"/></sheets></workbook>',
+            )
+            archive.writestr(
+                "xl/_rels/workbook.xml.rels",
+                '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                '<Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>',
+            )
+            archive.writestr(
+                "xl/worksheets/sheet1.xml",
+                f'<worksheet xmlns="{main}"><sheetData><row r="1">'
+                '<c r="A1" t="inlineStr"><is><t>Task</t></is></c><c r="B1"><v>3</v></c>'
+                "</row></sheetData></worksheet>",
+            )
+        files = {
+            "plan.xlsx": ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", book.getvalue()),
+            "rule.pdf": ("application/pdf", pdf(b"BT /F1 12 Tf 10 50 Td (Quy dinh BEC) Tj ET")),
+            "scan.pdf": ("application/octet-stream", pdf(b"")),
+        }
+        ids = {name: cuid() for name in files}
+        async with self.factory() as db:
+            for name, (mime, body) in files.items():
+                await db.execute(
+                    text("""INSERT INTO attachments (id,workspace_id,uploaded_by,entity_type,entity_id,object_key,filename,mime_type,size,created_at)
+                    VALUES (:id,:workspace,:user,'issue',:issue,:id,:name,:mime,:size,:now)"""),
+                    {
+                        "id": ids[name],
+                        "workspace": self.workspace,
+                        "user": self.user["id"],
+                        "issue": self.issue["id"],
+                        "name": name,
+                        "mime": mime,
+                        "size": len(body),
+                        "now": utcnow(),
+                    },
+                )
+            await db.commit()
+        with patch(
+            "app.storage.minio.MinioStorage.get",
+            AsyncMock(side_effect=[body for _, body in files.values()]),
+        ):
+            sheet = await self.call("read_attachment_text", attachmentId=ids["plan.xlsx"])
+            self.assertEqual(sheet["text"], "## Plan\nTask | 3")
+            page = await self.call("read_attachment_text", attachmentId=ids["rule.pdf"])
+            self.assertEqual(page["text"].splitlines(), ["--- Page 1 ---", "Quy dinh BEC"])
+            with self.assertRaises(ApiError) as scan:
+                await self.call("read_attachment_text", attachmentId=ids["scan.pdf"])
+            self.assertIn("no text layer", scan.exception.message)
+
     async def test_image_attachment_reader_checks_access_type_and_size(self):
         from unittest.mock import AsyncMock, patch
 

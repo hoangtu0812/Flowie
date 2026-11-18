@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 from datetime import UTC, date
 from io import BytesIO
 from typing import Any
 
 from ...core.errors import ApiError
+from ..attachments.tables import MAX_COLUMNS, MAX_ROWS, xlsx_sheets
 from ..teams.insights_api import hcm_today
 from .pagination import CursorCodec, literal_search
 from .policy import AccessPolicy
@@ -25,8 +27,76 @@ from .queries import (
 
 IMAGE_TYPES = frozenset({"image/png", "image/jpeg", "image/gif", "image/webp"})
 IMAGE_LIMIT = 5 * 1048576
-DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-DOCX_LIMIT = 10 * 1048576
+DOCUMENT_LIMIT = 10 * 1048576
+# Pages read from one PDF. VI: Số trang tối đa đọc từ một file PDF.
+PDF_MAX_PAGES = 300
+
+
+def _docx_text(body: bytes) -> str:
+    """Plain text of a DOCX file, paragraphs split by blank lines, images and formatting dropped.
+
+    mammoth is the reader the DOCX preview and the planning agent already use.
+    VI: Văn bản thuần của file DOCX, các đoạn cách nhau bằng dòng trống, bỏ hình ảnh và định
+    VI: dạng. mammoth là bộ đọc mà trang xem trước DOCX và agent lập kế hoạch đang dùng.
+    """
+    import mammoth
+
+    return mammoth.extract_raw_text(BytesIO(body)).value
+
+
+def _xlsx_text(body: bytes) -> str:
+    """Each sheet as a `## <name>` heading followed by its rows, cells joined by ` | `.
+
+    The attachment table preview's reader is reused, so the same ZIP-bomb guard and the same
+    row and column caps apply; a cut sheet ends with a note. Values are shown as stored (a
+    date is its serial number) because number formats are not applied.
+    VI: Mỗi sheet thành tiêu đề `## <tên>` rồi các dòng, các ô nối bằng ` | `. Dùng lại bộ đọc
+    VI: của trang xem trước bảng, nên có cùng lớp chặn ZIP bomb và giới hạn dòng, cột; sheet bị
+    VI: cắt có ghi chú ở cuối. Giá trị hiện như được lưu (ngày là số sê-ri) vì không áp định dạng số.
+    """
+    parts = []
+    for name, rows, truncated in xlsx_sheets(body):
+        lines = [f"## {name}", *(" | ".join(row) for row in rows)]
+        if truncated:
+            lines.append(f"(Only the first {MAX_ROWS} rows and {MAX_COLUMNS} columns are shown.)")
+        parts.append("\n".join(lines))
+    return "\n\n".join(parts)
+
+
+def _pdf_text(body: bytes) -> str:
+    """Text layer of a PDF, each page under a `--- Page n ---` line, at most PDF_MAX_PAGES pages.
+
+    A password-protected PDF, or one with no text layer (a scanned document), is refused with
+    415 instead of returning an empty page the agent could mistake for a blank file.
+    shortcut: scanned PDFs are not OCR'd; add OCR if agents need to read scans.
+    VI: Lớp văn bản của PDF, mỗi trang dưới dòng `--- Page n ---`, tối đa PDF_MAX_PAGES trang.
+    VI: PDF có mật khẩu, hoặc không có lớp văn bản (bản scan), bị từ chối với mã 415 thay vì trả
+    VI: trang rỗng mà agent có thể hiểu nhầm là file trống.
+    VI: shortcut: PDF scan không được OCR; thêm OCR nếu agent cần đọc bản scan.
+    """
+    from pypdf import PdfReader
+
+    reader = PdfReader(BytesIO(body))
+    if reader.is_encrypted and not reader.decrypt(""):
+        raise ApiError(415, "The PDF attachment is password-protected.", "Unsupported Media Type")
+    pages = [page.extract_text() or "" for page in reader.pages[:PDF_MAX_PAGES]]
+    if not any(page.strip() for page in pages):
+        raise ApiError(
+            415, "The PDF attachment has no text layer (it may be scanned).", "Unsupported Media Type"
+        )
+    text = "\n\n".join(f"--- Page {number} ---\n{page}" for number, page in enumerate(pages, 1))
+    if len(reader.pages) > PDF_MAX_PAGES:
+        text += f"\n\n(Only the first {PDF_MAX_PAGES} of {len(reader.pages)} pages are shown.)"
+    return text
+
+
+# Office and PDF formats read as text, keyed by suffix: (MIME type, label, reader).
+# VI: Các định dạng Office và PDF được đọc thành văn bản, theo đuôi file: (MIME, nhãn, bộ đọc).
+DOCUMENT_READERS = {
+    "docx": ("application/vnd.openxmlformats-officedocument.wordprocessingml.document", "DOCX", _docx_text),
+    "xlsx": ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "XLSX", _xlsx_text),
+    "pdf": ("application/pdf", "PDF", _pdf_text),
+}
 
 
 class QueryService:
@@ -135,8 +205,12 @@ class QueryService:
         row = await self._authorized_attachment(payload.attachmentId)
         mime = row["mime_type"].split(";", 1)[0].lower()
         suffix = row["filename"].rsplit(".", 1)[-1].lower()
-        if mime == DOCX_TYPE or suffix == "docx":
-            content = await self._docx_text(row)
+        document = next(
+            (reader for key, reader in DOCUMENT_READERS.items() if mime == reader[0] or suffix == key),
+            None,
+        )
+        if document:
+            content = await self._document_text(row, *document[1:])
         elif not (
             mime.startswith("text/")
             or mime == "application/json"
@@ -147,7 +221,7 @@ class QueryService:
         ):
             raise ApiError(
                 415,
-                "Only UTF-8 text and DOCX attachments are supported.",
+                "Only UTF-8 text, DOCX, XLSX and PDF attachments are supported.",
                 "Unsupported Media Type",
             )
         else:
@@ -185,23 +259,23 @@ class QueryService:
             raise ApiError(413, message, "Payload Too Large")
         return body
 
-    async def _docx_text(self, row) -> str:
-        """Returns the plain text of a DOCX attachment of at most 10 MiB, paragraphs split by blank lines.
+    async def _document_text(self, row, label: str, reader) -> str:
+        """Text of a DOCX, XLSX or PDF attachment of at most 10 MiB, extracted off the event loop.
 
-        mammoth is the reader the DOCX preview and the planning agent already use; it drops
-        images and formatting. A file that is not a readable DOCX is refused with 415.
-        VI: Trả văn bản thuần của file DOCX tối đa 10 MiB, các đoạn cách nhau bằng dòng trống.
-        VI: mammoth là bộ đọc mà trang xem trước DOCX và agent lập kế hoạch đang dùng; nó bỏ
-        VI: hình ảnh và định dạng. File không đọc được như DOCX bị từ chối với mã 415.
+        Parsing runs in a worker thread because a large document takes seconds of CPU and would
+        otherwise stall every other request. A file the reader cannot parse is refused with 415.
+        VI: Văn bản của file DOCX, XLSX hoặc PDF tối đa 10 MiB, trích xuất ngoài event loop. Việc
+        VI: phân tích chạy ở thread riêng vì tài liệu lớn tốn vài giây CPU và sẽ chặn mọi request
+        VI: khác. File bộ đọc không phân tích được bị từ chối với mã 415.
         """
-        import mammoth
-
-        body = await self._attachment_body(row, DOCX_LIMIT, "DOCX attachments must be at most 10 MiB.")
+        body = await self._attachment_body(row, DOCUMENT_LIMIT, f"{label} attachments must be at most 10 MiB.")
         try:
-            return mammoth.extract_raw_text(BytesIO(body)).value
-        except Exception as error:  # mammoth raises zipfile, XML and its own errors for a bad file.
+            return await asyncio.to_thread(reader, body)
+        except ApiError:
+            raise
+        except Exception as error:  # The readers raise ZIP, XML, PDF and their own errors for a bad file.
             raise ApiError(
-                415, "The DOCX attachment could not be read.", "Unsupported Media Type"
+                415, f"The {label} attachment could not be read.", "Unsupported Media Type"
             ) from error
 
     async def attachment_image(self, payload) -> dict:
