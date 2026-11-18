@@ -21,7 +21,7 @@ pull request and commit references, which are for us.
 
 ### Added
 
-- The MCP tool `read_attachment_text` also reads XLSX attachments (one section per sheet, first 500 rows and 50 columns) and PDF attachments (text layer, first 300 pages) up to 10 MiB. Scanned and password-protected PDFs are refused with a clear message. Adds the `pypdf` Python dependency: rebuild `api`.
+- The MCP tool `read_attachment_text` also reads XLSX attachments (one section per sheet, first 500 rows and 50 columns) and PDF attachments (text layer, first 300 pages) up to 10 MiB. Scanned and password-protected PDFs are refused with a clear message. Adds the `pypdf` Python dependency: rebuild `api`. (#309)
   VI: Tool MCP `read_attachment_text` đọc thêm được file XLSX đính kèm (mỗi sheet một phần, tối đa 500 dòng và 50 cột đầu) và PDF đính kèm (lớp văn bản, tối đa 300 trang đầu), dung lượng tối đa 10 MiB. PDF dạng scan hoặc có mật khẩu bị từ chối kèm thông báo rõ ràng. Thêm thư viện Python `pypdf`: build lại `api`.
 - The MCP tool `read_attachment_text` reads DOCX attachments up to 10 MiB as plain text (images and formatting dropped), so agents can read Word files attached to a task. Rebuild `api`. (#308)
   VI: Tool MCP `read_attachment_text` đọc được file DOCX đính kèm tối đa 10 MiB dưới dạng văn bản thuần (bỏ hình ảnh và định dạng), nên agent đọc được file Word đính kèm trong task. Build lại `api`.
