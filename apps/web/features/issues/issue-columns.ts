@@ -55,6 +55,18 @@ export const ISSUE_COLUMN_LABEL = {
 } as const satisfies Record<IssueColumnKey, string>;
 
 /**
+ * Label of a column for the current grouping. Grouped by sub project, each row already sits in
+ * one of its sub projects, so the Sub projects column lists only the others and is named so.
+ * VI: Nhãn cột theo grouping hiện tại. Khi group theo sub project, mỗi dòng đã nằm trong một sub
+ * VI: project của nó, nên cột Sub projects chỉ liệt kê các sub project còn lại và đổi tên theo.
+ */
+export function issueColumnLabel(column: IssueColumnKey, grouping: string) {
+   return column === 'subProjects' && grouping === 'subProject'
+      ? 'Other sub projects'
+      : ISSUE_COLUMN_LABEL[column];
+}
+
+/**
  * Responsive visibility and layout of each column, shared by the header and
  * every row so the labels can never drift from their cells. Widths are not
  * here: they come from the account's column settings as an inline style.

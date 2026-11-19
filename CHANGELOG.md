@@ -21,6 +21,8 @@ pull request and commit references, which are for us.
 
 ### Added
 
+- When the issue list is grouped by sub project, the Sub projects column is named "Other sub projects" and each row shows only the sub projects besides its group's, so an issue in a single sub project shows an empty cell. Other groupings keep the "Sub projects" column and toggle. Rebuild `web`. (DTD-963)
+  VI: Khi danh sách task được group theo sub project, cột Sub projects đổi tên thành "Other sub projects" và mỗi dòng chỉ hiện các sub project ngoài sub project của nhóm, nên task chỉ có một sub project sẽ có ô trống. Các kiểu group khác giữ nguyên cột và toggle "Sub projects". Build lại `web`.
 - The MCP tool `search_issues` accepts `noProject: true` to find issues filed under no project (team-level work) in the teams the connection's user belongs to, and `get_issue` / `get_issue_context` describe that such issues come back with `projectId: null`. Connections bound to projects still never see them. Rebuild `api`. (DTD-955, #310)
   VI: Tool MCP `search_issues` nhận `noProject: true` để tìm các issue chưa gắn project (việc cấp team) trong các team mà người dùng của kết nối là thành viên; mô tả của `get_issue` / `get_issue_context` nói rõ các issue này trả về `projectId: null`. Kết nối giới hạn dự án vẫn không thấy chúng. Build lại `api`.
 - The MCP tool `read_attachment_text` also reads XLSX attachments (one section per sheet, first 500 rows and 50 columns) and PDF attachments (text layer, first 300 pages) up to 10 MiB. Scanned and password-protected PDFs are refused with a clear message. Adds the `pypdf` Python dependency: rebuild `api`. (#309)

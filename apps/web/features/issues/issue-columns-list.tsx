@@ -5,9 +5,9 @@ import { isSortable, useSortable } from '@dnd-kit/react/sortable';
 import { GripVertical } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
-import type { DisplayPropertyKey } from '@/store/display-settings-store';
+import { useDisplaySettingsStore, type DisplayPropertyKey } from '@/store/display-settings-store';
 import {
-   ISSUE_COLUMN_LABEL,
+   issueColumnLabel,
    moveIssueColumn,
    setIssueColumnVisible,
    TITLE_PROPERTIES,
@@ -74,6 +74,7 @@ function PropertyRow({
 // khác chuyển động nhường chỗ.
 function SortableColumnRow({ column, index }: { column: IssueColumnKey; index: number }) {
    const { ref, handleRef, isDragSource } = useSortable({ id: column, index });
+   const grouping = useDisplaySettingsStore((state) => state.grouping);
    return (
       <div
          ref={ref}
@@ -86,7 +87,7 @@ function SortableColumnRow({ column, index }: { column: IssueColumnKey; index: n
       >
          <PropertyRow
             property={column}
-            label={ISSUE_COLUMN_LABEL[column]}
+            label={issueColumnLabel(column, grouping)}
             handleRef={handleRef}
             movable
          />
@@ -106,6 +107,7 @@ function SortableColumnRow({ column, index }: { column: IssueColumnKey; index: n
  */
 export function IssueColumnsList() {
    const { order } = useIssueColumns();
+   const grouping = useDisplaySettingsStore((state) => state.grouping);
    return (
       <div className="flex flex-col gap-1.5">
          <div className="rounded-md border divide-y divide-border/60">
@@ -133,7 +135,11 @@ export function IssueColumnsList() {
                   const column = order.find((candidate) => candidate === source.id);
                   return column ? (
                      <div inert className={cn(ROW_CLASS, 'rounded-md border bg-popover shadow-lg')}>
-                        <PropertyRow property={column} label={ISSUE_COLUMN_LABEL[column]} movable />
+                        <PropertyRow
+                           property={column}
+                           label={issueColumnLabel(column, grouping)}
+                           movable
+                        />
                      </div>
                   ) : null;
                }}

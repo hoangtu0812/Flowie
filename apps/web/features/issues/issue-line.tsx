@@ -17,6 +17,7 @@ import { IssueDateCell, IssueEffortCell } from './issue-inline-cells';
 import { FittedChips } from './fitted-chips';
 import { LabelBadge } from './label-badge';
 import { SubProjectBadge } from './sub-project-badge';
+import { otherSubProjects } from './sub-project-groups';
 import { MilestoneBadge } from './milestone-badge';
 import { PrioritySelector } from './priority-selector';
 import { ProjectBadge } from './project-badge';
@@ -29,7 +30,21 @@ import { IssueParentIndicator } from './issue-parent-indicator';
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { IssueContextMenu } from './issue-context-menu';
 
-export function IssueLine({ issue, layoutId = false }: { issue: Issue; layoutId?: boolean }) {
+/**
+ * One issue row of the list. `subProjectGroupId` is the sub project of the group the row is
+ * listed in when grouping by sub project; that one is left out of the Sub projects cell.
+ * VI: Một dòng issue của danh sách. `subProjectGroupId` là sub project của nhóm chứa dòng khi
+ * VI: group theo sub project; sub project đó không hiện trong ô Sub projects.
+ */
+export function IssueLine({
+   issue,
+   layoutId = false,
+   subProjectGroupId,
+}: {
+   issue: Issue;
+   layoutId?: boolean;
+   subProjectGroupId?: string;
+}) {
    const { orgId } = useParams<{ orgId: string }>();
    const pathname = usePathname();
    const columns = useIssueColumns();
@@ -49,7 +64,7 @@ export function IssueLine({ issue, layoutId = false }: { issue: Issue; layoutId?
          case 'subProjects':
             return (
                <FittedChips
-                  items={issue.subProjectLabels ?? []}
+                  items={otherSubProjects(issue.subProjectLabels ?? [], subProjectGroupId)}
                   render={(shown) => <SubProjectBadge labels={shown} />}
                />
             );

@@ -158,6 +158,7 @@ export const messages = {
    'Edit labels': 'Sửa nhãn',
    'No workspace labels yet': 'Workspace chưa có nhãn',
    'Sub projects': 'Sub project',
+   'Other sub projects': 'Sub project khác',
    'Edit sub projects': 'Sửa sub project',
    'No sub projects in this project yet': 'Dự án chưa có sub project',
    'Add them in Project settings.': 'Thêm trong Project settings.',
