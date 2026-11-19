@@ -37,6 +37,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import { AssigneeUser } from '../assignee-user';
 import { LabelBadge } from '../label-badge';
 import { SubProjectBadge } from '../sub-project-badge';
@@ -75,6 +76,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
  */
 export function IssuePropertiesPanel({ issue, reviews }: IssuePropertiesPanelProps) {
    const tx = useMessages(messages);
+   const router = useRouter();
+   const route = useParams<{ orgId: string }>();
 
    const {
       cycles,
@@ -93,6 +96,7 @@ export function IssuePropertiesPanel({ issue, reviews }: IssuePropertiesPanelPro
       updateIssueReporter,
       updateIssueSubProjects,
       updateIssueMilestone,
+      moveIssue,
    } = useIssuesStore();
    const [scheduleOpen, setScheduleOpen] = useState(false);
    const [startDate, setStartDate] = useState('');
@@ -149,11 +153,36 @@ export function IssuePropertiesPanel({ issue, reviews }: IssuePropertiesPanelPro
          ? `${formatDay(issue.startDate)} → ${formatDay(issue.targetDate)}`
          : tx('Set start and target dates');
 
+   // The picker lists every readable project of the workspace. A project of another team is
+   // joined by moving the issue to that team in one request, which renumbers it, maps its status
+   // and drops its cycle and parent, so the person confirms first and the page follows the new key.
+   // VI: Picker liệt kê mọi dự án đọc được của workspace. Dự án của team khác được gắn bằng cách
+   // VI: chuyển issue sang team đó trong một request, việc này đánh số lại, ánh xạ trạng thái và gỡ
+   // VI: cycle, task cha, nên người dùng xác nhận trước và trang chuyển theo mã mới.
    const setProject = async (projectId: string | null) => {
-      await updateIssueProject(
-         issue.id,
-         projectId ? projects.find((candidate) => candidate.id === projectId) : undefined
-      );
+      const project = projectId
+         ? projects.find((candidate) => candidate.id === projectId)
+         : undefined;
+      if (!project?.teamId || project.teamId === issue.teamId) {
+         await updateIssueProject(issue.id, project);
+         return;
+      }
+      if (
+         !window.confirm(
+            tx(
+               'Move {identifier} to the team of {project}? It gets a new identifier, a matching status of that team, and leaves its cycle and parent.',
+               { identifier: issue.identifier, project: project.name }
+            )
+         )
+      )
+         return;
+      try {
+         const moved = await moveIssue(issue.id, project.teamId, project.id);
+         router.replace(`/${route.orgId}/issue/${moved.identifier}`);
+         toast.success(tx('Moved as {identifier}', { identifier: moved.identifier }));
+      } catch (caught) {
+         toast.error(caught instanceof Error ? caught.message : tx('Could not move issue.'));
+      }
    };
 
    // Only the type is sent, so bug fields survive a switch to Task/Epic and back.

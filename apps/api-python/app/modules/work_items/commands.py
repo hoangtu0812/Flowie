@@ -300,8 +300,8 @@ MOVE_ISSUE_UPDATE_ISSUES_2 = text(
     '''UPDATE issues
                SET team_id = :team_id, status_id = :status_id, identifier = :identifier,
                    number = :number, parent_issue_id = NULL,
-                   project_id = CASE WHEN :clear_project THEN NULL ELSE project_id END,
-                   milestone_id = CASE WHEN :clear_project THEN NULL ELSE milestone_id END,
+                   project_id = :project_id,
+                   milestone_id = CASE WHEN :project_changed THEN NULL ELSE milestone_id END,
                    updated_at = :now
                WHERE id = :issue_id AND workspace_id = :workspace_id'''
 )

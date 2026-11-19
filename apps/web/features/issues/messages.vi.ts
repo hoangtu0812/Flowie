@@ -172,6 +172,10 @@ export const messages = {
    'Add to project': 'Thêm vào dự án',
    'No project': 'Chưa có dự án',
    'No projects in this workspace': 'Workspace này chưa có dự án',
+   'Move {identifier} to the team of {project}? It gets a new identifier, a matching status of that team, and leaves its cycle and parent.':
+      'Chuyển {identifier} sang team của {project}? Task sẽ có mã mới, trạng thái tương ứng của team đó, và rời cycle cùng task cha.',
+   'Moved as {identifier}': 'Đã chuyển thành {identifier}',
+   'Could not move issue.': 'Không chuyển được task.',
    'Blocked by': 'Bị chặn bởi',
    'Related': 'Liên quan',
    'Diffs': 'Thay đổi',

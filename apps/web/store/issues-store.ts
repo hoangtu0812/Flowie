@@ -98,7 +98,7 @@ type NativeIssueStatus = {
 
 type NativeIssueOptions = {
    statuses: NativeIssueStatus[];
-   projects: Array<{ id: string; name: string }>;
+   projects: Array<{ id: string; name: string; teamId?: string | null }>;
    members: Array<{
       id: string;
       name: string;
@@ -277,7 +277,7 @@ function asMember(native: NativeIssueOptions['members'][number]): User {
 }
 
 function asProjectOption(native: NativeIssueOptions['projects'][number]): Project {
-   return { id: native.id, name: native.name, icon: Box } as Project;
+   return { id: native.id, name: native.name, icon: Box, teamId: native.teamId ?? '' } as Project;
 }
 
 interface FilterOptions {
@@ -389,7 +389,7 @@ interface IssuesState {
    updateIssueTitle: (issueId: string, title: string) => Promise<Issue>;
    updateIssueDescription: (issueId: string, description: string) => Promise<Issue>;
    setIssueParent: (issueId: string, parentIssueId: string | null) => Promise<Issue>;
-   moveIssue: (issueId: string, teamId: string | null) => Promise<Issue>;
+   moveIssue: (issueId: string, teamId: string | null, projectId?: string) => Promise<Issue>;
    classifyIssue: (
       issueId: string,
       resolution: 'DUPLICATE' | 'WONT_FIX',
@@ -596,7 +596,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
          );
          const [options, joined] = await Promise.all([
             authenticatedFetch(
-               `${api}/issues/options?${new URLSearchParams({ workspaceId: workspace.id, ...(native.teamId ? { teamId: native.teamId } : { noTeam: 'true' }) })}`
+               `${api}/issues/options?${new URLSearchParams({ workspaceId: workspace.id, allProjects: 'true', ...(native.teamId ? { teamId: native.teamId } : { noTeam: 'true' }) })}`
             ).then(responseData<NativeIssueOptions>),
             loadJoinedWorkspaceTeams(),
          ]);
@@ -1294,12 +1294,12 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
       return issue;
    },
 
-   moveIssue: async (issueId, teamId) => {
+   moveIssue: async (issueId, teamId, projectId) => {
       const workspaceId = get().workspaceId ?? (await loadCurrentWorkspace()).id;
       const response = await authenticatedFetch(`${api}/issues/${issueId}/move`, {
          method: 'POST',
          headers: { 'content-type': 'application/json' },
-         body: JSON.stringify({ workspaceId, teamId }),
+         body: JSON.stringify({ workspaceId, teamId, projectId }),
       });
       if (!response.ok) {
          const body = (await response.json().catch(() => null)) as { message?: string } | null;
