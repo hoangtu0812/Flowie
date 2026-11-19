@@ -462,6 +462,67 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             [],
         )
 
+    async def test_issues_without_project_are_searchable_and_readable(self):
+        # noProject finds team-level issues for a workspace-wide connection, get_issue_context
+        # reads them with projectId null; another team's issue and project-bound connections
+        # stay blind, and project-only filters cannot be mixed in.
+        # VI: noProject tìm được issue cấp team với kết nối toàn workspace, get_issue_context đọc
+        # VI: được với projectId null; issue của team khác và kết nối giới hạn dự án vẫn không
+        # VI: thấy, và không được trộn bộ lọc chỉ dành cho dự án.
+        async with self.factory() as db:
+            loose = (
+                await create_issue(
+                    CreateIssueInput(
+                        workspaceId=self.workspace, teamId=self.team,
+                        statusId=self.status, title="Team-level chore",
+                    ),
+                    self.user, db,
+                )
+            )["data"]
+            # The caller is not a member of the private team, so its issue stays out of scope.
+            # VI: Người gọi không là thành viên team private nên issue của team đó nằm ngoài phạm vi.
+            private = {"id": cuid(), "identifier": "PRIVATE-1"}
+            await db.execute(
+                text("""INSERT INTO issues (id,workspace_id,team_id,status_id,identifier,number,title,
+                priority,creator_id,created_at,updated_at) VALUES (:id,:workspace,:team,:status,
+                :identifier,1,'Private team chore','NONE',:user,:now,:now)"""),
+                {
+                    **private, "workspace": self.workspace, "team": self.private_team,
+                    "status": self.status, "user": self.user["id"], "now": utcnow(),
+                },
+            )
+            wide = await create(
+                db, self.workspace, self.user, ConnectionInput(name="All projects", scopes=sorted(ALL_SCOPES))
+            )
+            wide_principal = await authenticate(db, wide["token"])
+            await db.commit()
+
+        async def wide_call(name, **arguments):
+            return await self.application.call(wide_principal, name, arguments)
+
+        found = await wide_call("search_issues", noProject=True)
+        self.assertEqual([item["id"] for item in found["items"]], [loose["id"]])
+        self.assertIsNone(found["items"][0]["projectId"])
+        scoped = await wide_call("search_issues", noProject=True, teamId=self.team)
+        self.assertEqual([item["id"] for item in scoped["items"]], [loose["id"]])
+        context = await wide_call("get_issue_context", issueId=loose["identifier"])
+        self.assertEqual(context["issue"]["title"], "Team-level chore")
+        self.assertIsNone(context["issue"]["projectId"])
+        for name, args in [
+            ("get_issue", {"issueId": private["identifier"]}),
+            ("get_issue_context", {"issueId": private["identifier"]}),
+        ]:
+            with self.subTest(tool=name), self.assertRaises(ApiError) as hidden:
+                await wide_call(name, **args)
+            self.assertEqual(hidden.exception.status_code, 404)
+        self.assertEqual((await self.call("search_issues", noProject=True))["items"], [])
+        with self.assertRaises(ApiError) as bound:
+            await self.call("get_issue", issueId=loose["identifier"])
+        self.assertEqual(bound.exception.status_code, 404)
+        with self.assertRaises(ApiError) as mixed:
+            await wide_call("search_issues", noProject=True, projectId=self.project)
+        self.assertIn("noProject cannot be combined", mixed.exception.message)
+
     async def test_comment_retries_and_version_conflicts(self):
         args = {
             "issueId": self.issue["id"],
