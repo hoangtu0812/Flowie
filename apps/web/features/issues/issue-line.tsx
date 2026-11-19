@@ -14,6 +14,7 @@ import {
    type IssueColumnKey,
 } from './issue-columns';
 import { IssueDateCell, IssueEffortCell } from './issue-inline-cells';
+import { FittedChips } from './fitted-chips';
 import { LabelBadge } from './label-badge';
 import { SubProjectBadge } from './sub-project-badge';
 import { MilestoneBadge } from './milestone-badge';
@@ -43,28 +44,15 @@ export function IssueLine({ issue, layoutId = false }: { issue: Issue; layoutId?
       switch (key) {
          case 'labels':
             return (
-               <>
-                  <LabelBadge label={issue.labels.slice(0, 1)} />
-                  {issue.labels.length > 1 && (
-                     <span className="text-xs text-muted-foreground shrink-0">
-                        +{issue.labels.length - 1}
-                     </span>
-                  )}
-               </>
+               <FittedChips items={issue.labels} render={(shown) => <LabelBadge label={shown} />} />
             );
-         case 'subProjects': {
-            const subProjects = issue.subProjectLabels ?? [];
+         case 'subProjects':
             return (
-               <>
-                  <SubProjectBadge labels={subProjects.slice(0, 1)} />
-                  {subProjects.length > 1 && (
-                     <span className="text-xs text-muted-foreground shrink-0">
-                        +{subProjects.length - 1}
-                     </span>
-                  )}
-               </>
+               <FittedChips
+                  items={issue.subProjectLabels ?? []}
+                  render={(shown) => <SubProjectBadge labels={shown} />}
+               />
             );
-         }
          case 'milestone':
             return issue.milestone && <MilestoneBadge milestone={issue.milestone} />;
          case 'project':
