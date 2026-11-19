@@ -72,6 +72,30 @@ def test_teams_message_carries_embed_content():
     assert card['actions'][0]['url'] == 'https://flowie.example/ws/issue/DTD-1'
 
 
+def test_teams_message_shows_a_short_plain_preview_of_markdown():
+    # Newlines are already collapsed by the notification excerpt, as in production.
+    # VI: Xuống dòng đã bị gộp bởi excerpt của thông báo, giống production.
+    description = ' '.join(
+        '## Việc cần admin làm\n1. Gỡ role **AcrPush** khỏi `sp-ci`\n- Xem [hướng dẫn](https://x.example/doc)\n'
+        '> ghi chú\n```bash\naz role assignment delete\n```\n'.split()
+    )
+    card = teams_message({'title': 'DTD-966 · Admin', 'description': description + ' tail' * 100})
+    preview = card['attachments'][0]['content']['body'][1]['text']
+    assert preview.startswith(
+        'Việc cần admin làm Gỡ role AcrPush khỏi sp-ci Xem hướng dẫn ghi chú az role assignment delete tail'
+    )
+    assert len(preview) <= 200 and preview.endswith('…')
+    for raw in ['#', '**', '`', '](', '> ', '- ', '1. ']:
+        assert raw not in preview, raw
+    assert teams_message({'description': 'a-b x_y 2.0'})['attachments'][0]['content']['body'][1]['text'] == 'a-b x_y 2.0'
+
+
+def test_teams_message_keeps_markdown_when_asked():
+    text = '- **High** [Title](https://x.example)'
+    card = teams_message({'title': 'News', 'description': text}, markdown=True)
+    assert card['attachments'][0]['content']['body'][1]['text'] == text
+
+
 def test_outbox_delivers_card_to_each_teams_channel():
     client = MagicMock()
     client.post = AsyncMock(return_value=MagicMock(raise_for_status=MagicMock()))

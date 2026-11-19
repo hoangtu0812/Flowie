@@ -277,5 +277,6 @@ def news_card(
     if len(items) > CARD_ITEMS:
         lines.append(f'+{len(items) - CARD_ITEMS} more')
     return teams_message(
-        {'title': f'📰 {category}: {len(items)} new', 'description': '\n'.join(lines), 'url': app_url}
+        {'title': f'📰 {category}: {len(items)} new', 'description': '\n'.join(lines), 'url': app_url},
+        markdown=True,
     )
