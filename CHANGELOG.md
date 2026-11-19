@@ -36,7 +36,7 @@ pull request and commit references, which are for us.
 
 ### Fixed
 
-- The browser regression check for milestones passes again: it looked for the issue title as any text and matched a hidden element, so every run since milestones were added failed on all browsers. It now checks the issue's row link and also recovers when an earlier failed attempt left a milestone on the issue. No deploy needed.
+- The browser regression check for milestones passes again: it looked for the issue title as any text and matched a hidden element, so every run since milestones were added failed on all browsers. It now checks the issue's row link and also recovers when an earlier failed attempt left a milestone on the issue. No deploy needed. (#315)
   VI: Bài kiểm tra trình duyệt cho milestone chạy đạt trở lại: trước đây nó tìm tiêu đề task như văn bản bất kỳ và trúng một phần tử bị ẩn, nên mọi lần chạy kể từ khi có milestone đều lỗi trên mọi trình duyệt. Giờ bài kiểm tra dùng link của dòng task, và vẫn chạy được khi lần chạy lỗi trước để lại milestone trên task. Không cần deploy.
 - The Labels and Sub projects columns of the issue list show as many chips as fit the column's width, so widening a column reveals more and narrowing it folds the rest into "+N". Hovering "+N" lists the hidden names. Rebuild `web`. (DTD-962, #312)
   VI: Cột Labels và Sub projects trong danh sách task hiện số chip vừa với độ rộng cột, nên kéo rộng cột thì thấy thêm chip, thu hẹp thì phần còn lại gộp vào "+N". Rê chuột lên "+N" sẽ thấy tên các mục bị ẩn. Build lại `web`.
