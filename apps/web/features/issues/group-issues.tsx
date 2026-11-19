@@ -41,6 +41,9 @@ export function GroupIssues({ group, issues, count }: GroupIssuesProps) {
    const manual = useDisplaySettingsStore(
       (state) => state.ordering === 'manual' && !state.columnSorts?.length
    );
+   const subProjectGroupId = useDisplaySettingsStore((state) =>
+      state.grouping === 'subProject' ? group.id : undefined
+   );
    const [orderedIssues, setOrderedIssues] = useState(issues);
    useEffect(() => setOrderedIssues(issues), [issues]);
    const { workspaceId, retryIssues } = useIssuesStore();
@@ -145,7 +148,11 @@ export function GroupIssues({ group, issues, count }: GroupIssuesProps) {
                            }
                            refresh={retryIssues}
                         >
-                           <IssueLine issue={issue} layoutId={true} />
+                           <IssueLine
+                              issue={issue}
+                              layoutId={true}
+                              subProjectGroupId={subProjectGroupId}
+                           />
                         </ReorderRow>
                      ))}
                   </div>

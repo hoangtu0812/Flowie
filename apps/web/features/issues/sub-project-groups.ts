@@ -41,3 +41,13 @@ export function groupBySubProject<
    );
    return none.issues.length ? [...named, none] : named;
 }
+
+/**
+ * Sub projects of an issue other than the one of the group it is listed in, for the
+ * "Other sub projects" column; without a group id every sub project is kept.
+ * VI: Các sub project của issue khác với sub project của nhóm đang chứa nó, cho cột
+ * VI: "Other sub projects"; không có id nhóm thì giữ mọi sub project.
+ */
+export function otherSubProjects<T extends { id: string }>(labels: T[], groupId?: string): T[] {
+   return groupId ? labels.filter((label) => label.id !== groupId) : labels;
+}

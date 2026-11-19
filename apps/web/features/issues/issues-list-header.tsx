@@ -26,7 +26,7 @@ import { useDisplaySettingsStore } from '@/store/display-settings-store';
 import type { ColumnSortKey } from '@/features/issues/column-sorting';
 import {
    ISSUE_COLUMN,
-   ISSUE_COLUMN_LABEL,
+   issueColumnLabel,
    issueColumnWidthLimit,
    moveIssueColumn,
    resizeIssueColumn,
@@ -185,7 +185,8 @@ function SortableHeader({
    width: number;
 }) {
    const tx = useMessages(messages);
-   const label = tx(ISSUE_COLUMN_LABEL[column]);
+   const grouping = useDisplaySettingsStore((state) => state.grouping);
+   const label = tx(issueColumnLabel(column, grouping));
    const { ref, isDragSource } = useSortable({
       id: column,
       index,
@@ -243,6 +244,7 @@ const HEADER_SENSORS = [
 
 export function IssuesListHeader() {
    const tx = useMessages(messages);
+   const grouping = useDisplaySettingsStore((state) => state.grouping);
    const { visible, order, widths } = useIssueColumns();
    const shown = order.filter((column) => visible[column]);
    return (
@@ -282,7 +284,7 @@ export function IssuesListHeader() {
                         className="flex h-8 items-center rounded-md border bg-popover px-2 text-xs text-foreground shadow-lg"
                         style={{ width: widths[column] }}
                      >
-                        {tx(ISSUE_COLUMN_LABEL[column])}
+                        {tx(issueColumnLabel(column, grouping))}
                      </div>
                   ) : null;
                }}
