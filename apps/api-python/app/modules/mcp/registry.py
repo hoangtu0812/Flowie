@@ -116,14 +116,14 @@ DEFINITIONS = (
     ),
     ToolDefinition(
         "search_issues",
-        "Search tasks and bugs by project, label, sub project, milestone, state, assignee and dates.",
+        "Search tasks and bugs by project, label, sub project, milestone, state, assignee and dates. noProject=true returns only issues filed under no project (team-level work); a connection bound to projects never sees those.",
         c.SearchIssuesInput,
         "issues:read",
         "issues",
     ),
     ToolDefinition(
         "get_issue",
-        "Read an issue by ID or workspace issue identifier.",
+        "Read an issue by ID or workspace issue identifier, including one filed under no project (projectId is then null).",
         c.IssueInput,
         "issues:read",
         "issue",
@@ -137,7 +137,7 @@ DEFINITIONS = (
     ),
     ToolDefinition(
         "get_issue_context",
-        "Read an issue with independently authorized comments, documents, reviews and relations.",
+        "Read an issue with independently authorized comments, documents, reviews and relations; an issue filed under no project returns projectId null.",
         c.IssueContextInput,
         "issues:read",
         "context",

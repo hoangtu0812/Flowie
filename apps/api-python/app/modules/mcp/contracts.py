@@ -93,6 +93,23 @@ class SearchIssuesInput(PageInput):
     updatedAfter: datetime | None = None
     updatedBefore: datetime | None = None
     overdue: bool = False
+    # Only issues filed under no project (team-level work). Project-bound connections never see
+    # them, so for those the result is empty rather than an error.
+    # VI: Chỉ issue chưa gắn project (việc cấp team). Kết nối giới hạn dự án không bao giờ thấy
+    # VI: các issue này, nên với kết nối đó kết quả rỗng thay vì báo lỗi.
+    noProject: bool = False
+
+    @model_validator(mode="after")
+    def project_filters_need_a_project(self):
+        # Sub projects and milestones belong to one project, so they cannot match a project-less
+        # issue; rejecting the mix tells the agent instead of returning a silent empty page.
+        # VI: Sub project và milestone thuộc một dự án nên không thể khớp issue không có dự án;
+        # VI: từ chối tổ hợp này để agent biết thay vì trả về trang rỗng im lặng.
+        if self.noProject and (self.projectId or self.subProjectLabelId or self.milestoneId):
+            raise ValueError(
+                "noProject cannot be combined with projectId, subProjectLabelId or milestoneId."
+            )
+        return self
 
 
 class IssueInput(StrictInput):

@@ -360,6 +360,8 @@ class QueryService:
                 "EXISTS(SELECT 1 FROM issue_sub_project_labels isl WHERE isl.issue_id=i.id AND isl.label_id=:sub_project)"
             )
             params["sub_project"] = payload.subProjectLabelId
+        if payload.noProject:
+            filters.append("i.project_id IS NULL")
         if payload.milestoneId:
             filters.append("i.milestone_id=:milestone")
             params["milestone"] = payload.milestoneId
