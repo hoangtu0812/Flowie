@@ -32,7 +32,7 @@ pull request and commit references, which are for us.
 
 ### Fixed
 
-- The Project picker on an issue page lists every project of the workspace you can read, so an issue without a team or project (for example `WS_25`) can be added to one. Choosing a project of another team asks for confirmation, then moves the issue to that team and into the project in one step: it gets that team's identifier and a matching status, leaves its cycle and parent, and drops the old project's sub projects and milestone. Rebuild `api` and `web`. (DTD-957)
+- The Project picker on an issue page lists every project of the workspace you can read, so an issue without a team or project (for example `WS_25`) can be added to one. Choosing a project of another team asks for confirmation, then moves the issue to that team and into the project in one step: it gets that team's identifier and a matching status, leaves its cycle and parent, and drops the old project's sub projects and milestone. Rebuild `api` and `web`. (DTD-957, #311)
   VI: Ô chọn Project ở trang task liệt kê mọi dự án trong workspace mà bạn xem được, nên task chưa có team hay dự án (ví dụ `WS_25`) có thể được thêm vào một dự án. Chọn dự án của team khác sẽ hỏi xác nhận, rồi chuyển task sang team đó và vào dự án trong một bước: task nhận mã của team đó và trạng thái tương ứng, rời cycle và task cha, bỏ sub project và milestone của dự án cũ. Build lại `api` và `web`.
 
 ## [0.24.0] — 2026-11-18 08:43 +07
