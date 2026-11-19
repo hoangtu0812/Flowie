@@ -49,8 +49,11 @@ test('issues carry a milestone of their project and the project shows its progre
       await saved;
    };
 
+   // A failed earlier attempt may have left its own milestone on the issue, so the picker opens
+   // from either label. VI: Lần chạy lỗi trước có thể để lại milestone của nó trên issue, nên picker
+   // mở được từ cả hai nhãn.
    await page.goto(`/${fixture.slug}/issue/${issue.identifier}`);
-   await page.getByRole('button', { name: 'Add to milestone' }).click();
+   await page.getByRole('button', { name: /^(Add to milestone|Beta \d+)$/ }).click();
    await pick(title);
    await page.reload();
    await expect(page.getByRole('button', { name: title })).toBeVisible();
@@ -60,7 +63,9 @@ test('issues carry a milestone of their project and the project shows its progre
    await expect(page.getByRole('progressbar', { name: `${title} progress` })).toBeVisible();
    await row.click();
    await expect(page).toHaveURL(/\/issues\?filters=/);
-   await expect(page.getByText(issue.title).first()).toBeVisible();
+   // The row link, not any text: a hidden element elsewhere also carries the title.
+   // VI: Dùng link của dòng, không dùng text bất kỳ: một phần tử ẩn ở chỗ khác cũng chứa tiêu đề.
+   await expect(page.getByRole('link', { name: issue.title, exact: true })).toBeVisible();
 
    await page.goto(`/${fixture.slug}/issue/${issue.identifier}`);
    await page.getByRole('button', { name: title }).click();
