@@ -14,13 +14,20 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ...core.clock import utcnow
 from ...core.errors import ApiError
 from .commands import (
     REPLACE_SUB_PROJECTS_DELETE_ISSUE_SUB_PROJECT_LABELS,
     REPLACE_SUB_PROJECTS_INSERT_ISSUE_SUB_PROJECT_LABELS,
+    TOUCH_ISSUE_UPDATE_ISSUES,
 )
-from .issue_activity import _transition
-from .queries import SUB_PROJECT_LABELS_SELECT_SUB_PROJECT_LABELS
+from .issue_activity import _transition, _write_activity
+from .queries import (
+    CURRENT_SUB_PROJECTS_SELECT,
+    INHERITED_SUB_PROJECTS_SELECT,
+    INHERITING_CHILDREN_SELECT,
+    SUB_PROJECT_LABELS_SELECT_SUB_PROJECT_LABELS,
+)
 
 
 async def validate_sub_projects(
@@ -86,3 +93,60 @@ async def replace_sub_projects(
         ", ".join(label["name"] for label in current),
         ", ".join(label["name"] for label in target),
     )
+
+
+async def inherited_sub_projects(
+    db: AsyncSession, parent_id: str | None, project_id: str | None
+) -> list[dict[str, Any]]:
+    """Sub projects an inheriting issue takes from `parent_id`: the parent's ones that belong to
+    the issue's own project, so a parent in another project (or no parent/project) gives none.
+    VI: Sub project mà issue kế thừa lấy từ `parent_id`: các sub project của parent thuộc chính
+    VI: dự án của issue, nên parent ở dự án khác (hoặc không có parent/dự án) cho danh sách rỗng.
+    """
+    if not parent_id or not project_id:
+        return []
+    rows = await db.execute(
+        INHERITED_SUB_PROJECTS_SELECT, {"parent_id": parent_id, "project_id": project_id}
+    )
+    return [dict(row) for row in rows.mappings()]
+
+
+async def cascade_sub_projects(
+    db: AsyncSession, workspace_id: str, issue_id: str, actor_id: str
+) -> None:
+    """Copies the sub projects of `issue_id` down to its inheriting sub-issues, level by level.
+
+    Each changed sub-issue gets its updated_at touched (the version trigger bumps it) and an
+    "issue.updated" activity; a sub-issue whose set did not change stops the walk on its branch,
+    since its own inheriting children already match it. Independent sub-issues are never read.
+    VI: Sao chép sub project của `issue_id` xuống các sub-issue đang kế thừa, từng bậc một. Mỗi
+    VI: sub-issue bị đổi được chạm updated_at (trigger tăng version) và có activity
+    VI: "issue.updated"; sub-issue không đổi thì dừng nhánh đó, vì các con kế thừa của nó vốn đã
+    VI: khớp. Sub-issue độc lập không bao giờ bị đọc tới.
+    """
+    queue, seen = [issue_id], {issue_id}
+    while queue:
+        parent_id = queue.pop(0)
+        children = (
+            await db.execute(INHERITING_CHILDREN_SELECT, {"parent_id": parent_id})
+        ).mappings().all()
+        for child in children:
+            if child["id"] in seen:
+                continue
+            seen.add(child["id"])
+            current = [
+                dict(row)
+                for row in (
+                    await db.execute(CURRENT_SUB_PROJECTS_SELECT, {"issue_id": child["id"]})
+                ).mappings()
+            ]
+            target = await inherited_sub_projects(db, parent_id, child["project_id"])
+            change = await replace_sub_projects(db, child["id"], current, target)
+            if change is None:
+                continue
+            await db.execute(TOUCH_ISSUE_UPDATE_ISSUES, {"issue_id": child["id"], "now": utcnow()})
+            await _write_activity(db, workspace_id, child["id"], actor_id, "issue.updated", {
+                "fields": ["subProjectLabelIds"],
+                "changes": [{"field": "Sub projects", "change": change}],
+            })
+            queue.append(child["id"])

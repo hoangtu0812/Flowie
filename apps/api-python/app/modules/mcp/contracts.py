@@ -247,6 +247,11 @@ class UpdateIssueTool(VersionInput, IssueInput, BugUpdateFields):
     # Replaces the list; changing projectId alone drops the old project's sub projects.
     # VI: Thay cả danh sách; chỉ đổi projectId thì gỡ sub project của dự án cũ.
     subProjectLabelIds: list[str] | None = Field(default=None, max_length=100)
+    # True: take the parent's sub projects again and follow its changes; false: keep the current
+    # ones as the issue's own. subProjectLabelIds already makes the issue independent.
+    # VI: True: lấy lại sub project của parent và theo các thay đổi của nó; false: giữ danh sách
+    # VI: hiện tại làm của riêng. subProjectLabelIds đã tự chuyển issue sang độc lập.
+    subProjectsInherited: bool | None = None
     # Null removes it; changing projectId alone drops the old project's milestone.
     # VI: Null để gỡ; chỉ đổi projectId thì gỡ milestone của dự án cũ.
     milestoneId: str | None = Field(default=None, max_length=100)

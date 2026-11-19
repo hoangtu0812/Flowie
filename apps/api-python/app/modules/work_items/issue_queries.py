@@ -157,6 +157,7 @@ def _present_issue(row, labels, cycles, releases, user_id):
         "updatedAt": row["updated_at"],
         "version": row.get("version", 1),
         "subIssueSort": row.get("sub_issue_sort", "manual"),
+        "subProjectsInherited": bool(row.get("sub_projects_inherited", False)),
         "team": {
             "id": row["team_id_value"],
             "name": row["team_name"],
