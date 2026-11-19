@@ -9,6 +9,7 @@ Microsoft Entra sign-in is configured, because the feature is scoped to
 organizations that already run Flowie inside their Microsoft tenant.
 """
 
+import re
 from typing import Any
 from urllib.parse import urlparse
 
@@ -49,8 +50,52 @@ def masked_webhook(value: str) -> str:
     return f'{value[:32]}••••{value[-6:]}'
 
 
-def teams_message(embed: dict[str, Any]) -> dict[str, Any]:
-    """Render the shared notification embed as a Teams Adaptive Card message."""
+PREVIEW_LIMIT = 200
+
+# Markdown syntax a TextBlock would otherwise show raw or as large text. The
+# description usually arrives with its newlines already collapsed into spaces,
+# so block markers (heading, quote, list) are matched at the start of any word.
+# VI: Cú pháp Markdown mà TextBlock sẽ hiện thô hoặc thành chữ to. Description
+# VI: thường đến với xuống dòng đã gộp thành dấu cách, nên ký hiệu khối
+# VI: (heading, quote, list) được bắt ở đầu bất kỳ từ nào.
+_MARKDOWN = [
+    (re.compile(r'```\w*'), ' '),
+    (re.compile(r'!?\[([^\]]*)\]\([^)]*\)'), r'\1'),
+    (re.compile(r'(^|\s)(?:#{1,6}|>|[-*+]|\d+[.)])(?=\s)'), r'\1'),
+    (re.compile(r'\*\*|__|~~|`'), ''),
+]
+
+
+def plain_preview(text: str, limit: int = PREVIEW_LIMIT) -> str:
+    """Return ``text`` as one plain line of at most ``limit`` characters.
+
+    Removes code fences, heading/quote/list markers, bold/strike/code marks and
+    turns ``[text](url)`` into ``text``, then collapses whitespace and cuts with
+    an ellipsis. A single ``*``/``_`` is kept because it only italicises.
+    VI: Trả ``text`` thành một dòng văn bản thường tối đa ``limit`` ký tự.
+    VI: Bỏ code fence, ký hiệu heading/quote/list, in đậm/gạch/code và đổi
+    VI: ``[text](url)`` thành ``text``, rồi gộp khoảng trắng và cắt kèm dấu
+    VI: ba chấm. Giữ ``*``/``_`` đơn vì chúng chỉ làm chữ nghiêng.
+    """
+
+    for pattern, replacement in _MARKDOWN:
+        text = pattern.sub(replacement, text)
+    text = ' '.join(text.split())
+    return text if len(text) <= limit else f'{text[: limit - 1].rstrip()}…'
+
+
+def teams_message(embed: dict[str, Any], *, markdown: bool = False) -> dict[str, Any]:
+    """Render the shared notification embed as a Teams Adaptive Card message.
+
+    The description is reduced to a short plain-text preview so a long issue
+    description or comment cannot turn the card into a wall of raw Markdown
+    and heading-sized text. ``markdown=True`` keeps it as written, for cards
+    that build their description as Markdown on purpose (news digests).
+    VI: Description được rút thành preview văn bản thường ngắn để description
+    VI: hay comment dài không biến card thành khối Markdown thô và chữ cỡ
+    VI: heading. ``markdown=True`` giữ nguyên, cho card cố ý dựng description
+    VI: bằng Markdown (bản tin News).
+    """
 
     body: list[dict[str, Any]] = [
         {'type': 'TextBlock', 'text': embed.get('title') or 'Flowie', 'weight': 'Bolder', 'size': 'Medium', 'wrap': True},
@@ -58,8 +103,11 @@ def teams_message(embed: dict[str, Any]) -> dict[str, Any]:
     author = (embed.get('author') or {}).get('name')
     if author:
         body.append({'type': 'TextBlock', 'text': author, 'isSubtle': True, 'spacing': 'None', 'wrap': True})
-    if embed.get('description'):
-        body.append({'type': 'TextBlock', 'text': embed['description'], 'wrap': True})
+    description = embed.get('description')
+    if description and not markdown:
+        description = plain_preview(description)
+    if description:
+        body.append({'type': 'TextBlock', 'text': description, 'wrap': True})
     facts = [{'title': field['name'], 'value': field['value']} for field in embed.get('fields', [])]
     if facts:
         body.append({'type': 'FactSet', 'facts': facts})
