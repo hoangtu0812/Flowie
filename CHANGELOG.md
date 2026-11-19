@@ -21,7 +21,7 @@ pull request and commit references, which are for us.
 
 ### Added
 
-- The MCP tool `search_issues` accepts `noProject: true` to find issues filed under no project (team-level work) in the teams the connection's user belongs to, and `get_issue` / `get_issue_context` describe that such issues come back with `projectId: null`. Connections bound to projects still never see them. Rebuild `api`. (DTD-955)
+- The MCP tool `search_issues` accepts `noProject: true` to find issues filed under no project (team-level work) in the teams the connection's user belongs to, and `get_issue` / `get_issue_context` describe that such issues come back with `projectId: null`. Connections bound to projects still never see them. Rebuild `api`. (DTD-955, #310)
   VI: Tool MCP `search_issues` nhận `noProject: true` để tìm các issue chưa gắn project (việc cấp team) trong các team mà người dùng của kết nối là thành viên; mô tả của `get_issue` / `get_issue_context` nói rõ các issue này trả về `projectId: null`. Kết nối giới hạn dự án vẫn không thấy chúng. Build lại `api`.
 - The MCP tool `read_attachment_text` also reads XLSX attachments (one section per sheet, first 500 rows and 50 columns) and PDF attachments (text layer, first 300 pages) up to 10 MiB. Scanned and password-protected PDFs are refused with a clear message. Adds the `pypdf` Python dependency: rebuild `api`. (#309)
   VI: Tool MCP `read_attachment_text` đọc thêm được file XLSX đính kèm (mỗi sheet một phần, tối đa 500 dòng và 50 cột đầu) và PDF đính kèm (lớp văn bản, tối đa 300 trang đầu), dung lượng tối đa 10 MiB. PDF dạng scan hoặc có mật khẩu bị từ chối kèm thông báo rõ ràng. Thêm thư viện Python `pypdf`: build lại `api`.
