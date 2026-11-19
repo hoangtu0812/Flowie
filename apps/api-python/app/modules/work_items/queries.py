@@ -839,6 +839,16 @@ def issue_options_select_cycles_sql(teamId) -> TextClause:
 MOVE_ISSUE_SELECT_PROJECTS = text('SELECT team_id FROM projects WHERE id = :project_id')
 
 
+# Destination project of a move: readable by the mover, not archived, and owned by the destination
+# team or by no team, which is the same rule an issue's project follows inside its team.
+# VI: Dự án đích khi chuyển: người chuyển đọc được, chưa lưu trữ và thuộc team đích hoặc không thuộc
+# VI: team nào, đúng quy tắc dự án của issue trong team của nó.
+def move_issue_select_target_project_sql(project_read_scope) -> TextClause:
+    return text(f'''SELECT p.id, p.name FROM projects p WHERE p.id = :project_id
+            AND {project_read_scope(workspace='workspace_id', user='user_id')}
+            AND (p.team_id IS NULL OR p.team_id = :team_id) FOR SHARE OF p''')
+
+
 CLASSIFY_ISSUE_SELECT_ISSUES = text(
     '''SELECT id FROM issues WHERE workspace_id = :workspace_id
                    AND identifier = :identifier AND archived_at IS NULL LIMIT 1'''

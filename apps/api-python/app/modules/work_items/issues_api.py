@@ -47,7 +47,7 @@ from .commands import (
     update_issue_template_update_issue_templates_sql,
 )
 from .contracts import CreateIssueInput, UpdateIssueInput
-from .issue_activity import _write_activity
+from .issue_activity import _transition, _write_activity
 from .issue_hierarchy import issue_ancestors
 from .issue_queries import (
     _relation_summary,
@@ -81,6 +81,7 @@ from .queries import (
     issue_options_select_milestones_sql,
     issue_options_select_projects_sql,
     issue_options_select_sub_project_labels_sql,
+    move_issue_select_target_project_sql,
 )
 
 # Mutations remain staged under the private prefix. Read endpoints are exposed
@@ -119,6 +120,11 @@ class UpdateIssueRelationInput(BaseModel):
 class MoveIssueInput(BaseModel):
     workspaceId: str = Field(min_length=1)
     teamId: str | None = Field(default=None, min_length=1)
+    # Optional project of the destination team to join in the same transaction, so an issue can be
+    # put into another team's project in one step.
+    # VI: Dự án (không bắt buộc) của team đích để gắn trong cùng transaction, nhờ đó issue vào được
+    # VI: dự án của team khác chỉ trong một bước.
+    projectId: str | None = Field(default=None, min_length=1)
 
 
 class ClassifyIssueInput(BaseModel):
@@ -261,6 +267,7 @@ async def issue_options(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
     noTeam: bool = False,
+    allProjects: bool = False,
 ) -> dict[str, dict[str, list[dict[str, Any]]]]:
     await workspace_access(db, workspaceId, user['id'])
     if teamId:
@@ -272,7 +279,13 @@ async def issue_options(
     statuses, projects, members, labels, cycles = await db.execute(
         issue_options_select_issue_statuses_sql(team_filter), params
     ), await db.execute(
-        issue_options_select_projects_sql(project_read_scope, noTeam, teamId), params
+        # allProjects drops the team filter: the issue page lists every readable project, and one of
+        # another team is joined by moving the issue there. List pages and filters keep the filter.
+        # VI: allProjects bỏ lọc theo team: trang issue liệt kê mọi dự án đọc được, dự án của team
+        # VI: khác được gắn bằng cách chuyển issue sang team đó. Trang danh sách và bộ lọc giữ lọc cũ.
+        issue_options_select_projects_sql(
+            project_read_scope, noTeam and not allProjects, None if allProjects else teamId
+        ), params
     ), await db.execute(
         ISSUE_OPTIONS_SELECT_WORKSPACE_MEMBERS, {'workspace_id': workspaceId}
     ), await db.execute(
@@ -323,8 +336,9 @@ async def public_issue_options(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
     noTeam: bool = False,
+    allProjects: bool = False,
 ) -> dict[str, dict[str, list[dict[str, Any]]]]:
-    return await issue_options(workspaceId, teamId, user, db, noTeam)
+    return await issue_options(workspaceId, teamId, user, db, noTeam, allProjects)
 
 
 @router.post('')
@@ -627,11 +641,22 @@ async def move_issue(
     await actor_context(db, user['id'])
     issue = await issue_row(db, issue_id, payload.workspaceId, user['id'])
     if issue['teamId'] == payload.teamId:
+        if payload.projectId:
+            raise ApiError(400, 'The issue is already in this team; change its project instead.', 'Bad Request')
         return {'data': issue}
     # Moving writes to both the source and the target team. VI: Di chuyển ghi vào cả team nguồn lẫn team đích.
     await team_write_role(db, issue['teamId'], user['id'])
     if payload.teamId:
         await team_writer(db, payload.workspaceId, payload.teamId, user['id'])
+    target_project = None
+    if payload.projectId:
+        target_project = (await db.execute(
+            move_issue_select_target_project_sql(project_read_scope),
+            {'project_id': payload.projectId, 'workspace_id': payload.workspaceId,
+             'user_id': user['id'], 'team_id': payload.teamId},
+        )).mappings().first()
+        if not target_project:
+            raise ApiError(404, 'Project not found for the destination team.', 'Not Found')
     from .issue_numbering import allocate_issue_number
     team = await allocate_issue_number(db, payload.workspaceId, payload.teamId)
     status = await db.execute(
@@ -653,8 +678,13 @@ async def move_issue(
         project_team_id = project_team.scalar_one_or_none()
     now = utcnow()
     clear_project = bool(project_team_id and project_team_id != team['id'])
+    # A requested project replaces the old one; otherwise the issue keeps a project that still
+    # fits the destination team. VI: Dự án được yêu cầu thay dự án cũ; nếu không, issue giữ dự án
+    # VI: còn hợp với team đích.
+    project_id = target_project['id'] if target_project else (None if clear_project else issue['projectId'])
+    project_changed = project_id != issue['projectId']
     # Leaving the project also leaves its sub projects. VI: Rời dự án thì cũng rời sub project của nó.
-    if clear_project:
+    if project_changed:
         await db.execute(REPLACE_SUB_PROJECTS_DELETE_ISSUE_SUB_PROJECT_LABELS, {'issue_id': issue_id})
     await db.execute(MOVE_ISSUE_DELETE_ISSUE_CYCLES, {'issue_id': issue_id})
     await db.execute(
@@ -668,7 +698,8 @@ async def move_issue(
             'status_id': destination_status['id'],
             'identifier': team['issue_identifier'],
             'number': team['issue_sequence'],
-            'clear_project': clear_project,
+            'project_id': project_id,
+            'project_changed': project_changed,
             'now': now,
             'issue_id': issue_id,
             'workspace_id': payload.workspaceId,
@@ -679,6 +710,13 @@ async def move_issue(
         'toTeamId': team['id'],
         'identifier': team['issue_identifier'],
     })
+    if target_project and project_changed:
+        await _write_activity(db, payload.workspaceId, issue_id, user['id'], 'issue.updated', {
+            'fields': ['projectId'],
+            'changes': [{'field': 'Project', 'change': _transition(
+                issue['project']['name'] if issue.get('project') else None, target_project['name'],
+            )}],
+        })
     await sync_issue(db, issue_id)
     await db.commit()
     return {'data': await issue_row(db, issue_id, payload.workspaceId, user['id'])}

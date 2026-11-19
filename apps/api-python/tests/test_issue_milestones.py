@@ -157,6 +157,40 @@ async def verify_issue_milestones():
             traveller = await new_issue("Traveller", projectId=project_a, milestoneId=alpha["id"])
             left = (await move_issue(traveller["id"], MoveIssueInput(workspaceId=workspace), owner, db))["data"]
             assert left["projectId"] is None and left["milestoneId"] is None
+
+            # DTD-957: the issue page lists every readable project of the workspace, and an issue
+            # without a team joins another team's project by moving there in one step.
+            # VI: DTD-957: trang issue liệt kê mọi dự án đọc được của workspace, và issue không có
+            # VI: team vào dự án của team khác bằng một bước chuyển sang team đó.
+            private_team, private_project = cuid(), cuid()
+            await db.execute(
+                text(
+                    "INSERT INTO teams(id,workspace_id,name,identifier,created_at,updated_at) VALUES (:id,:workspace,'Private','PRIV',:now,:now)"
+                ),
+                {"id": private_team, "workspace": workspace, "now": now},
+            )
+            await db.execute(
+                text(
+                    "INSERT INTO projects(id,workspace_id,team_id,name,identifier,created_at,updated_at) VALUES (:id,:workspace,:team,:id,:id,:now,:now)"
+                ),
+                {"id": private_project, "workspace": workspace, "team": private_team, "now": now},
+            )
+            team_bound = {row["id"] for row in (await issue_options(workspace, None, owner, db, True))["data"]["projects"]}
+            listed = {row["id"] for row in (await issue_options(workspace, None, owner, db, True, True))["data"]["projects"]}
+            assert project_b not in team_bound and {project_a, project_b} <= listed
+            assert private_project not in listed
+            await expect_error(404, move_issue(
+                traveller["id"], MoveIssueInput(workspaceId=workspace, teamId=team, projectId=private_project), owner, db,
+            ))
+            joined = (await move_issue(
+                traveller["id"], MoveIssueInput(workspaceId=workspace, teamId=team, projectId=project_b), owner, db,
+            ))["data"]
+            assert joined["teamId"] == team and joined["projectId"] == project_b
+            assert joined["identifier"] != traveller["identifier"]
+            assert {"field": "Project", "change": f"— → {project_b}"} in await last_changes(traveller["id"])
+            await expect_error(400, move_issue(
+                traveller["id"], MoveIssueInput(workspaceId=workspace, teamId=team, projectId=project_a), owner, db,
+            ))
             await db.rollback()
     finally:
         await engine.dispose()
