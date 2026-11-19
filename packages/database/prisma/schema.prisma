@@ -1944,6 +1944,9 @@ model Issue {
   /// Sort rule of the sub-issue tree (manual, identifier-asc/desc, status-asc/desc).
   /// VI: Quy tắc sắp xếp cây sub-issue (manual, identifier-asc/desc, status-asc/desc).
   subIssueSort String @default("manual") @map("sub_issue_sort")
+  /// True keeps the sub projects equal to the parent's (copied rows); false lets the issue set its own.
+  /// VI: True giữ sub project bằng của parent (bản sao); false để issue tự gán.
+  subProjectsInherited Boolean @default(false) @map("sub_projects_inherited")
   id                String            @id @default(cuid())
   workspaceId       String            @map("workspace_id")
   teamId            String?           @map("team_id")

@@ -48,7 +48,12 @@ from .queries import (
     UPDATE_ISSUE_SELECT_ISSUES,
     UPDATE_ISSUE_SELECT_ISSUES_2,
 )
-from .sub_projects import replace_sub_projects, validate_sub_projects
+from .sub_projects import (
+    cascade_sub_projects,
+    inherited_sub_projects,
+    replace_sub_projects,
+    validate_sub_projects,
+)
 
 
 async def create_issue(
@@ -71,6 +76,11 @@ async def create_issue(
         db, payload.workspaceId, payload.teamId, None, category,
         parse_date(values.get("targetDate")),
     )
+    # Without an explicit list the issue inherits: as a sub-issue it starts with its parent's sub
+    # projects; the parent check below runs before anything is written.
+    # VI: Không gửi danh sách thì issue kế thừa: là sub-issue thì bắt đầu với sub project của
+    # VI: parent; kiểm tra parent bên dưới chạy trước khi ghi bất cứ gì.
+    inherits_sub_projects = values.get("subProjectLabelIds") is None
     sub_projects = await validate_sub_projects(
         db, values.get("projectId"), values.get("subProjectLabelIds") or [], []
     )
@@ -93,6 +103,10 @@ async def create_issue(
         if parent.scalar_one_or_none() is None:
             raise ApiError(
                 404, "Parent issue was not found for this team.", "Not Found"
+            )
+        if inherits_sub_projects:
+            sub_projects = await inherited_sub_projects(
+                db, values["parentIssueId"], values.get("projectId")
             )
     sequence = await allocate_issue_number(db, payload.workspaceId, payload.teamId)
     identifier = sequence["issue_identifier"]
@@ -134,6 +148,7 @@ async def create_issue(
             "canceled_at": canceled_at,
             "now": now,
             "sla_opt_out": explicit_due,
+            "sub_projects_inherited": inherits_sub_projects,
         },
     )
     if sla_policy:
@@ -282,6 +297,33 @@ async def update_issue(
         )
     elif final_project_id != issue["projectId"]:
         target_sub_projects = []
+    # Sub project mode: an explicit list makes the issue independent; subProjectsInherited sets it.
+    # An inheriting issue with a parent copies the parent's sub projects again when it starts
+    # inheriting, changes parent or changes project; losing its parent keeps what it has.
+    # VI: Chế độ sub project: gửi danh sách thì thành độc lập; subProjectsInherited đặt chế độ.
+    # VI: Issue kế thừa có parent sao chép lại sub project của parent khi bắt đầu kế thừa, đổi
+    # VI: parent hoặc đổi dự án; mất parent thì giữ nguyên những gì đang có.
+    requested_mode = values.pop("subProjectsInherited", None)
+    if requested_mode and "subProjectLabelIds" in values:
+        raise ApiError(
+            400, "Send either subProjectLabelIds or subProjectsInherited: true, not both.",
+            "Bad Request",
+        )
+    was_inheriting = bool(issue.get("subProjectsInherited"))
+    inheriting = (
+        False if "subProjectLabelIds" in values
+        else requested_mode if requested_mode is not None
+        else was_inheriting
+    )
+    final_parent_id = values["parentIssueId"] if "parentIssueId" in values else issue["parentIssueId"]
+    if inheriting and final_parent_id and (
+        not was_inheriting
+        or final_parent_id != issue["parentIssueId"]
+        or final_project_id != issue["projectId"]
+    ):
+        target_sub_projects = await inherited_sub_projects(db, final_parent_id, final_project_id)
+    if inheriting != was_inheriting:
+        values["subProjectsInherited"] = inheriting
     # Same rule for the milestone: checked against the final project, dropped on a project change.
     # VI: Cùng quy tắc cho milestone: kiểm theo dự án sau cùng, gỡ khi đổi dự án.
     milestone_transition = None
@@ -337,6 +379,7 @@ async def update_issue(
         "targetDate": "target_date",
         "dueDate": "due_date",
         "subIssueSort": "sub_issue_sort",
+        "subProjectsInherited": "sub_projects_inherited",
     }
     sets: list[str] = []
     params: dict[str, Any] = {"issue_id": issue_id, "now": utcnow()}
@@ -375,6 +418,8 @@ async def update_issue(
         if target_sub_projects is not None
         else None
     )
+    if sub_project_change:
+        await cascade_sub_projects(db, workspaceId, issue_id, user["id"])
     if "releaseIds" in values:
         await db.execute(
             UPDATE_ISSUE_DELETE_ISSUE_RELEASES,
@@ -449,6 +494,14 @@ async def update_issue(
         changes.append(("Parent", parent_transition))
     if sub_project_change:
         changes.append(("Sub projects", sub_project_change))
+    if "subProjectsInherited" in values:
+        changes.append((
+            "Sub projects mode",
+            _transition(*(
+                ("Independent", "Inherited") if values["subProjectsInherited"]
+                else ("Inherited", "Independent")
+            )),
+        ))
     if milestone_transition:
         changes.append(("Milestone", milestone_transition))
     if "startDate" in values:

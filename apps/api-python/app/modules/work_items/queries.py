@@ -543,6 +543,23 @@ VALIDATE_MILESTONE_SELECT_PROJECT_MILESTONES = text(
 )
 
 
+INHERITED_SUB_PROJECTS_SELECT = text(
+    """SELECT l.id,l.name FROM issue_sub_project_labels isl JOIN sub_project_labels l ON l.id=isl.label_id
+       WHERE isl.issue_id=:parent_id AND l.project_id=:project_id ORDER BY lower(l.name),l.id"""
+)
+
+
+INHERITING_CHILDREN_SELECT = text(
+    "SELECT id,project_id FROM issues WHERE parent_issue_id=:parent_id AND sub_projects_inherited ORDER BY id"
+)
+
+
+CURRENT_SUB_PROJECTS_SELECT = text(
+    """SELECT l.id,l.name FROM issue_sub_project_labels isl JOIN sub_project_labels l ON l.id=isl.label_id
+       WHERE isl.issue_id=:issue_id ORDER BY lower(l.name),l.id"""
+)
+
+
 SUB_PROJECT_LABELS_SELECT_SUB_PROJECT_LABELS = text(
     "SELECT id,name,archived_at FROM sub_project_labels WHERE project_id=:project_id AND id=ANY(CAST(:ids AS text[]))"
 )

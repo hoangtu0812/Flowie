@@ -81,6 +81,7 @@ type NativeIssue = BugFields & {
    project?: { id: string; name: string } | null;
    labelLinks?: { label: LabelInterface }[];
    subProjectLabels?: SubProjectLabel[];
+   subProjectsInherited?: boolean;
    milestone?: IssueMilestone | null;
    cycleLinks?: { cycleId: string }[];
    releaseLinks?: { releaseId: string }[];
@@ -239,6 +240,7 @@ function asIssue(native: NativeIssue): Issue {
       priority,
       labels: (native.labelLinks ?? []).map(({ label }) => label),
       subProjectLabels: native.subProjectLabels ?? [],
+      subProjectsInherited: native.subProjectsInherited ?? false,
       milestone: native.milestone ?? null,
       createdAt: native.createdAt,
       manualOrder: native.manualOrder,
@@ -357,7 +359,12 @@ interface IssuesState {
    removeIssueLabel: (issueId: string, labelId: string) => Promise<boolean>;
    replaceIssueLabels: (issueId: string, labels: LabelInterface[]) => Promise<boolean>;
    /** Replaces the issue's sub projects; the API refuses ids of another project. VI: Thay sub project của issue; API từ chối id của dự án khác. */
-   updateIssueSubProjects: (issueId: string, subProjectLabelIds: string[]) => Promise<Issue>;
+   /**
+    * Sets the issue's own sub projects (making it independent), or with null makes it inherit its
+    * parent's again.
+    * VI: Gán sub project riêng cho issue (thành độc lập), hoặc truyền null để kế thừa lại từ parent.
+    */
+   updateIssueSubProjects: (issueId: string, subProjectLabelIds: string[] | null) => Promise<Issue>;
    /** Sets or clears (null) the milestone; the API refuses another project's one. VI: Đặt hoặc gỡ (null) milestone; API từ chối milestone của dự án khác. */
    updateIssueMilestone: (issueId: string, milestoneId: string | null) => Promise<Issue>;
 
@@ -1201,7 +1208,9 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
          {
             method: 'PATCH',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ subProjectLabelIds }),
+            body: JSON.stringify(
+               subProjectLabelIds ? { subProjectLabelIds } : { subProjectsInherited: true }
+            ),
          }
       );
       if (!response.ok) {

@@ -224,6 +224,15 @@ export function IssuePropertiesPanel({ issue, reviews }: IssuePropertiesPanelPro
    const subProjectChoices = subProjectLabels.filter(
       (label) => label.projectId === issue.project?.id && !label.archivedAt
    );
+   const inheritSubProjects = async () => {
+      try {
+         await updateIssueSubProjects(issue.id, null);
+      } catch (caught) {
+         toast.error(
+            caught instanceof Error ? caught.message : tx('Could not update sub projects.')
+         );
+      }
+   };
    const toggleSubProject = async (labelId: string) => {
       // Read the stored issue, not this render's props, so a toggle right after another keeps it.
       // VI: Đọc issue trong store thay vì props của lần render này, để lần bật ngay sau vẫn giữ lần trước.
@@ -572,6 +581,28 @@ export function IssuePropertiesPanel({ issue, reviews }: IssuePropertiesPanelPro
                      </DropdownMenuContent>
                   </DropdownMenu>
                </div>
+               {/* Sub-issues say whether their sub projects follow the parent; editing them above
+                   makes the issue independent, and the link puts it back on the parent's.
+                   VI: Sub-issue cho biết sub project có theo parent không; sửa ở trên thì thành độc
+                   lập, còn liên kết đưa issue về lại sub project của parent. */}
+               {issue.parentIssueId && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                     {issue.subProjectsInherited ? (
+                        tx('Inherited from parent')
+                     ) : (
+                        <>
+                           {tx('Independent')} ·{' '}
+                           <button
+                              type="button"
+                              className="underline-offset-2 hover:underline hover:text-foreground"
+                              onClick={() => void inheritSubProjects()}
+                           >
+                              {tx('Inherit from parent')}
+                           </button>
+                        </>
+                     )}
+                  </p>
+               )}
             </Section>
          )}
 

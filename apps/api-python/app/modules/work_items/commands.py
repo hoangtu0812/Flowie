@@ -212,13 +212,16 @@ ENSURE_DEFAULT_ISSUE_STATUSES_UPDATE_ISSUE_STATUSES = text(
 )
 
 
+TOUCH_ISSUE_UPDATE_ISSUES = text("UPDATE issues SET updated_at = :now WHERE id = :issue_id")
+
+
 CREATE_ISSUE_INSERT_ISSUES = text(
     """INSERT INTO issues (id, workspace_id, team_id, status_id, project_id, milestone_id, parent_issue_id,
                identifier, number, issue_type, severity, environment, reproduction_steps, expected_result, actual_result, title, description, priority, estimated_effort, actual_effort, start_date, target_date, due_date, creator_id,
-               reporter_id, assignee_id, completed_at, canceled_at, created_at, updated_at,sla_opt_out)
+               reporter_id, assignee_id, completed_at, canceled_at, created_at, updated_at,sla_opt_out,sub_projects_inherited)
                VALUES (:id, :workspace_id, :team_id, :status_id, :project_id, :milestone_id, :parent_issue_id,
                :identifier, :number, :issueType, :severity, :environment, :reproductionSteps, :expectedResult, :actualResult, :title, :description, :priority, :estimated_effort, :actual_effort, :start_date, :target_date, :due_date, :creator_id,
-               :reporter_id, :assignee_id, :completed_at, :canceled_at, :now, :now,:sla_opt_out)"""
+               :reporter_id, :assignee_id, :completed_at, :canceled_at, :now, :now,:sla_opt_out,:sub_projects_inherited)"""
 )
 
 

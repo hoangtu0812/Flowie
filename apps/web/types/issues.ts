@@ -32,6 +32,11 @@ export interface Issue {
    labels: LabelInterface[];
    /** Sub projects of the issue's project. VI: Sub project thuộc dự án của issue. */
    subProjectLabels?: SubProjectLabel[];
+   /**
+    * True while the sub projects follow the parent's; false when the issue sets its own.
+    * VI: True khi sub project theo parent; false khi issue tự gán.
+    */
+   subProjectsInherited?: boolean;
    /** Milestone of the issue's project, or null. VI: Milestone thuộc dự án của issue, hoặc null. */
    milestone?: IssueMilestone | null;
    createdAt: string;

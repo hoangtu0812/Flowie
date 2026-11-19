@@ -27,6 +27,7 @@ from app.modules.portfolio.projects_api import (
 )
 from app.modules.teams.api import TeamMemberRoleInput, update_member
 from app.modules.work_items.contracts import CreateIssueInput, UpdateIssueInput
+from app.modules.work_items.issue_queries import issue_row
 from app.modules.work_items.issue_search import search_page
 from app.modules.work_items.issues import create_issue, update_issue
 from app.modules.work_items.issues_api import MoveIssueInput, issue_options, move_issue
@@ -215,6 +216,63 @@ async def verify_sub_projects():
             )["data"]
             left = (await move_issue(traveller["id"], MoveIssueInput(workspaceId=workspace), owner, db))["data"]
             assert left["projectId"] is None and left["subProjectLabels"] == []
+
+            # DTD-961: a new sub-issue inherits its parent's sub projects, parent changes flow down
+            # through inheriting levels, independent sub-issues are left alone, and the mode can
+            # be switched back. VI: DTD-961: sub-issue mới kế thừa sub project của parent, thay đổi
+            # VI: của parent lan xuống các bậc kế thừa, sub-issue độc lập giữ nguyên, và chế độ
+            # VI: đổi lại được.
+            ops = await new_label(project_a, "Ops")
+            async def new_child(title, parent, **fields):
+                payload = CreateIssueInput(
+                    workspaceId=workspace, teamId=team, projectId=project_a, title=title,
+                    parentIssueId=parent, **fields,
+                )
+                return (await create_issue(payload, owner, db))["data"]
+
+            async def names(issue_id):
+                row = await issue_row(db, issue_id, workspace, owner["id"])
+                return sorted(label["name"] for label in row["subProjectLabels"]), row["subProjectsInherited"]
+
+            root = (await create_issue(CreateIssueInput(
+                workspaceId=workspace, teamId=team, projectId=project_a, title="Root",
+                subProjectLabelIds=[web["id"]],
+            ), owner, db))["data"]
+            assert root["subProjectsInherited"] is False
+            child = await new_child("Child", root["id"])
+            grandchild = await new_child("Grandchild", child["id"])
+            own = await new_child("Own", root["id"], subProjectLabelIds=[ops["id"]])
+            assert await names(child["id"]) == (["Web"], True)
+            assert await names(grandchild["id"]) == (["Web"], True)
+            assert await names(own["id"]) == (["Ops"], False)
+
+            await update_issue(
+                root["id"], UpdateIssueInput(subProjectLabelIds=[web["id"], ops["id"]]), workspace, owner, db
+            )
+            assert await names(child["id"]) == (["Ops", "Web"], True)
+            assert await names(grandchild["id"]) == (["Ops", "Web"], True)
+            assert await names(own["id"]) == (["Ops"], False)
+
+            async def last_changes(issue_id):
+                return (await db.execute(text(
+                    "SELECT data FROM activities WHERE issue_id=:id AND type='issue.updated' ORDER BY created_at DESC LIMIT 1"
+                ), {"id": issue_id})).scalar_one()["changes"]
+
+            assert {"field": "Sub projects", "change": "Web → Ops, Web"} in await last_changes(grandchild["id"])
+
+            # Editing the child makes it independent; the grandchild follows the child.
+            # VI: Sửa child thì child thành độc lập; grandchild theo child.
+            await update_issue(child["id"], UpdateIssueInput(subProjectLabelIds=[web["id"]]), workspace, owner, db)
+            assert await names(child["id"]) == (["Web"], False)
+            assert await names(grandchild["id"]) == (["Web"], True)
+            assert {"field": "Sub projects mode", "change": "Inherited → Independent"} in await last_changes(child["id"])
+            await expect_error(400, update_issue(
+                child["id"], UpdateIssueInput(subProjectLabelIds=[], subProjectsInherited=True), workspace, owner, db
+            ))
+            back = (await update_issue(child["id"], UpdateIssueInput(subProjectsInherited=True), workspace, owner, db))["data"]
+            assert back["subProjectsInherited"] is True
+            assert await names(child["id"]) == (["Ops", "Web"], True)
+            assert await names(grandchild["id"]) == (["Ops", "Web"], True)
             await db.rollback()
     finally:
         await engine.dispose()

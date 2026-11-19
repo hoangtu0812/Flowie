@@ -67,6 +67,11 @@ class UpdateIssueInput(BugUpdateFields):
     # Replaces the whole list; a project change without it drops the old project's sub projects.
     # VI: Thay cả danh sách; đổi dự án mà không gửi trường này thì gỡ sub project của dự án cũ.
     subProjectLabelIds: list[str] | None = Field(default=None, max_length=100)
+    # True makes the issue take its parent's sub projects again (and follow later changes); false
+    # keeps the current ones as its own. Sending subProjectLabelIds already makes it independent.
+    # VI: True để issue lấy lại sub project của parent (và theo các thay đổi sau đó); false giữ
+    # VI: danh sách hiện tại làm của riêng. Gửi subProjectLabelIds đã tự chuyển sang độc lập.
+    subProjectsInherited: bool | None = None
     # Null removes it; a project change without it drops the old project's milestone.
     # VI: Null để gỡ; đổi dự án mà không gửi trường này thì gỡ milestone của dự án cũ.
     milestoneId: str | None = Field(default=None, max_length=100)
