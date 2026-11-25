@@ -16,11 +16,14 @@ from ...services.microsoft_teams import masked_webhook
 from ..access.read_only import ADMIN_READ_ROLES
 from .ai import analyze_workspace
 from .commands import (
+    INSTALL_PRESETS_INSERT_NEWS_SOURCES,
+    INSTALL_PRESETS_UPSERT_NEWS_CATEGORIES,
     NOTIFY_WORKSPACE_UPDATE_NEWS_ITEMS,
     REFRESH_WORKSPACE_INSERT_NEWS_ITEMS,
     REFRESH_WORKSPACE_UPDATE_NEWS_SOURCES,
+    SEED_PRESETS_UPDATE_WORKSPACES,
 )
-from .feeds import fetch_feed, news_card, parse_feed
+from .feeds import NEWS_PRESETS, feed_url, fetch_feed, news_card, parse_feed
 from .queries import (
     DUE_WORKSPACES_SELECT_NEWS_SOURCES,
     HELD_WORKSPACES_SELECT_NEWS_ITEMS,
@@ -30,6 +33,7 @@ from .queries import (
     NEWS_PAGE_SELECT_NEWS_SOURCES,
     NOTIFY_WORKSPACE_SELECT_NEWS_ITEMS,
     NOTIFY_WORKSPACE_SELECT_WORKSPACE_AGENT_PROVIDERS,
+    SEED_PRESETS_SELECT_WORKSPACES,
     refresh_workspace_select_news_sources_sql,
 )
 
@@ -131,6 +135,49 @@ async def news_page(db: AsyncSession, workspace_id: str, user_id: str) -> dict[s
             for row in sources
         ]
     return page
+
+
+async def install_presets_for(db: AsyncSession, workspace_id: str) -> int:
+    """Add the suggested groups and feeds from code and return how many feeds were new. A group with
+    the same name is reused and a feed URL the workspace already has is skipped, so running it again
+    changes nothing. The caller commits.
+    VI: Thêm nhóm và feed gợi ý có sẵn trong code, trả về số feed mới. Nhóm trùng tên được dùng lại
+    VI: và URL feed workspace đã có thì bỏ qua, nên chạy lại không đổi gì. Bên gọi tự commit.
+    """
+    now, added = utcnow(), 0
+    for name, feeds in NEWS_PRESETS.items():
+        category_id = (
+            await db.execute(
+                INSTALL_PRESETS_UPSERT_NEWS_CATEGORIES,
+                {'id': cuid(), 'workspace_id': workspace_id, 'name': name, 'now': now},
+            )
+        ).scalar_one()
+        for source_name, url in feeds:
+            row = (
+                await db.execute(
+                    INSTALL_PRESETS_INSERT_NEWS_SOURCES,
+                    {
+                        'id': cuid(), 'workspace_id': workspace_id, 'category_id': category_id,
+                        'name': source_name, 'feed_url': feed_url(url), 'now': now,
+                    },
+                )
+            ).first()
+            added += row is not None
+    return added
+
+
+async def seed_presets(db: AsyncSession) -> int:
+    """Give each workspace the suggested groups once, new workspaces included. The mark on the
+    workspace keeps groups or feeds an administrator later deletes from coming back.
+    VI: Cài nhóm gợi ý cho mỗi workspace một lần, kể cả workspace mới tạo. Dấu trên workspace giữ cho
+    VI: nhóm hay feed mà quản trị viên xóa sau đó không bị thêm lại.
+    """
+    pending = (await db.execute(SEED_PRESETS_SELECT_WORKSPACES)).scalars().all()
+    for workspace_id in pending:
+        await install_presets_for(db, workspace_id)
+        await db.execute(SEED_PRESETS_UPDATE_WORKSPACES, {'id': workspace_id, 'now': utcnow()})
+        await db.commit()
+    return len(pending)
 
 
 async def due_workspaces(db: AsyncSession, cutoff: Any) -> list[str]:

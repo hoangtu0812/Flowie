@@ -11,6 +11,7 @@ from .service import (
     held_workspaces,
     refresh_workspace,
     retry_held_workspace,
+    seed_presets,
 )
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,13 @@ async def fetch_due_news(factory, settings=None) -> int:
     VI: vừa làm mới trong lượt này không bị phân tích hai lần.
     """
     cutoff = news_cutoff_utc(utcnow())
+    # Seeded first, so a workspace's new feeds are fetched in this same tick.
+    # VI: Cài trước, để feed mới của workspace được lấy ngay trong lượt này.
+    async with factory() as db:
+        try:
+            await seed_presets(db)
+        except Exception:
+            logger.exception('Installing suggested news groups failed.')
     async with factory() as db:
         workspaces = await due_workspaces(db, cutoff)
         held = await held_workspaces(db) if settings is not None else []

@@ -65,6 +65,11 @@ INSTALL_PRESETS_UPSERT_NEWS_CATEGORIES = text(
 )
 
 
+SEED_PRESETS_UPDATE_WORKSPACES = text(
+    '''UPDATE workspaces SET news_presets_at = :now WHERE id = :id'''
+)
+
+
 INSTALL_PRESETS_INSERT_NEWS_SOURCES = text(
     '''INSERT INTO news_sources (id, workspace_id, category_id, name, feed_url, enabled, created_at)
                    SELECT :id, :workspace_id, :category_id, :name, :feed_url, TRUE, :now

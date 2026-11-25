@@ -384,6 +384,7 @@ def test_worker_retries_held_workspaces_except_the_ones_it_just_refreshed(monkey
         retried.append(workspace_id)
 
     monkeypatch.setattr(worker, 'due_workspaces', due)
+    monkeypatch.setattr(worker, 'seed_presets', lambda db: asyncio.sleep(0))
     monkeypatch.setattr(worker, 'held_workspaces', held)
     monkeypatch.setattr(worker, 'refresh_workspace', refresh)
     monkeypatch.setattr(worker, 'retry_held_workspace', retry)

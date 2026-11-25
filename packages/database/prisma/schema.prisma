@@ -613,6 +613,9 @@ model Workspace {
   issueDisplayDefaults   Json?                 @map("issue_display_defaults")
   issueInsightDefaults   Json?                 @map("issue_insight_defaults")
   mcpInstructions        String?               @map("mcp_instructions")
+  /// When the suggested news groups were installed; null means the news job still has to add them.
+  /// VI: Thời điểm đã cài nhóm tin gợi ý; null là tác vụ tin tức còn phải thêm.
+  newsPresetsAt          DateTime?             @map("news_presets_at")
   createdAt              DateTime              @default(now()) @map("created_at")
   updatedAt              DateTime              @updatedAt @map("updated_at")
 
