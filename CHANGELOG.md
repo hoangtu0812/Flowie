@@ -21,7 +21,7 @@ pull request and commit references, which are for us.
 
 ### Added
 
-- Service Desk ticket categories: workspace administrators keep a list of categories in Settings, people raising a ticket must pick one once the list exists, and the team can filter its queue by category. Run migrations, then rebuild `api` and `web`. (#PR)
+- Service Desk ticket categories: workspace administrators keep a list of categories in Settings, people raising a ticket must pick one once the list exists, and the team can filter its queue by category. Run migrations, then rebuild `api` and `web`. (#324)
   VI: Phân loại ticket Service Desk: quản trị viên workspace quản lý danh sách phân loại trong Cài đặt, người tạo ticket phải chọn một phân loại khi danh sách đã có, và team lọc được hàng đợi theo phân loại. Chạy migration rồi build lại `api` và `web`.
 
 ### Changed
