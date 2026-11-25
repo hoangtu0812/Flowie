@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Text } from '@astryxdesign/core/Text';
 import type { TeamMember } from '@/features/teams/team-types';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -175,231 +176,257 @@ export function TicketDetail({
                <ChevronLeft className="size-4" />
             </Button>
             <Text type="label" className="min-w-0 flex-1 truncate">
-               {ticket.title}
+               {ticket.identifier}
             </Text>
             <Badge variant="secondary">{tx(statusLabel(ticket.ticketStatus, canHandle))}</Badge>
          </HStack>
-         <VStack gap={4} className="min-h-0 flex-1 overflow-y-auto p-4">
-            <Text type="supporting">
-               {[
-                  ticket.identifier,
-                  ticket.project?.name ?? ticket.team.name,
-                  tx('Created by {name}', { name: ticket.createdBy.name }),
-                  ticket.assignee && tx('Assigned to {name}', { name: ticket.assignee.name }),
-                  when(ticket.createdAt),
-               ]
-                  .filter(Boolean)
-                  .join(' · ')}
-            </Text>
-            {ticket.description && (
-               <p className="text-sm whitespace-pre-wrap">{ticket.description}</p>
-            )}
-            {canHandle && ticket.reopenPending && converted && (
-               <Text type="supporting">
-                  {tx(
-                     'The requester reopened this ticket. Move {issue} back to work, or mark the ticket as resolved.',
-                     { issue: converted.identifier }
-                  )}
-               </Text>
-            )}
-            {canHandle && editable && (
-               <div className="grid max-w-xs gap-1.5">
-                  <Label htmlFor="ticket-assignee">{tx('Assignee')}</Label>
-                  <Select
-                     value={ticket.assignee?.id ?? UNASSIGNED}
-                     disabled={busy}
-                     onValueChange={(value) =>
-                        void change(() =>
-                           updateTicket(workspaceId, ticket.id, {
-                              assigneeId: value === UNASSIGNED ? null : value,
-                           })
-                        )
-                     }
-                  >
-                     <SelectTrigger id="ticket-assignee" className="w-full">
-                        <SelectValue />
-                     </SelectTrigger>
-                     <SelectContent>
-                        <SelectItem value={UNASSIGNED}>{tx('Unassigned')}</SelectItem>
-                        {members.map((member) => (
-                           <SelectItem key={member.id} value={member.id}>
-                              {member.name}
-                           </SelectItem>
-                        ))}
-                     </SelectContent>
-                  </Select>
-               </div>
-            )}
-            <div className="flex flex-wrap gap-2">
-               {converted && (
-                  <Button asChild variant="outline" size="sm">
-                     <Link href={`/${orgId}/issue/${converted.identifier}`}>
-                        {converted.identifier}
-                     </Link>
-                  </Button>
+         <div className="min-h-0 flex-1 overflow-y-auto">
+            <VStack gap={6} className="mx-auto w-full max-w-3xl p-4 sm:p-6">
+               <VStack gap={1}>
+                  <h2 className="text-lg font-semibold break-words">{ticket.title}</h2>
+                  <Text type="supporting">
+                     {[
+                        ticket.project?.name ?? ticket.team.name,
+                        tx('Created by {name}', { name: ticket.createdBy.name }),
+                        ticket.assignee && tx('Assigned to {name}', { name: ticket.assignee.name }),
+                        when(ticket.createdAt),
+                     ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                  </Text>
+               </VStack>
+               {canHandle && ticket.reopenPending && converted && (
+                  <p className="rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+                     {tx(
+                        'The requester reopened this ticket. Move {issue} back to work, or mark the ticket as resolved.',
+                        { issue: converted.identifier }
+                     )}
+                  </p>
                )}
                {canHandle && editable && (
-                  <Button
-                     type="button"
-                     size="sm"
-                     disabled={busy}
-                     onClick={() => void change(() => convertTicket(workspaceId, ticket.id))}
-                  >
-                     {tx('Convert to issue')}
-                  </Button>
-               )}
-               {canHandle && (editable || ticket.reopenPending) && (
-                  <Button
-                     type="button"
-                     variant="outline"
-                     size="sm"
-                     disabled={busy}
-                     onClick={() => setPending('resolve')}
-                  >
-                     {tx('Mark as resolved')}
-                  </Button>
-               )}
-               {canHandle && editable && (
-                  <Button
-                     type="button"
-                     variant="outline"
-                     size="sm"
-                     disabled={busy}
-                     onClick={() => setPending('decline')}
-                  >
-                     {tx('Decline')}
-                  </Button>
-               )}
-               {canHandle && closed && (
-                  <Button
-                     type="button"
-                     variant="outline"
-                     size="sm"
-                     disabled={busy}
-                     onClick={() => setPending('reopen')}
-                  >
-                     {tx('Reopen')}
-                  </Button>
-               )}
-               {editable && (
-                  <Button
-                     type="button"
-                     variant="outline"
-                     size="sm"
-                     disabled={busy}
-                     onClick={onEdit}
-                  >
-                     {tx('Edit')}
-                  </Button>
-               )}
-               {!canHandle && editable && (
-                  <Button
-                     type="button"
-                     variant="outline"
-                     size="sm"
-                     disabled={busy}
-                     onClick={() => setPending('cancel')}
-                  >
-                     {tx('Cancel request')}
-                  </Button>
-               )}
-               {canHandle && (
-                  <Button
-                     type="button"
-                     variant="outline"
-                     size="sm"
-                     disabled={busy}
-                     onClick={() => setPending('archive')}
-                  >
-                     {tx('Archive')}
-                  </Button>
-               )}
-            </div>
-            <VStack gap={2}>
-               <HStack gap={2} className="items-center justify-between">
-                  <Text type="label">{tx('Attachments')}</Text>
-                  <Button
-                     type="button"
-                     variant="ghost"
-                     size="sm"
-                     disabled={busy}
-                     onClick={() => fileInput.current?.click()}
-                  >
-                     <Paperclip className="size-3.5" />
-                     {tx('Add file')}
-                  </Button>
-                  <input
-                     ref={fileInput}
-                     type="file"
-                     multiple
-                     hidden
-                     aria-label={tx('Add file')}
-                     onChange={(event) => {
-                        void upload(Array.from(event.target.files ?? []));
-                        event.target.value = '';
-                     }}
-                  />
-               </HStack>
-               {files.map((file) => (
-                  <a
-                     key={file.id}
-                     className="text-sm underline break-all"
-                     href={`${api}/attachments/${encodeURIComponent(file.id)}/download`}
-                     target="_blank"
-                     rel="noreferrer"
-                  >
-                     {file.filename}
-                  </a>
-               ))}
-            </VStack>
-            <VStack gap={2}>
-               <Text type="label">{tx('Messages')}</Text>
-               {thread.length === 0 && <Text type="supporting">{tx('No messages yet.')}</Text>}
-               {thread.map((message) => (
-                  <div key={message.id} className="rounded-md border p-3">
-                     <Text type="supporting">
-                        {message.author.name} · {when(message.createdAt)}
-                     </Text>
-                     <p className="mt-1 text-sm whitespace-pre-wrap">{message.content}</p>
+                  <div className="grid max-w-xs gap-1.5">
+                     <Label htmlFor="ticket-assignee">{tx('Assignee')}</Label>
+                     <Select
+                        value={ticket.assignee?.id ?? UNASSIGNED}
+                        disabled={busy}
+                        onValueChange={(value) =>
+                           void change(() =>
+                              updateTicket(workspaceId, ticket.id, {
+                                 assigneeId: value === UNASSIGNED ? null : value,
+                              })
+                           )
+                        }
+                     >
+                        <SelectTrigger id="ticket-assignee" className="w-full">
+                           <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                           <SelectItem value={UNASSIGNED}>{tx('Unassigned')}</SelectItem>
+                           {members.map((member) => (
+                              <SelectItem key={member.id} value={member.id}>
+                                 {member.name}
+                              </SelectItem>
+                           ))}
+                        </SelectContent>
+                     </Select>
                   </div>
-               ))}
+               )}
+               <div className="flex flex-wrap gap-2">
+                  {converted && (
+                     <Button asChild variant="outline" size="sm">
+                        <Link href={`/${orgId}/issue/${converted.identifier}`}>
+                           {converted.identifier}
+                        </Link>
+                     </Button>
+                  )}
+                  {canHandle && editable && (
+                     <Button
+                        type="button"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => void change(() => convertTicket(workspaceId, ticket.id))}
+                     >
+                        {tx('Convert to issue')}
+                     </Button>
+                  )}
+                  {canHandle && (editable || ticket.reopenPending) && (
+                     <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => setPending('resolve')}
+                     >
+                        {tx('Mark as resolved')}
+                     </Button>
+                  )}
+                  {canHandle && editable && (
+                     <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => setPending('decline')}
+                     >
+                        {tx('Decline')}
+                     </Button>
+                  )}
+                  {canHandle && closed && (
+                     <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => setPending('reopen')}
+                     >
+                        {tx('Reopen')}
+                     </Button>
+                  )}
+                  {editable && (
+                     <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={busy}
+                        onClick={onEdit}
+                     >
+                        {tx('Edit')}
+                     </Button>
+                  )}
+                  {!canHandle && editable && (
+                     <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => setPending('cancel')}
+                     >
+                        {tx('Cancel request')}
+                     </Button>
+                  )}
+                  {canHandle && (
+                     <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => setPending('archive')}
+                     >
+                        {tx('Archive')}
+                     </Button>
+                  )}
+               </div>
+               {ticket.description && (
+                  <Section title={tx('Description')}>
+                     <p className="rounded-lg border bg-muted/30 px-3 py-2 text-sm whitespace-pre-wrap">
+                        {ticket.description}
+                     </p>
+                  </Section>
+               )}
+               <Section
+                  title={`${tx('Attachments')}${files.length ? ` (${files.length})` : ''}`}
+                  action={
+                     <>
+                        <Button
+                           type="button"
+                           variant="ghost"
+                           size="sm"
+                           disabled={busy}
+                           onClick={() => fileInput.current?.click()}
+                        >
+                           <Paperclip className="size-3.5" />
+                           {tx('Add file')}
+                        </Button>
+                        <input
+                           ref={fileInput}
+                           type="file"
+                           multiple
+                           hidden
+                           aria-label={tx('Add file')}
+                           onChange={(event) => {
+                              void upload(Array.from(event.target.files ?? []));
+                              event.target.value = '';
+                           }}
+                        />
+                     </>
+                  }
+               >
+                  {files.map((file) => (
+                     <a
+                        key={file.id}
+                        className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm break-all hover:bg-muted/50"
+                        href={`${api}/attachments/${encodeURIComponent(file.id)}/download`}
+                        target="_blank"
+                        rel="noreferrer"
+                     >
+                        <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
+                        {file.filename}
+                     </a>
+                  ))}
+               </Section>
+               <Section title={`${tx('Messages')}${thread.length ? ` (${thread.length})` : ''}`}>
+                  {thread.length === 0 && <Text type="supporting">{tx('No messages yet.')}</Text>}
+                  {thread.map((message) => (
+                     <HStack key={message.id} gap={3} className="items-start">
+                        <Avatar className="size-7 shrink-0">
+                           <AvatarFallback className="text-xs">
+                              {message.author.name.charAt(0).toUpperCase()}
+                           </AvatarFallback>
+                        </Avatar>
+                        <VStack gap={1} className="min-w-0 flex-1 rounded-lg bg-muted/40 px-3 py-2">
+                           <Text type="supporting">
+                              <span className="font-medium text-foreground">
+                                 {message.author.name}
+                              </span>{' '}
+                              · {when(message.createdAt)}
+                           </Text>
+                           <p className="text-sm break-words whitespace-pre-wrap">
+                              {message.content}
+                           </p>
+                        </VStack>
+                     </HStack>
+                  ))}
+               </Section>
             </VStack>
-         </VStack>
-         <VStack gap={2} className="shrink-0 border-t p-4">
-            {error && (
-               <p role="alert" className="text-sm text-destructive">
-                  {error}
-               </p>
-            )}
-            {requesterReopens ? (
-               <HStack gap={2} className="items-center justify-between">
-                  <Text type="supporting">{tx('This ticket is closed.')}</Text>
-                  <Button type="button" size="sm" onClick={() => setPending('reopen')}>
-                     {tx('Still not fixed')}
-                  </Button>
-               </HStack>
-            ) : (
-               <>
-                  <Textarea
-                     value={reply}
-                     rows={2}
-                     maxLength={10000}
-                     aria-label={tx('Write a reply')}
-                     placeholder={tx('Write a reply')}
-                     onChange={(event) => setReply(event.target.value)}
-                  />
-                  <Button
-                     type="button"
-                     size="sm"
-                     className="self-end"
-                     disabled={busy || !reply.trim()}
-                     onClick={() => void send()}
-                  >
-                     {tx('Send')}
-                  </Button>
-               </>
-            )}
-         </VStack>
+         </div>
+         {/* pr-20 keeps the send button clear of the floating assistant button. */}
+         {/* VI: pr-20 chừa chỗ để nút gửi không bị nút trợ lý nổi che. */}
+         <div className="shrink-0 border-t">
+            <VStack gap={2} className="mx-auto w-full max-w-3xl p-4 pr-20">
+               {error && (
+                  <p role="alert" className="text-sm text-destructive">
+                     {error}
+                  </p>
+               )}
+               {requesterReopens ? (
+                  <HStack gap={2} className="items-center justify-between">
+                     <Text type="supporting">{tx('This ticket is closed.')}</Text>
+                     <Button type="button" size="sm" onClick={() => setPending('reopen')}>
+                        {tx('Still not fixed')}
+                     </Button>
+                  </HStack>
+               ) : (
+                  <HStack gap={2} className="items-end">
+                     <Textarea
+                        value={reply}
+                        rows={2}
+                        maxLength={10000}
+                        aria-label={tx('Write a reply')}
+                        placeholder={tx('Write a reply')}
+                        className="min-h-0 resize-none"
+                        onChange={(event) => setReply(event.target.value)}
+                     />
+                     <Button
+                        type="button"
+                        disabled={busy || !reply.trim()}
+                        onClick={() => void send()}
+                     >
+                        {tx('Send')}
+                     </Button>
+                  </HStack>
+               )}
+            </VStack>
+         </div>
          {pending && (
             <TicketActionDialog
                action={pending}
@@ -407,6 +434,26 @@ export function TicketDetail({
                onConfirm={confirm}
             />
          )}
+      </VStack>
+   );
+}
+
+function Section({
+   title,
+   action,
+   children,
+}: {
+   title: string;
+   action?: React.ReactNode;
+   children: React.ReactNode;
+}) {
+   return (
+      <VStack gap={2}>
+         <HStack gap={2} className="min-h-8 items-center justify-between">
+            <Text type="label">{title}</Text>
+            {action}
+         </HStack>
+         {children}
       </VStack>
    );
 }

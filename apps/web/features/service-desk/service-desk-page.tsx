@@ -8,10 +8,7 @@ import { Tab, TabList } from '@astryxdesign/core/TabList';
 import { Text } from '@astryxdesign/core/Text';
 import { LoadingState } from '@/components/common/loading-state';
 import { QueryState } from '@/components/common/query-state';
-import {
-   loadCurrentWorkspaceTeams,
-   type WorkspaceTeam,
-} from '@/features/teams/team-types';
+import { loadCurrentWorkspaceTeams, type WorkspaceTeam } from '@/features/teams/team-types';
 import { Button } from '@/components/ui/button';
 import {
    Select,
@@ -21,6 +18,7 @@ import {
    SelectValue,
 } from '@/components/ui/select';
 import { SidebarTrigger } from '@/components/ui/sidebar';
+import { loadCurrentUser } from '@/features/identity/current-user';
 import { useMessages } from '@/features/shared/use-messages';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { loadCurrentWorkspaceMembership } from '@/lib/workspaces';
@@ -40,8 +38,10 @@ import { useTicketUpdates } from './use-ticket-updates';
 import { inState, isOpen, TicketList, TicketStateSelect, type TicketState } from './ticket-list';
 import { isRequester } from './requester';
 
+type DeskTab = 'mine' | 'assigned' | 'queue';
 type DeskData = {
    workspaceId: string;
+   userId: string;
    teams: WorkspaceTeam[];
    inTeam: boolean;
    mine: Ticket[];
@@ -66,7 +66,7 @@ export function ServiceDeskPage() {
    const [data, setData] = useState<DeskData>();
    const [loadError, setLoadError] = useState<string>();
    const [notice, setNotice] = useState<string>();
-   const [tab, setTab] = useState<'mine' | 'queue'>('mine');
+   const [tab, setTab] = useState<DeskTab>('mine');
    const [selected, setSelected] = useSelectedTicket(`/${orgId}/service-desk`);
    const [projectFilter, setProjectFilter] = useState(ALL_PROJECTS);
    const [ticketState, setTicketState] = useState<TicketState>('open');
@@ -84,12 +84,13 @@ export function ServiceDeskPage() {
          }
          const { workspaceId, teams } = await loadCurrentWorkspaceTeams();
          const inTeam = teams.some((team) => team.joined);
-         const [mine, queue, projects] = await Promise.all([
+         const [user, mine, queue, projects] = await Promise.all([
+            loadCurrentUser(),
             listTickets(workspaceId, 'mine'),
             inTeam ? listTickets(workspaceId, 'team') : [],
             listTicketProjects(workspaceId),
          ]);
-         setData({ workspaceId, teams, inTeam, mine, queue, projects });
+         setData({ workspaceId, userId: user.id, teams, inTeam, mine, queue, projects });
          setLoadError(undefined);
       } catch (caught) {
          setLoadError(caught instanceof Error ? caught.message : 'Could not load tickets.');
@@ -113,8 +114,10 @@ export function ServiceDeskPage() {
       followedTicket.current = selected;
       const mine = data.mine.some((item) => item.id === selected);
       const queued = data.queue.some((item) => item.id === selected);
-      if (mine !== queued) setTab(mine ? 'mine' : 'queue');
-   }, [data, selected]);
+      // A ticket picked under "Assigned to me" is also in the queue, so it stays on that tab.
+      // VI: Ticket chọn ở "Được giao cho tôi" cũng nằm trong hàng đợi, nên giữ nguyên tab đó.
+      if (mine !== queued && !(queued && tab === 'assigned')) setTab(mine ? 'mine' : 'queue');
+   }, [data, selected, tab]);
 
    const queueProjects = useMemo(() => {
       const named = (data?.queue ?? []).flatMap((ticket) =>
@@ -122,7 +125,10 @@ export function ServiceDeskPage() {
       );
       return [...new Map(named.map((project) => [project.id, project])).values()];
    }, [data]);
-   const rows = (tab === 'mine' ? (data?.mine ?? []) : (data?.queue ?? [])).filter(
+   const assigned = (data?.queue ?? []).filter((ticket) => ticket.assignee?.id === data?.userId);
+   const rows = (
+      tab === 'mine' ? (data?.mine ?? []) : tab === 'assigned' ? assigned : (data?.queue ?? [])
+   ).filter(
       (ticket) =>
          inState(ticket, ticketState) &&
          (tab === 'mine' || projectFilter === ALL_PROJECTS || ticket.projectId === projectFilter)
@@ -147,13 +153,18 @@ export function ServiceDeskPage() {
                role="tablist"
                size="sm"
                value={tab}
-               onChange={(value) => setTab(value as 'mine' | 'queue')}
+               onChange={(value) => setTab(value as DeskTab)}
                hasDivider
             >
                <Tab
                   value="mine"
                   panelId="service-desk-list"
                   label={tx('My tickets ({count})', { count: data.mine.length })}
+               />
+               <Tab
+                  value="assigned"
+                  panelId="service-desk-list"
+                  label={tx('Assigned to me ({count})', { count: assigned.filter(isOpen).length })}
                />
                <Tab
                   value="queue"
@@ -164,7 +175,7 @@ export function ServiceDeskPage() {
          )}
          <div className="grid shrink-0 grid-cols-2 gap-2 p-2">
             <TicketStateSelect value={ticketState} onChange={setTicketState} />
-            {tab === 'queue' && (
+            {tab !== 'mine' && (
                <Select value={projectFilter} onValueChange={setProjectFilter}>
                   <SelectTrigger aria-label={tx('Project')} className="w-full">
                      <SelectValue />
@@ -197,16 +208,18 @@ export function ServiceDeskPage() {
                   {tx(
                      tab === 'queue'
                         ? 'No tickets are waiting for your team.'
-                        : data.mine.length === 0
-                          ? 'You have no tickets yet.'
-                          : 'No tickets in this view.'
+                        : tab === 'assigned'
+                          ? 'No tickets are assigned to you.'
+                          : data.mine.length === 0
+                            ? 'You have no tickets yet.'
+                            : 'No tickets in this view.'
                   )}
                </Text>
             )}
             <TicketList
                rows={rows}
                selected={selected}
-               inQueue={tab === 'queue'}
+               inQueue={tab !== 'mine'}
                onSelect={setSelected}
             />
          </VStack>
