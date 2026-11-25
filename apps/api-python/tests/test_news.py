@@ -1,11 +1,16 @@
 import asyncio
+import json
+import os
 from datetime import datetime
+from urllib.parse import urlsplit
 
 import httpx
 import pytest
 
 from app.core.errors import ApiError
 from app.modules.news.feeds import (
+    NEWS_FEED_HOSTS,
+    NEWS_PRESETS,
     feed_url,
     fetch_article,
     fetch_feed,
@@ -54,6 +59,90 @@ def test_parse_rejects_dtd_and_non_feeds():
         parse_feed(b'<?xml version="1.0"?><!DOCTYPE r [<!ENTITY a "x">]><rss>&a;</rss>', NOW)
     with pytest.raises(ValueError):
         parse_feed(b'<html><body>not a feed</body></html>', NOW)
+
+
+def test_parse_kev_json_links_each_cve_to_nvd():
+    body = json.dumps(
+        {
+            'vulnerabilities': [
+                {'cveID': 'CVE-2024-3400', 'vulnerabilityName': 'PAN-OS <b>Injection</b>',
+                 'shortDescription': 'Exploited.', 'dateAdded': '2024-04-12'},
+                {'cveID': 'CVE-2026-12345', 'vulnerabilityName': 'Newer', 'dateAdded': '2026-10-28'},
+                {'cveID': 'javascript:alert(1)', 'vulnerabilityName': 'Bad id'},
+                'not an entry',
+            ]
+        }
+    ).encode()
+    items = parse_feed(b'  ' + body, NOW)
+    assert [item['url'] for item in items] == [
+        'https://nvd.nist.gov/vuln/detail/CVE-2026-12345',
+        'https://nvd.nist.gov/vuln/detail/CVE-2024-3400',
+    ]
+    assert items[1]['title'] == 'CVE-2024-3400: PAN-OS Injection'
+    assert items[1]['summary'] == 'Exploited.'
+    assert items[1]['publishedAt'] == datetime(2024, 4, 12)
+    assert items[0]['summary'] is None
+    with pytest.raises(ValueError):
+        parse_feed(b'{"data": []}', NOW)
+
+
+def test_every_preset_feed_is_allowlisted_and_every_host_is_used():
+    urls = [url for feeds in NEWS_PRESETS.values() for _name, url in feeds]
+    assert [feed_url(url) for url in urls] == urls
+    assert len(set(urls)) == len(urls)
+    # www.cisa.gov and the older security hosts stay allowed for sources added by hand.
+    # VI: www.cisa.gov và các host bảo mật cũ vẫn được phép cho nguồn admin tự thêm.
+    manual = {'www.cisa.gov', 'krebsonsecurity.com', 'www.darkreading.com'}
+    assert NEWS_FEED_HOSTS - manual == {urlsplit(url).hostname for url in urls}
+
+
+@pytest.mark.skipif(not os.getenv('MCP_TEST_DATABASE_URL'), reason='Test database not configured')
+def test_presets_reuse_groups_and_skip_known_feeds(monkeypatch):
+    from sqlalchemy import text
+
+    from app.core.identifiers import cuid
+    from app.modules.news import api
+    from tests.seeded_workspace import seeded_workspace
+
+    async def allow(*_args):
+        return None
+
+    monkeypatch.setattr(api, 'require_manager', allow)
+    total = sum(len(feeds) for feeds in NEWS_PRESETS.values())
+
+    async def run():
+        async with seeded_workspace() as (factory, workspace, _member):
+            async with factory() as db:
+                seed, owner = await workspace(db)
+                ws = seed['workspace_id']
+                security = cuid()
+                await db.execute(
+                    text('''INSERT INTO news_categories (id, workspace_id, name, created_at, updated_at)
+                            VALUES (:id, :ws, 'Security', now(), now())'''),
+                    {'id': security, 'ws': ws},
+                )
+                await db.execute(
+                    text('''INSERT INTO news_sources (id, workspace_id, category_id, name, feed_url, created_at)
+                            VALUES (:id, :ws, :cat, 'BC', 'https://www.bleepingcomputer.com/feed/', now())'''),
+                    {'id': cuid(), 'ws': ws, 'cat': security},
+                )
+                await db.commit()
+                first = await api.install_presets(workspaceId=ws, user=owner, db=db)
+                second = await api.install_presets(workspaceId=ws, user=owner, db=db)
+                groups = (
+                    await db.execute(
+                        text('''SELECT c.name, count(s.id) FROM news_categories c
+                                LEFT JOIN news_sources s ON s.category_id = c.id
+                                WHERE c.workspace_id = :ws GROUP BY c.id, c.name'''),
+                        {'ws': ws},
+                    )
+                ).all()
+        return first, second, dict(groups)
+
+    first, second, groups = asyncio.run(run())
+    assert first == {'data': {'added': total - 1}}
+    assert second == {'data': {'added': 0}}
+    assert groups == {name: len(feeds) for name, feeds in NEWS_PRESETS.items()}
 
 
 def test_plain_text_truncates():

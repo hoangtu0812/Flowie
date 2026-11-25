@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import xml.etree.ElementTree as ET
 from datetime import UTC, datetime, timedelta
@@ -22,13 +23,59 @@ from ..link_metadata.service import public_url
 NEWS_FEED_HOSTS = frozenset(
     {
         'www.cisa.gov',
+        'raw.githubusercontent.com',
         'feeds.feedburner.com',
         'www.bleepingcomputer.com',
         'krebsonsecurity.com',
         'www.securityweek.com',
         'www.darkreading.com',
+        'vnexpress.net',
+        'cafef.vn',
+        'oilprice.com',
+        'www.cnbc.com',
+        'news.google.com',
+        'openai.com',
+        'blog.google',
+        'huggingface.co',
+        'techcrunch.com',
+        'www.theverge.com',
+        'rss.arxiv.org',
     }
 )
+
+# Suggested groups and feeds, all checked from the production server (192.168.90.53). cisa.gov
+# answers 403 there, so the Known Exploited Vulnerabilities list comes from CISA's GitHub mirror.
+# VI: Nhóm và feed gợi ý, đều đã kiểm tra gọi được từ server production (192.168.90.53). cisa.gov
+# VI: trả 403 ở đó nên danh sách lỗ hổng bị khai thác (KEV) lấy từ bản mirror GitHub của CISA.
+NEWS_PRESETS: dict[str, list[tuple[str, str]]] = {
+    'Security': [
+        ('CISA KEV', 'https://raw.githubusercontent.com/cisagov/kev-data/develop/known_exploited_vulnerabilities.json'),
+        ('The Hacker News', 'https://feeds.feedburner.com/TheHackersNews'),
+        ('BleepingComputer', 'https://www.bleepingcomputer.com/feed/'),
+        ('SecurityWeek', 'https://www.securityweek.com/feed/'),
+    ],
+    'Thị trường': [
+        ('VnExpress Kinh doanh', 'https://vnexpress.net/rss/kinh-doanh.rss'),
+        ('CafeF Chứng khoán', 'https://cafef.vn/thi-truong-chung-khoan.rss'),
+        ('OilPrice', 'https://oilprice.com/rss/main'),
+        ('CNBC Markets', 'https://www.cnbc.com/id/20910258/device/rss/rss.html'),
+        ('Google News: giá dầu', 'https://news.google.com/rss/search?q=gi%C3%A1+d%E1%BA%A7u&hl=vi&gl=VN&ceid=VN:vi'),
+    ],
+    'AI': [
+        ('OpenAI', 'https://openai.com/news/rss.xml'),
+        ('Google AI', 'https://blog.google/innovation-and-ai/technology/ai/rss/'),
+        ('Hugging Face', 'https://huggingface.co/blog/feed.xml'),
+        ('TechCrunch AI', 'https://techcrunch.com/category/artificial-intelligence/feed/'),
+        ('The Verge AI', 'https://www.theverge.com/rss/ai-artificial-intelligence/index.xml'),
+        ('arXiv cs.AI', 'https://rss.arxiv.org/rss/cs.AI'),
+    ],
+    'Công nghệ': [
+        ('VnExpress Khoa học công nghệ', 'https://vnexpress.net/rss/khoa-hoc-cong-nghe.rss'),
+        ('TechCrunch', 'https://techcrunch.com/feed/'),
+        ('The Verge', 'https://www.theverge.com/rss/index.xml'),
+    ],
+}
+_CVE = re.compile(r'CVE-\d{4}-\d{4,}')
 MAX_FEED_BYTES = 4 * 1024 * 1024
 MAX_REDIRECTS = 3
 MAX_ARTICLE_BYTES = 1024 * 1024
@@ -165,7 +212,12 @@ def parse_feed(body: bytes, now: datetime) -> list[dict[str, Any]]:
     VI: Parse RSS 2.0, RSS 1.0 hoặc Atom thành tối đa ``ITEMS_PER_FEED`` tin mới nhất
     VI: ``{title, url, summary, publishedAt}``. Từ chối DTD trước phần tử gốc để chặn entity
     VI: expansion và external entity; bỏ tin không có tiêu đề hoặc link http(s).
+
+    A JSON body is read as the CISA Known Exploited Vulnerabilities catalogue instead.
+    VI: Body JSON được đọc như danh mục lỗ hổng bị khai thác (KEV) của CISA.
     """
+    if body.lstrip()[:1] == b'{':
+        return _parse_kev(body, now)
     root_start = _ROOT_START.search(body)
     if not root_start or _DTD.search(body[: root_start.start()]):
         raise ValueError('The feed has a DTD or no root element.')
@@ -187,6 +239,30 @@ def parse_feed(body: bytes, now: datetime) -> list[dict[str, Any]]:
             'publishedAt': _published(_text(entry, 'pubDate', 'published', 'updated', 'date'), now),
         }
     return sorted(entries.values(), key=lambda item: item['publishedAt'], reverse=True)[:ITEMS_PER_FEED]
+
+
+def _parse_kev(body: bytes, now: datetime) -> list[dict[str, Any]]:
+    # Each entry becomes an item linking to its NVD page; entries without a valid CVE id are
+    # skipped so the URL is always built from a checked value.
+    # VI: Mỗi mục thành một tin trỏ tới trang NVD của nó; bỏ mục không có mã CVE hợp lệ để URL
+    # VI: luôn dựng từ giá trị đã kiểm tra.
+    entries = json.loads(body).get('vulnerabilities')
+    if not isinstance(entries, list):
+        raise ValueError('The URL is not an RSS or Atom feed.')
+    items: list[dict[str, Any]] = []
+    for entry in entries:
+        cve = str(entry.get('cveID', '')) if isinstance(entry, dict) else ''
+        if not _CVE.fullmatch(cve):
+            continue
+        items.append(
+            {
+                'title': plain_text(f"{cve}: {entry.get('vulnerabilityName') or ''}", 300),
+                'url': f'https://nvd.nist.gov/vuln/detail/{cve}',
+                'summary': plain_text(entry.get('shortDescription'), 500) or None,
+                'publishedAt': _published(entry.get('dateAdded'), now),
+            }
+        )
+    return sorted(items, key=lambda item: item['publishedAt'], reverse=True)[:ITEMS_PER_FEED]
 
 
 async def fetch_feed(url: str, client: httpx.AsyncClient) -> bytes:

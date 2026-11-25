@@ -15,6 +15,8 @@ export const messages: Readonly<Record<string, string>> = {
       'Mỗi nhóm có thể gửi tin mới vào kênh Microsoft Teams riêng (webhook Teams Workflows).',
    'Group name': 'Tên nhóm',
    'Add group': 'Thêm nhóm',
+   'Add suggested groups (Security, Market, AI, Technology)':
+      'Thêm nhóm gợi ý (Security, Thị trường, AI, Công nghệ)',
    'Delete group': 'Xoá nhóm',
    'Teams webhook URL': 'URL webhook Teams',
    'Save webhook': 'Lưu webhook',
