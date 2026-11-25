@@ -54,3 +54,21 @@ REFRESH_WORKSPACE_INSERT_NEWS_ITEMS = text(
                            VALUES (:id, :workspace_id, :source_id, :title, :url, :summary, :published_at, :now)
                            ON CONFLICT (workspace_id, url) DO NOTHING'''
 )
+
+
+# ON CONFLICT ... DO UPDATE (a no-op) so an existing group of that name still returns its id.
+# VI: ON CONFLICT ... DO UPDATE (không đổi gì) để nhóm cùng tên đã có vẫn trả về id.
+INSTALL_PRESETS_UPSERT_NEWS_CATEGORIES = text(
+    '''INSERT INTO news_categories (id, workspace_id, name, created_at, updated_at)
+                   VALUES (:id, :workspace_id, :name, :now, :now)
+                   ON CONFLICT (workspace_id, name) DO UPDATE SET name = EXCLUDED.name RETURNING id'''
+)
+
+
+INSTALL_PRESETS_INSERT_NEWS_SOURCES = text(
+    '''INSERT INTO news_sources (id, workspace_id, category_id, name, feed_url, enabled, created_at)
+                   SELECT :id, :workspace_id, :category_id, :name, :feed_url, TRUE, :now
+                   WHERE NOT EXISTS (SELECT 1 FROM news_sources
+                                     WHERE workspace_id = :workspace_id AND feed_url = :feed_url)
+                   RETURNING id'''
+)

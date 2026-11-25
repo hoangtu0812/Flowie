@@ -94,6 +94,9 @@ export function NewsSourcesDialog({
                   {tx('Add group')}
                </Button>
             </form>
+            <Button variant="outline" disabled={busy} onClick={() => void run('/presets', 'POST')}>
+               {tx('Add suggested groups (Security, Market, AI, Technology)')}
+            </Button>
          </DialogContent>
       </Dialog>
    );
