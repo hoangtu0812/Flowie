@@ -16,7 +16,7 @@ import { PreferenceSync } from '@/features/identity/preference-sync';
 import { useMessages } from '@/features/shared/use-messages';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { loadWorkspaceMemberships, type WorkspaceSummary } from '@/lib/workspaces';
-import { ServiceDeskAssistant, useAssistantStatus } from './assistant';
+import { AssistantBubble, useAssistantStatus } from './assistant';
 import type { TicketPrefill } from './assistant-draft';
 import { messages } from './messages.vi';
 import {
@@ -141,11 +141,6 @@ export function ServiceDeskPortal() {
             <Text type="label" className="flex-1">
                {tx('My tickets ({count})', { count: desk?.tickets.length ?? 0 })}
             </Text>
-            {isMobile && assistant && (
-               <Button type="button" size="sm" variant="outline" onClick={() => setAsking(true)}>
-                  {tx('Ask the assistant')}
-               </Button>
-            )}
             <Button type="button" size="sm" disabled={!desk} onClick={() => newTicket()}>
                <Plus className="size-3.5" />
                {tx('New ticket')}
@@ -182,14 +177,15 @@ export function ServiceDeskPortal() {
       </VStack>
    );
 
-   const assistantPanel = workspace && assistant && (
-      <ServiceDeskAssistant
+   const assistantBubble = workspace && assistant && (
+      <AssistantBubble
          key={workspace.id}
          workspaceId={workspace.id}
          workspaceSlug={workspace.slug}
          applications={assistant.applications}
          onCreateTicket={newTicket}
-         onClose={isMobile ? () => setAsking(false) : undefined}
+         open={asking}
+         onOpenChange={setAsking}
       />
    );
 
@@ -210,11 +206,9 @@ export function ServiceDeskPortal() {
             }}
          />
       ) : (
-         assistantPanel || (
-            <div className="grid h-full place-items-center p-6 text-center text-sm text-muted-foreground">
-               {tx('Select a ticket to read it.')}
-            </div>
-         )
+         <div className="grid h-full place-items-center p-6 text-center text-sm text-muted-foreground">
+            {tx('Select a ticket to read it.')}
+         </div>
       );
 
    const picker = workspaces && !workspace && (
@@ -270,7 +264,7 @@ export function ServiceDeskPortal() {
             ) : (
                picker ||
                (isMobile ? (
-                  ticket || (asking && assistantPanel) ? (
+                  ticket ? (
                      detail
                   ) : (
                      list
@@ -285,6 +279,7 @@ export function ServiceDeskPortal() {
                ))
             )}
          </main>
+         {assistantBubble}
          {workspaceId && desk && dialog && (
             <TicketDialog
                workspaceId={workspaceId}

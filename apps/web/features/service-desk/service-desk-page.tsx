@@ -24,7 +24,7 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useMessages } from '@/features/shared/use-messages';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { loadCurrentWorkspaceMembership } from '@/lib/workspaces';
-import { ServiceDeskAssistant, useAssistantStatus } from './assistant';
+import { AssistantBubble, useAssistantStatus } from './assistant';
 import type { TicketPrefill } from './assistant-draft';
 import { messages } from './messages.vi';
 import {
@@ -137,11 +137,6 @@ export function ServiceDeskPage() {
             <Text type="label" className="flex-1">
                {tx('Service Desk')}
             </Text>
-            {isMobile && assistant && tab === 'mine' && (
-               <Button type="button" size="sm" variant="outline" onClick={() => setAsking(true)}>
-                  {tx('Ask the assistant')}
-               </Button>
-            )}
             <Button type="button" size="sm" disabled={!data} onClick={() => newTicket()}>
                <Plus className="size-3.5" />
                {tx('New ticket')}
@@ -218,16 +213,15 @@ export function ServiceDeskPage() {
       </VStack>
    );
 
-   // The assistant belongs to "My tickets"; the queue keeps its plain empty state.
-   // VI: Trợ lý thuộc tab "Ticket của tôi"; hàng đợi giữ trạng thái trống như cũ.
-   const assistantPanel = data && assistant && tab === 'mine' && (
-      <ServiceDeskAssistant
+   const assistantBubble = data && assistant && (
+      <AssistantBubble
          key={data.workspaceId}
          workspaceId={data.workspaceId}
          workspaceSlug={orgId}
          applications={assistant.applications}
          onCreateTicket={newTicket}
-         onClose={isMobile ? () => setAsking(false) : undefined}
+         open={asking}
+         onOpenChange={setAsking}
       />
    );
 
@@ -248,17 +242,15 @@ export function ServiceDeskPage() {
             }}
          />
       ) : (
-         assistantPanel || (
-            <div className="grid h-full place-items-center p-6 text-center text-sm text-muted-foreground">
-               {tx('Select a ticket to read it.')}
-            </div>
-         )
+         <div className="grid h-full place-items-center p-6 text-center text-sm text-muted-foreground">
+            {tx('Select a ticket to read it.')}
+         </div>
       );
 
    return (
       <>
          {isMobile ? (
-            ticket || (asking && assistantPanel) ? (
+            ticket ? (
                preview
             ) : (
                list
@@ -271,6 +263,7 @@ export function ServiceDeskPage() {
                <VStack className="h-full min-w-0 flex-1">{preview}</VStack>
             </HStack>
          )}
+         {assistantBubble}
          {data && dialog && (
             <TicketDialog
                workspaceId={data.workspaceId}
