@@ -38,7 +38,7 @@ pull request and commit references, which are for us.
 
 ### Changed
 
-- News no longer suggests BleepingComputer, and the cisa.gov advisories and BleepingComputer feeds that the first news release added to every workspace are removed where they never delivered an item; both answer 403 from the production server. CISA's data keeps coming from its GitHub mirror (CISA KEV). Run migrations; rebuild `api`. (#PR)
+- News no longer suggests BleepingComputer, and the cisa.gov advisories and BleepingComputer feeds that the first news release added to every workspace are removed where they never delivered an item; both answer 403 from the production server. CISA's data keeps coming from its GitHub mirror (CISA KEV). Run migrations; rebuild `api`. (#331)
   VI: News không còn gợi ý BleepingComputer, và feed advisories của cisa.gov cùng BleepingComputer mà bản tin tức đầu tiên thêm cho mọi workspace được xóa ở nơi chưa từng lấy được tin nào; cả hai trả 403 từ server production. Dữ liệu CISA vẫn lấy từ bản mirror GitHub (CISA KEV). Chạy migration; build lại `api`.
 
 - The ticket reply box takes a pasted screenshot or files from a paperclip button, lists them with their size before sending, and the ticket shows image attachments as thumbnails. Pasting text copied from Word or Excel stays a text paste, here and in the new ticket form. Rebuild `web`. (#327)
