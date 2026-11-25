@@ -567,6 +567,7 @@ test('the assistant offers a prefilled ticket when the documents fall short', as
          });
       });
       await page.reload();
+      await page.getByRole('button', { name: 'Ask the assistant' }).click();
       const conversation = page.getByRole('log', { name: 'Conversation' });
       await expect(conversation.getByText('I can help with: Regression app')).toBeVisible();
       await page.getByRole('textbox', { name: 'Your question' }).fill('Payroll export fails');
@@ -576,7 +577,9 @@ test('the assistant offers a prefilled ticket when the documents fall short', as
          { workspaceId: fixture.workspace_id, question: 'Payroll export fails', history: [] },
       ]);
 
-      const dialog = page.getByRole('dialog');
+      // The chat bubble is a dialog too, so pick the ticket form by its title.
+      // VI: Bong bóng chat cũng là dialog, nên chọn form ticket theo tiêu đề.
+      const dialog = page.getByRole('dialog', { name: 'New ticket' });
       await conversation.getByRole('button', { name: 'Create ticket' }).click();
       await expect(dialog.getByLabel('Title', { exact: true })).toHaveValue(title);
       await expect(dialog.getByLabel('Description', { exact: true })).toHaveValue(
