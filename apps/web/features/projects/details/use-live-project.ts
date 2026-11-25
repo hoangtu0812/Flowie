@@ -76,6 +76,10 @@ export type LiveProjectIssue = {
    version: number;
    manualOrder: string;
    subIssueSort: SubIssueSort;
+   /** Milestone of the issue in this project. VI: Milestone của issue trong dự án này. */
+   milestoneId?: string | null;
+   /** Ids of issues in this project that block it. VI: Id các issue trong dự án đang chặn nó. */
+   blockedBy?: string[];
    status: { id: string; name: string; category: string; color: string; position: number };
    team: { id: string; name: string; identifier: string } | null;
    creator: { id: string; name: string; avatarUrl: string | null };

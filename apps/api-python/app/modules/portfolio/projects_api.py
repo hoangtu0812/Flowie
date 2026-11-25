@@ -96,6 +96,7 @@ from .queries import (
     LIST_SUB_PROJECT_LABELS_SELECT_SUB_PROJECT_LABELS,
     MEMBERS_SELECT_PROJECT_MEMBERS,
     PROJECT_CUSTOM_FIELDS_SELECT_PROJECT_CUSTOM_FIELDS,
+    PROJECT_ISSUE_ROWS_SELECT_BLOCKERS,
     PROJECT_ISSUE_ROWS_SELECT_ISSUE_CYCLES,
     PROJECT_ISSUE_ROWS_SELECT_ISSUE_LABELS,
     PROJECT_ISSUE_ROWS_SELECT_ISSUES,
@@ -992,6 +993,14 @@ async def _project_issue_rows(db: AsyncSession, project_id: str, workspace_id: s
         {'issue_ids': issue_ids},
     )
 
+    blockers = await db.execute(
+        PROJECT_ISSUE_ROWS_SELECT_BLOCKERS,
+        {'issue_ids': issue_ids},
+    )
+    blocked_by: dict[str, list[str]] = {}
+    for link in blockers.mappings().all():
+        blocked_by.setdefault(link['related_issue_id'], []).append(link['issue_id'])
+
     label_links: dict[str, list[dict[str, Any]]] = {}
     for link in labels.mappings().all():
         label_links.setdefault(link['issue_id'], []).append({
@@ -1025,6 +1034,9 @@ async def _project_issue_rows(db: AsyncSession, project_id: str, workspace_id: s
             # VI: và lưu thao tác kéo mà không ghi đè thay đổi mới hơn.
             'version': row['version'], 'manualOrder': str(row['manual_order']),
             'subIssueSort': row['sub_issue_sort'],
+            # Milestone and blockers let the Timeline group by milestone and draw dependency arrows.
+            # VI: Milestone và issue chặn giúp Timeline nhóm theo milestone và vẽ mũi tên phụ thuộc.
+            'milestoneId': row['milestone_id'], 'blockedBy': blocked_by.get(row['id'], []),
             'status': {
                 'id': row['status_id_value'], 'name': row['status_name'],
                 'category': row['status_category'], 'color': row['status_color'],

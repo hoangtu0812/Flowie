@@ -19,6 +19,11 @@ pull request and commit references, which are for us.
 
 ## Unreleased
 
+### Changed
+
+- The project Timeline is now a Gantt chart: issues are grouped by milestone or by status in folding groups with a progress bar, bars take the group colour and show how much is done, milestones are diamonds with their date, "blocks" relations are drawn as arrows (red when the blocker ends after the blocked issue starts), and the list shows the assignee, the end date and a warning for overdue or blocked issues. Timelines get a Day scale, a Day/Week/Month/Quarter/Year switch that keeps the dates in view, shaded weekends and a labelled Today line, and dragged bars can be undone or reset. Rebuild `api` and `web`. (DTD-1026)
+  VI: Timeline của dự án nay là biểu đồ Gantt: issue được nhóm theo milestone hoặc trạng thái thành các nhóm thu gọn được có thanh tiến độ, thanh mang màu nhóm và cho thấy phần đã xong, milestone là hình thoi kèm ngày, quan hệ "blocks" vẽ thành mũi tên (màu đỏ khi issue chặn kết thúc sau ngày issue bị chặn bắt đầu), danh sách hiện người phụ trách, ngày kết thúc và cảnh báo cho issue quá hạn hoặc bị chặn. Timeline có thêm thang Day, nút chuyển Day/Week/Month/Quarter/Year giữ nguyên vùng ngày đang xem, cuối tuần tô nhạt và vạch Today có nhãn; thanh đã kéo có thể Undo hoặc Reset. Build lại `api` và `web`.
+
 ## [0.25.0] — 2026-11-19 14:31 +07
 
 ### Added

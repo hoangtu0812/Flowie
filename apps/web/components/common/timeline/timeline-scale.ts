@@ -18,6 +18,7 @@ export const ZOOM_LEVELS = [
    { id: 'quarter', label: 'Quarter', shortcut: 'Q', monthWidth: 240 },
    { id: 'month', label: 'Month', shortcut: 'M', monthWidth: 480 },
    { id: 'week', label: 'Week', shortcut: 'W', monthWidth: 960 },
+   { id: 'day', label: 'Day', shortcut: 'D', monthWidth: 1920 },
 ] as const;
 
 export type TimelineZoom = (typeof ZOOM_LEVELS)[number]['id'];
@@ -74,6 +75,12 @@ export const isoWeekOf = (time: number): number => {
 export const WEEKLY_DATES: ScaleDate[] = [];
 for (let time = FIRST_MONDAY; time <= RANGE_END; time += 7 * DAY_MS) {
    WEEKLY_DATES.push({ time, day: new Date(time).getUTCDate(), week: isoWeekOf(time) });
+}
+
+/** Every day of the range (date labels at the Day zoom). VI: Mọi ngày trong khoảng (nhãn ngày ở zoom Day). */
+export const DAILY_DATES: ScaleDate[] = [];
+for (let time = RANGE_START; time <= RANGE_END; time += DAY_MS) {
+   DAILY_DATES.push({ time, day: new Date(time).getUTCDate(), week: isoWeekOf(time) });
 }
 
 /** Every other Monday (date labels at the Year zoom). */
