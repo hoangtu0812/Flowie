@@ -29,7 +29,7 @@ pull request and commit references, which are for us.
 
 ### Changed
 
-- The ticket reply box takes a pasted screenshot or files from a paperclip button, lists them with their size before sending, and the ticket shows image attachments as thumbnails. Pasting text copied from Word or Excel stays a text paste, here and in the new ticket form. Rebuild `web`. (#PR)
+- The ticket reply box takes a pasted screenshot or files from a paperclip button, lists them with their size before sending, and the ticket shows image attachments as thumbnails. Pasting text copied from Word or Excel stays a text paste, here and in the new ticket form. Rebuild `web`. (#327)
   VI: Ô trả lời ticket nhận ảnh chụp màn hình dán vào hoặc tệp từ nút kẹp giấy, liệt kê kèm dung lượng trước khi gửi, và ticket hiện ảnh đính kèm dạng ảnh thu nhỏ. Dán chữ chép từ Word hay Excel vẫn là dán chữ, ở đây và ở form tạo ticket. Build lại `web`.
 
 - The new ticket form takes files by drag and drop or by pasting a screenshot, lists the chosen files with their size so they can be removed, and says up front that images, PDF, Word, Excel and other files up to 10 MB are accepted. Rebuild `web`. (#323)
