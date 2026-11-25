@@ -283,3 +283,78 @@ def test_webhook_test_posts_only_to_the_stored_url(monkeypatch):
     assert result == {'data': {'delivered': True}}
     assert sent == ['https://x.logic.azure.com/workflows/a']
     assert db.params == {'id': 'cat', 'workspace_id': 'ws'}
+
+
+@pytest.mark.skipif(not os.getenv('MCP_TEST_DATABASE_URL'), reason='Test database not configured')
+def test_feed_reads_the_token_workspace_with_filters_and_cursor():
+    from dataclasses import replace
+
+    from sqlalchemy import text
+
+    from app.core.config import Settings
+    from app.core.identifiers import cuid
+    from app.db.session import get_session
+    from app.main import create_app
+    from app.modules.mcp.connections import create
+    from app.modules.mcp.contracts import ConnectionInput
+    from tests.seeded_workspace import seeded_workspace
+
+    async def run():
+        async with seeded_workspace() as (factory, workspace, _member):
+            async with factory() as db:
+                seed, owner = await workspace(db)
+                other, _other_owner = await workspace(db, 'Other')
+                for ws, group, titles in [
+                    (seed['workspace_id'], 'AI', [('a1', 1), ('a2', 3)]),
+                    (seed['workspace_id'], 'Security', [('s1', 2)]),
+                    (other['workspace_id'], 'AI', [('x1', 4)]),
+                ]:
+                    category, source = cuid(), cuid()
+                    await db.execute(
+                        text('''INSERT INTO news_categories (id, workspace_id, name, created_at, updated_at)
+                                VALUES (:id, :ws, :name, now(), now())'''),
+                        {'id': category, 'ws': ws, 'name': group},
+                    )
+                    await db.execute(
+                        text('''INSERT INTO news_sources (id, workspace_id, category_id, name, feed_url, created_at)
+                                VALUES (:id, :ws, :cat, :name, :url, now())'''),
+                        {'id': source, 'ws': ws, 'cat': category, 'name': group + ' feed', 'url': 'https://example.com/' + source},
+                    )
+                    for title, day in titles:
+                        await db.execute(
+                            text('''INSERT INTO news_items (id, workspace_id, source_id, title, url, summary, published_at, created_at)
+                                    VALUES (:id, :ws, :src, :title, :url, 'sum', :at, now())'''),
+                            {'id': cuid(), 'ws': ws, 'src': source, 'title': title, 'url': 'https://example.com/' + title,
+                             'at': datetime(2026, 11, day, 8, 0)},
+                        )
+                await db.commit()
+                token = (await create(db, seed['workspace_id'], owner, ConnectionInput(name='News reader')))['token']
+
+            app = create_app(replace(Settings.from_environment(), auth_jwt_secret='news-feed-test-secret-at-least-32-characters'))
+
+            async def session_dependency():
+                async with factory() as db:
+                    yield db
+
+            app.dependency_overrides[get_session] = session_dependency
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://testserver') as client:
+                headers = {'Authorization': f'Bearer {token}'}
+                denied = await client.get('/api/v1/news/feed')
+                wrong = await client.get('/api/v1/news/feed', headers={'Authorization': 'Bearer flowie_mcp_nope'})
+                first = (await client.get('/api/v1/news/feed', params={'limit': 2}, headers=headers)).json()['data']
+                rest = (
+                    await client.get('/api/v1/news/feed', params={'limit': 2, 'cursor': first['nextCursor']}, headers=headers)
+                ).json()['data']
+                ai = (await client.get('/api/v1/news/feed', params={'category': 'AI', 'since': '2026-11-03T00:00:00Z'}, headers=headers)).json()['data']
+                reused = await client.get('/api/v1/news/feed', params={'category': 'AI', 'cursor': first['nextCursor']}, headers=headers)
+        return denied.status_code, wrong.status_code, first, rest, ai, reused.status_code
+
+    denied, wrong, first, rest, ai, reused = asyncio.run(run())
+    assert (denied, wrong, reused) == (401, 401, 400)
+    assert [item['title'] for item in first['items']] == ['a2', 's1']
+    assert first['items'][0] | {'id': None} == {
+        'id': None, 'title': 'a2', 'url': 'https://example.com/a2', 'source': 'AI feed', 'category': 'AI',
+        'publishedAt': '2026-11-03T08:00:00+00:00', 'summary': 'sum', 'aiSummary': None, 'riskLevel': None, 'riskScore': None,
+    }
+    assert [item['title'] for item in rest['items']] == ['a1'] and rest['nextCursor'] is None
+    assert [item['title'] for item in ai['items']] == ['a2']

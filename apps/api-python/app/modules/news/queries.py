@@ -94,3 +94,21 @@ def refresh_workspace_select_news_sources_sql(due_only: bool) -> TextClause:
     if due_only:
         query += ' AND (last_fetched_at IS NULL OR last_fetched_at < :cutoff)'
     return text(query)
+
+
+# Items of the token's workspace, newest first; a null filter matches everything. The group may be
+# given by id or exact name, and :after/:after_id continue after the previous page's last row.
+# VI: Tin của workspace mà token thuộc về, mới nhất trước; bộ lọc null thì khớp tất cả. Nhóm có thể
+# VI: là id hoặc đúng tên, và :after/:after_id đọc tiếp sau dòng cuối của trang trước.
+FEED_SELECT_NEWS_ITEMS = text(
+    '''SELECT i.id, i.title, i.url, i.summary, i.ai_summary, i.risk_level, i.risk_score, i.published_at,
+              s.name AS source_name, c.name AS category_name
+       FROM news_items i JOIN news_sources s ON s.id = i.source_id
+       JOIN news_categories c ON c.id = s.category_id
+       WHERE i.workspace_id = :workspace_id
+         AND (CAST(:category AS text) IS NULL OR c.id = :category OR c.name = :category)
+         AND (CAST(:since AS timestamp) IS NULL OR i.published_at >= :since)
+         AND (CAST(:until AS timestamp) IS NULL OR i.published_at < :until)
+         AND (CAST(:after AS timestamp) IS NULL OR (i.published_at, i.id) < (:after, :after_id))
+       ORDER BY i.published_at DESC, i.id DESC LIMIT :limit'''
+)
