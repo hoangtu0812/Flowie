@@ -21,7 +21,7 @@ export type Ticket = {
    reopenPending?: boolean;
    createdAt: string;
    updatedAt: string;
-   team: { id: string; name: string };
+   team: { id: string; name: string; supportTier?: number | null };
    project: { id: string; name: string } | null;
    createdBy: { id: string; name: string };
    assignee: { id: string; name: string } | null;
@@ -83,7 +83,7 @@ export const createTicket = async (
 export const updateTicket = async (
    workspaceId: string,
    ticketId: string,
-   changes: Partial<TicketDraft> & { assigneeId?: string | null }
+   changes: Partial<TicketDraft> & { assigneeId?: string | null; teamId?: string }
 ) =>
    responseData<Ticket>(
       await authenticatedFetch(

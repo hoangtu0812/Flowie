@@ -23,7 +23,8 @@ import { Textarea } from '@/components/ui/textarea';
 import type { WorkspaceTeam } from '@/features/teams/team-types';
 import { type FormEvent, useEffect, useState } from 'react';
 
-export type TeamSettingsEditKind = 'general' | 'template' | 'automation' | 'cycles' | 'hierarchy';
+export type TeamSettingsEditKind =
+   'general' | 'template' | 'automation' | 'cycles' | 'hierarchy' | 'support';
 
 type Template = { id: string; name: string };
 
@@ -33,6 +34,7 @@ const titles: Record<TeamSettingsEditKind, string> = {
    automation: 'Workflows & automations',
    cycles: 'Cycle cadence',
    hierarchy: 'Team hierarchy',
+   support: 'Service Desk support tier',
 };
 
 export function TeamSettingsDialog({
@@ -61,6 +63,7 @@ export function TeamSettingsDialog({
       team.cycleCadenceWeeks?.toString() ?? ''
    );
    const [parentTeamId, setParentTeamId] = useState(team.parentTeamId ?? 'none');
+   const [supportTier, setSupportTier] = useState(team.supportTier?.toString() ?? 'none');
    const [saving, setSaving] = useState(false);
    const [error, setError] = useState<string>();
 
@@ -75,6 +78,7 @@ export function TeamSettingsDialog({
       setAutoArchiveDays(team.autoArchiveDays?.toString() ?? '');
       setCycleCadenceWeeks(team.cycleCadenceWeeks?.toString() ?? '');
       setParentTeamId(team.parentTeamId ?? 'none');
+      setSupportTier(team.supportTier?.toString() ?? 'none');
       setError(undefined);
    }, [kind, team]);
 
@@ -107,6 +111,7 @@ export function TeamSettingsDialog({
             },
             cycles: { cycleCadenceWeeks: optionalNumber(cycleCadenceWeeks, 12) },
             hierarchy: { parentTeamId: parentTeamId === 'none' ? null : parentTeamId },
+            support: { supportTier: supportTier === 'none' ? null : Number(supportTier) },
          };
          if (kind === 'general' && name.trim().length < 2) {
             throw new Error('Team name must contain at least two characters.');
@@ -263,6 +268,25 @@ export function TeamSettingsDialog({
                               ))}
                         </SelectContent>
                      </Select>
+                  </div>
+               )}
+               {kind === 'support' && (
+                  <div className="space-y-2">
+                     <Label htmlFor="support-tier">Support tier</Label>
+                     <Select value={supportTier} onValueChange={setSupportTier}>
+                        <SelectTrigger id="support-tier">
+                           <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                           <SelectItem value="none">None</SelectItem>
+                           <SelectItem value="1">Tier 1 · first line</SelectItem>
+                           <SelectItem value="2">Tier 2</SelectItem>
+                           <SelectItem value="3">Tier 3</SelectItem>
+                        </SelectContent>
+                     </Select>
+                     <p className="text-sm text-muted-foreground">
+                        Teams with a tier can receive Service Desk tickets moved from another team.
+                     </p>
                   </div>
                )}
                {error && <p className="text-sm text-destructive">{error}</p>}

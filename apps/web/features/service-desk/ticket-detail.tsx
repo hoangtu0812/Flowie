@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Text } from '@astryxdesign/core/Text';
-import type { TeamMember } from '@/features/teams/team-types';
+import type { TeamMember, WorkspaceTeam } from '@/features/teams/team-types';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -68,6 +68,7 @@ export function TicketDetail({
    ticket,
    canHandle,
    members,
+   supportTeams = [],
    onChanged,
    onClose,
    onEdit,
@@ -77,6 +78,9 @@ export function TicketDetail({
    ticket: Ticket;
    canHandle: boolean;
    members: TeamMember[];
+   /** Teams with a support tier, which this ticket can move to. */
+   /** VI: Các team có cấp hỗ trợ, nơi ticket này có thể được chuyển tới. */
+   supportTeams?: WorkspaceTeam[];
    onChanged: () => Promise<void>;
    onClose: () => void;
    onEdit: () => void;
@@ -91,6 +95,12 @@ export function TicketDetail({
    const [busy, setBusy] = useState(false);
    const [error, setError] = useState<string>();
    const [pending, setPending] = useState<TicketDialogAction>();
+   const [moveTeam, setMoveTeam] = useState('');
+   const [moveAssignee, setMoveAssignee] = useState(UNASSIGNED);
+   const targets = supportTeams
+      .filter((team) => team.id !== ticket.teamId)
+      .sort((a, b) => (a.supportTier ?? 0) - (b.supportTier ?? 0) || a.name.localeCompare(b.name));
+   const target = targets.find((team) => team.id === moveTeam);
    const fileInput = useRef<HTMLInputElement>(null);
 
    const loadConversation = useCallback(async () => {
@@ -188,6 +198,13 @@ export function TicketDetail({
                      {[
                         ticket.category?.name,
                         ticket.project?.name ?? ticket.team.name,
+                        canHandle &&
+                           (ticket.team.supportTier
+                              ? tx('Tier {tier} · {team}', {
+                                   tier: ticket.team.supportTier,
+                                   team: ticket.team.name,
+                                })
+                              : ticket.project && ticket.team.name),
                         tx('Created by {name}', { name: ticket.createdBy.name }),
                         ticket.assignee && tx('Assigned to {name}', { name: ticket.assignee.name }),
                         when(ticket.createdAt),
@@ -230,6 +247,74 @@ export function TicketDetail({
                            ))}
                         </SelectContent>
                      </Select>
+                  </div>
+               )}
+               {canHandle && editable && targets.length > 0 && (
+                  <div className="grid gap-1.5 rounded-lg border p-3">
+                     <Label htmlFor="ticket-move-team">{tx('Escalate or hand over')}</Label>
+                     <div className="flex flex-wrap items-center gap-2">
+                        <Select
+                           value={moveTeam}
+                           disabled={busy}
+                           onValueChange={(value) => {
+                              setMoveTeam(value);
+                              setMoveAssignee(UNASSIGNED);
+                           }}
+                        >
+                           <SelectTrigger id="ticket-move-team" className="w-56">
+                              <SelectValue placeholder={tx('Choose a team')} />
+                           </SelectTrigger>
+                           <SelectContent>
+                              {targets.map((team) => (
+                                 <SelectItem key={team.id} value={team.id}>
+                                    {tx('Tier {tier} · {team}', {
+                                       tier: team.supportTier ?? '',
+                                       team: team.name,
+                                    })}
+                                 </SelectItem>
+                              ))}
+                           </SelectContent>
+                        </Select>
+                        <Select
+                           value={moveAssignee}
+                           disabled={busy || !target}
+                           onValueChange={setMoveAssignee}
+                        >
+                           <SelectTrigger aria-label={tx('Technician')} className="w-56">
+                              <SelectValue />
+                           </SelectTrigger>
+                           <SelectContent>
+                              <SelectItem value={UNASSIGNED}>{tx('Whole team')}</SelectItem>
+                              {target?.members.map((member) => (
+                                 <SelectItem key={member.id} value={member.id}>
+                                    {member.name}
+                                 </SelectItem>
+                              ))}
+                           </SelectContent>
+                        </Select>
+                        <Button
+                           type="button"
+                           size="sm"
+                           disabled={busy || !target}
+                           onClick={() =>
+                              void change(() =>
+                                 updateTicket(workspaceId, ticket.id, {
+                                    teamId: moveTeam,
+                                    ...(moveAssignee !== UNASSIGNED
+                                       ? { assigneeId: moveAssignee }
+                                       : {}),
+                                 })
+                              )
+                           }
+                        >
+                           {tx('Move ticket')}
+                        </Button>
+                     </div>
+                     <Text type="supporting">
+                        {tx(
+                           'The ticket leaves your queue and goes to the chosen team, or straight to one technician.'
+                        )}
+                     </Text>
                   </div>
                )}
                <div className="flex flex-wrap gap-2">

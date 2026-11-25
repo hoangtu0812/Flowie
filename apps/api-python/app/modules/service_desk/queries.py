@@ -13,7 +13,7 @@ ACCEPTS_TICKETS_SELECT_PROJECTS = text('''SELECT 1 FROM projects project JOIN te
                                       AND project.service_desk_enabled AND project.archived_at IS NULL AND team.archived_at IS NULL''')
 
 
-ASK_SELECT_ASK_MESSAGES = text('''SELECT ask.*, team.id AS team_id_value, team.name AS team_name, team.identifier AS team_identifier, team.icon AS team_icon,
+ASK_SELECT_ASK_MESSAGES = text('''SELECT ask.*, team.id AS team_id_value, team.name AS team_name, team.identifier AS team_identifier, team.icon AS team_icon, team.support_tier AS team_support_tier,
                                       project.id AS project_id_value, project.name AS project_name, project.identifier AS project_identifier,
                                       creator.id AS creator_id, creator.name AS creator_name, creator.avatar_url AS creator_avatar_url,
                                       issue.id AS issue_id_value, issue.identifier AS issue_identifier, issue.title AS issue_title, COALESCE(issue.completed_at, issue.canceled_at) AS issue_closed_at, issue_status.category AS issue_category, assignee.name AS assignee_name, assignee.avatar_url AS assignee_avatar_url, category.name AS category_name,
@@ -35,6 +35,10 @@ CATEGORY_NAME_TAKEN_SELECT_TICKET_CATEGORIES = text('SELECT 1 FROM ticket_catego
 
 
 HAS_CATEGORIES_SELECT_TICKET_CATEGORIES = text('SELECT 1 FROM ticket_categories WHERE workspace_id = :workspace_id AND archived_at IS NULL LIMIT 1')
+
+
+SUPPORT_TEAM_SELECT_TEAMS = text('''SELECT id FROM teams WHERE id = :team_id AND workspace_id = :workspace_id
+                                      AND support_tier IS NOT NULL AND archived_at IS NULL AND deleted_at IS NULL''')
 
 
 IS_HANDLER_SELECT_TEAM_MEMBERS = text('SELECT 1 FROM team_members WHERE team_id = :team_id AND user_id = :user_id')

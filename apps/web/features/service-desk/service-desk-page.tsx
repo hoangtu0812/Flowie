@@ -267,6 +267,7 @@ export function ServiceDeskPage() {
             ticket={ticket}
             canHandle={Boolean(queued)}
             members={data.teams.find((team) => team.id === ticket.teamId)?.members ?? []}
+            supportTeams={data.teams.filter((team) => team.supportTier)}
             onChanged={load}
             onClose={() => setSelected(undefined)}
             onEdit={() => setDialog('edit')}

@@ -58,6 +58,7 @@ from .queries import (
     RECORD_TICKET_FILE_SELECT_AUDIT_LOGS,
     REFERENCES_SELECT_PROJECTS,
     ROLE_SELECT_WORKSPACE_MEMBERS,
+    SUPPORT_TEAM_SELECT_TEAMS,
     TICKET_FOR_ISSUE_SELECT_ASKS,
     create_ask_message_select_ask_messages_sql,
     list_ask_messages_select_ask_messages_sql,
@@ -214,7 +215,7 @@ async def _ask(db: AsyncSession, ask_id: str, workspace_id: str) -> dict[str, An
     if not row: raise ApiError(404, 'Ask not found.', 'Not Found')
     pending = reopen_pending(row['status'], row['issue_category'], row['reopened_at'], row['issue_closed_at'])
     return {'id': row['id'], 'number': row['number'], 'identifier': ticket_identifier(row['number']), 'workspaceId': row['workspace_id'], 'teamId': row['team_id'], 'projectId': row['project_id'], 'title': row['title'], 'description': row['description'], 'priority': row['priority'], 'status': row['status'], 'ticketStatus': ticket_status(row['status'], row['issue_category'], row['last_message_author'] not in {None, row['created_by']}, pending), 'reopenPending': pending, 'createdById': row['created_by'], 'categoryId': row['category_id'], 'category': {'id': row['category_id'], 'name': row['category_name']} if row['category_id'] else None, 'assigneeId': row['assignee_id'], 'assignee': {'id': row['assignee_id'], 'name': row['assignee_name'], 'avatarUrl': row['assignee_avatar_url']} if row['assignee_id'] else None, 'convertedIssueId': row['converted_issue_id'], 'createdAt': row['created_at'], 'updatedAt': row['updated_at'],
-            'team': {'id': row['team_id_value'], 'name': row['team_name'], 'identifier': row['team_identifier'], 'icon': row['team_icon']},
+            'team': {'id': row['team_id_value'], 'name': row['team_name'], 'identifier': row['team_identifier'], 'icon': row['team_icon'], 'supportTier': row['team_support_tier']},
             'project': {'id': row['project_id_value'], 'name': row['project_name'], 'identifier': row['project_identifier'], 'team': {'id': row['team_id']} if row['team_id'] else None} if row['project_id_value'] else None,
             'createdBy': {'id': row['creator_id'], 'name': row['creator_name'], 'avatarUrl': row['creator_avatar_url']},
             'convertedIssue': {'id': row['issue_id_value'], 'identifier': row['issue_identifier'], 'title': row['issue_title']} if row['issue_id_value'] else None}
@@ -244,6 +245,21 @@ async def _manage(db: AsyncSession, ask: dict[str, Any], workspace_id: str, user
 async def _triage(db: AsyncSession, ask: dict[str, Any], workspace_id: str, user_id: str) -> None:
     if not await _is_handler(db, ask, workspace_id, user_id):
         raise ApiError(403, 'Only a team member or a workspace administrator can decide on this Ask.', 'Forbidden')
+
+
+async def _transfer_check(db: AsyncSession, ask: dict[str, Any], workspace_id: str, team_id: str | None, values: dict[str, Any], user_id: str) -> None:
+    """Moving a ticket between support tiers is the current team's call, and only to a support team.
+
+    The ticket keeps its project, which usually belongs to the first-line team, so the usual
+    project-team check does not apply here.
+    VI: Chuyển ticket giữa các cấp hỗ trợ là quyết định của team đang giữ ticket, và chỉ tới team hỗ
+    VI: trợ. Ticket giữ nguyên dự án, thường thuộc team tuyến đầu, nên không áp quy tắc dự án-team.
+    """
+    await _triage(db, ask, workspace_id, user_id)
+    if 'projectId' in values:
+        raise ApiError(400, 'Move the ticket and change its project in separate steps.', 'Bad Request')
+    if not team_id or not (await db.execute(SUPPORT_TEAM_SELECT_TEAMS, {'team_id': team_id, 'workspace_id': workspace_id})).first():
+        raise ApiError(400, 'Tickets can only move to a team with a support tier.', 'Bad Request')
 
 
 @router.get('/service-desk-projects')
@@ -389,7 +405,11 @@ async def update_ask(ask_id: str, payload: UpdateAskInput, workspaceId: str = Qu
     values = payload.model_dump(exclude_unset=True)
     if 'assigneeId' in values: await _triage(db, ask, workspaceId, user['id'])
     team_id, project_id = values.get('teamId', ask['teamId']), values.get('projectId', ask['projectId'])
-    await _references(db, workspaceId, team_id, project_id, user['id'])
+    transfer = team_id != ask['teamId']
+    if transfer:
+        await _transfer_check(db, ask, workspaceId, team_id, values, user['id'])
+    else:
+        await _references(db, workspaceId, team_id, project_id, user['id'])
     if 'categoryId' in values: await _check_category(db, workspaceId, values['categoryId'], intake=await _accepts_tickets(db, workspaceId, team_id, project_id))
     # An assignee belongs to the ticket's team, so moving the ticket clears the old one.
     # VI: Người được giao thuộc team của ticket, nên chuyển ticket sang team khác sẽ bỏ giao.
@@ -407,7 +427,14 @@ async def update_ask(ask_id: str, payload: UpdateAskInput, workspaceId: str = Qu
     if sets:
         await db.execute(update_ask_update_asks_sql(sets), params)
         await _audit(db, workspaceId, user['id'], 'ask.updated', ask_id, values)
-        if values.get('assigneeId') and values['assigneeId'] != ask['assigneeId']:
+        if transfer:
+            # The assignee hears about it if there is one; otherwise the whole receiving team does.
+            # VI: Có người được giao thì báo người đó; không thì báo cả team nhận.
+            recipients = {values['assigneeId']} if values.get('assigneeId') else await team_recipient_ids(db, team_id)
+            batch = await create_notification_batch(db, workspace_id=workspaceId, recipient_ids=recipients - {user['id']}, actor=user, event_type='ticket.transferred', entity_type='ticket', entity_id=ask_id,
+                                                    title=values.get('title', ask['title']), message='moved a ticket to your team', entity_path=f'/service-desk/{ask_id}', entity_label=ask['identifier'], discord=False)
+            await stage_notifications(db, batch, workspace_id=workspaceId)
+        elif values.get('assigneeId') and values['assigneeId'] != ask['assigneeId']:
             batch = await create_notification_batch(db, workspace_id=workspaceId, recipient_ids={values['assigneeId']}, actor=user, event_type='ticket.assigned', entity_type='ticket', entity_id=ask_id,
                                                     title=values.get('title', ask['title']), message='assigned you a ticket', entity_path=f'/service-desk/{ask_id}', entity_label=ask['identifier'], discord=False)
             await stage_notifications(db, batch, workspace_id=workspaceId)
