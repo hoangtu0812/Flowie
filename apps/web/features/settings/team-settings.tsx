@@ -288,6 +288,20 @@ export default function TeamSettings({ teamId }: { teamId: string }) {
             </SettingsSection>
          )}
          <SettingsSection
+            title="Service Desk"
+            description="Tier 1 receives new tickets and can move them to tier 2 or 3 teams."
+         >
+            <SettingsCard>
+               <SettingsRow
+                  icon={<Users className="size-4" />}
+                  title="Support tier"
+                  description={team.supportTier ? `Tier ${team.supportTier}` : 'No tier'}
+                  chevron
+                  onClick={() => setEditing('support')}
+               />
+            </SettingsCard>
+         </SettingsSection>
+         <SettingsSection
             title="Team hierarchy"
             description="Nest teams to reflect your organization."
          >

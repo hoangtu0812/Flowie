@@ -75,6 +75,7 @@ class UpdateTeamInput(BaseModel):
     autoArchiveDays: int | None = Field(default=None, ge=1, le=3650)
     parentTeamId: str | None = None
     defaultIssueTemplateId: str | None = None
+    supportTier: int | None = Field(default=None, ge=1, le=3)
 
 
 class TeamMemberInput(BaseModel):
@@ -95,7 +96,7 @@ def team_record(row: Any) -> dict[str, Any]:
         'color': row['color'], 'joinPolicy': 'INVITE_ONLY', 'triageEnabled': row['triage_enabled'],
         'cycleCadenceWeeks': row['cycle_cadence_weeks'], 'autoCloseDays': row['auto_close_days'],
         'autoArchiveDays': row['auto_archive_days'], 'parentTeamId': row['parent_team_id'],
-        'defaultIssueTemplateId': row['default_issue_template_id'], 'archivedAt': row['archived_at'],
+        'defaultIssueTemplateId': row['default_issue_template_id'], 'supportTier': row['support_tier'], 'archivedAt': row['archived_at'],
         'deletedAt': row['deleted_at'], 'issueSequence': row['issue_sequence'],
         'createdAt': row['created_at'], 'updatedAt': row['updated_at'],
     }
@@ -215,7 +216,7 @@ async def update_team(team_id: str, payload: UpdateTeamInput, workspaceId: str =
     close_days = values.get('autoCloseDays', current['auto_close_days'])
     archive_days = values.get('autoArchiveDays', current['auto_archive_days'])
     if close_days and archive_days and archive_days < close_days: raise ApiError(400, 'Auto-archive must not run before auto-close.', 'Bad Request')
-    columns = {'name': 'name', 'description': 'description', 'icon': 'icon', 'color': 'color', 'triageEnabled': 'triage_enabled', 'joinPolicy': 'join_policy', 'cycleCadenceWeeks': 'cycle_cadence_weeks', 'autoCloseDays': 'auto_close_days', 'autoArchiveDays': 'auto_archive_days', 'parentTeamId': 'parent_team_id', 'defaultIssueTemplateId': 'default_issue_template_id'}
+    columns = {'name': 'name', 'description': 'description', 'icon': 'icon', 'color': 'color', 'triageEnabled': 'triage_enabled', 'joinPolicy': 'join_policy', 'cycleCadenceWeeks': 'cycle_cadence_weeks', 'autoCloseDays': 'auto_close_days', 'autoArchiveDays': 'auto_archive_days', 'parentTeamId': 'parent_team_id', 'defaultIssueTemplateId': 'default_issue_template_id', 'supportTier': 'support_tier'}
     sets, params = [], {'id': team_id, 'now': utcnow()}
     for field, column in columns.items():
         if field in values:

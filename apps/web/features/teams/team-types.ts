@@ -29,6 +29,9 @@ export type WorkspaceTeam = {
    autoArchiveDays: number | null;
    parentTeamId: string | null;
    defaultIssueTemplateId: string | null;
+   /** Service Desk support level 1-3; null when tickets cannot be moved to this team. */
+   /** VI: Cấp hỗ trợ Service Desk 1-3; null khi không chuyển ticket tới team này được. */
+   supportTier?: number | null;
 };
 
 export type DeletedWorkspaceTeam = Pick<WorkspaceTeam, 'id' | 'name' | 'identifier' | 'icon'> & {

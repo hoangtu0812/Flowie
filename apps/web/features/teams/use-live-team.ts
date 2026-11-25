@@ -32,6 +32,7 @@ export type LiveTeam = {
    autoArchiveDays: number | null;
    parentTeamId: string | null;
    defaultIssueTemplateId: string | null;
+   supportTier?: number | null;
    createdAt: string;
    updatedAt: string;
    members: LiveTeamMember[];

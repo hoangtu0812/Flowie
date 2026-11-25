@@ -21,6 +21,9 @@ pull request and commit references, which are for us.
 
 ### Added
 
+- Service Desk support tiers: a team can be marked tier 1, 2 or 3 in its settings, and the team holding a ticket can move it to another tier's team, or straight to one of that team's technicians, who are notified. The ticket keeps its project and requester. Run migrations, then rebuild `api` and `web`. (#PR)
+  VI: Phân cấp hỗ trợ Service Desk: team được đặt cấp 1, 2 hoặc 3 trong cài đặt, và team đang giữ ticket có thể chuyển nó sang team cấp khác, hoặc thẳng tới một kỹ thuật viên của team đó, người nhận được thông báo. Ticket giữ nguyên dự án và người yêu cầu. Chạy migration rồi build lại `api` và `web`.
+
 - Service Desk ticket categories: workspace administrators keep a list of categories in Settings, people raising a ticket must pick one once the list exists, and the team can filter its queue by category. Run migrations, then rebuild `api` and `web`. (#324)
   VI: Phân loại ticket Service Desk: quản trị viên workspace quản lý danh sách phân loại trong Cài đặt, người tạo ticket phải chọn một phân loại khi danh sách đã có, và team lọc được hàng đợi theo phân loại. Chạy migration rồi build lại `api` và `web`.
 
