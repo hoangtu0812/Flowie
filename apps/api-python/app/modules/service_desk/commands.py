@@ -12,8 +12,16 @@ AUDIT_INSERT_AUDIT_LOGS = text('''INSERT INTO audit_logs (id, workspace_id, acto
 ADD_MESSAGE_INSERT_ASK_MESSAGES = text('INSERT INTO ask_messages (id, ask_id, author_id, content, created_at) VALUES (:id, :ask_id, :author_id, :content, :now)')
 
 
-CREATE_ASK_INSERT_ASKS = text('''INSERT INTO asks (id, number, workspace_id, team_id, project_id, title, description, priority, status, notified_ticket_status, created_by, created_at, updated_at)
-                             VALUES (:id, :number, :workspace_id, :team_id, :project_id, :title, :description, :priority, 'open', 'received', :created_by, :now, :now)''')
+CREATE_ASK_INSERT_ASKS = text('''INSERT INTO asks (id, number, workspace_id, team_id, project_id, category_id, title, description, priority, status, notified_ticket_status, created_by, created_at, updated_at)
+                             VALUES (:id, :number, :workspace_id, :team_id, :project_id, :category_id, :title, :description, :priority, 'open', 'received', :created_by, :now, :now)''')
+
+
+CREATE_CATEGORY_INSERT_TICKET_CATEGORIES = text('INSERT INTO ticket_categories (id, workspace_id, name, created_at) VALUES (:id, :workspace_id, :name, :now)')
+
+
+UPDATE_CATEGORY_UPDATE_TICKET_CATEGORIES = text('''UPDATE ticket_categories SET name = :name,
+                                       archived_at = CASE WHEN :archived THEN COALESCE(archived_at, CAST(:now AS timestamp)) ELSE NULL END
+                                       WHERE id = :id AND workspace_id = :workspace_id''')
 
 
 TRANSITION_ASK_UPDATE_ASKS = text('''UPDATE asks SET status = :status, notified_ticket_status = :label, updated_at = :now,

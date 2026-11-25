@@ -16,11 +16,25 @@ ACCEPTS_TICKETS_SELECT_PROJECTS = text('''SELECT 1 FROM projects project JOIN te
 ASK_SELECT_ASK_MESSAGES = text('''SELECT ask.*, team.id AS team_id_value, team.name AS team_name, team.identifier AS team_identifier, team.icon AS team_icon,
                                       project.id AS project_id_value, project.name AS project_name, project.identifier AS project_identifier,
                                       creator.id AS creator_id, creator.name AS creator_name, creator.avatar_url AS creator_avatar_url,
-                                      issue.id AS issue_id_value, issue.identifier AS issue_identifier, issue.title AS issue_title, COALESCE(issue.completed_at, issue.canceled_at) AS issue_closed_at, issue_status.category AS issue_category, assignee.name AS assignee_name, assignee.avatar_url AS assignee_avatar_url,
+                                      issue.id AS issue_id_value, issue.identifier AS issue_identifier, issue.title AS issue_title, COALESCE(issue.completed_at, issue.canceled_at) AS issue_closed_at, issue_status.category AS issue_category, assignee.name AS assignee_name, assignee.avatar_url AS assignee_avatar_url, category.name AS category_name,
                                       (SELECT message.author_id FROM ask_messages message WHERE message.ask_id = ask.id ORDER BY message.created_at DESC, message.id DESC LIMIT 1) AS last_message_author
                                FROM asks ask JOIN teams team ON team.id = ask.team_id JOIN users creator ON creator.id = ask.created_by
                                LEFT JOIN projects project ON project.id = ask.project_id LEFT JOIN issues issue ON issue.id = ask.converted_issue_id LEFT JOIN issue_statuses issue_status ON issue_status.id = issue.status_id LEFT JOIN users assignee ON assignee.id = ask.assignee_id
+                               LEFT JOIN ticket_categories category ON category.id = ask.category_id
                                WHERE ask.id = :ask_id AND ask.workspace_id = :workspace_id AND ask.archived_at IS NULL''')
+
+
+LIST_CATEGORIES_SELECT_TICKET_CATEGORIES = text('''SELECT id, name, archived_at FROM ticket_categories WHERE workspace_id = :workspace_id
+                                      AND (:archived OR archived_at IS NULL) ORDER BY archived_at NULLS FIRST, lower(name)''')
+
+
+CATEGORY_SELECT_TICKET_CATEGORIES = text('SELECT id, name, archived_at FROM ticket_categories WHERE id = :id AND workspace_id = :workspace_id')
+
+
+CATEGORY_NAME_TAKEN_SELECT_TICKET_CATEGORIES = text('SELECT 1 FROM ticket_categories WHERE workspace_id = :workspace_id AND lower(name) = lower(:name) AND id <> :id')
+
+
+HAS_CATEGORIES_SELECT_TICKET_CATEGORIES = text('SELECT 1 FROM ticket_categories WHERE workspace_id = :workspace_id AND archived_at IS NULL LIMIT 1')
 
 
 IS_HANDLER_SELECT_TEAM_MEMBERS = text('SELECT 1 FROM team_members WHERE team_id = :team_id AND user_id = :user_id')

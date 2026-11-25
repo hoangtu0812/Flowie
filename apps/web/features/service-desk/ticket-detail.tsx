@@ -186,6 +186,7 @@ export function TicketDetail({
                   <h2 className="text-lg font-semibold break-words">{ticket.title}</h2>
                   <Text type="supporting">
                      {[
+                        ticket.category?.name,
                         ticket.project?.name ?? ticket.team.name,
                         tx('Created by {name}', { name: ticket.createdBy.name }),
                         ticket.assignee && tx('Assigned to {name}', { name: ticket.assignee.name }),

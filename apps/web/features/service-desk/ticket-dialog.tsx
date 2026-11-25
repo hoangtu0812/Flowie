@@ -26,6 +26,7 @@ import { uploadAttachment } from '@/lib/attachments';
 import { cn } from '@/lib/utils';
 import { initialProjectId, type TicketPrefill } from './assistant-draft';
 import { messages } from './messages.vi';
+import { useTicketCategories } from './ticket-categories';
 import {
    createTicket,
    updateTicket,
@@ -85,6 +86,15 @@ export function TicketDialog({
       ticket?.description ?? initial?.description ?? ''
    );
    const [priority, setPriority] = useState<TicketPriority>(ticket?.priority ?? 'NONE');
+   const categories = useTicketCategories(workspaceId);
+   const [categoryId, setCategoryId] = useState(ticket?.category?.id ?? '');
+   // An archived category still shows on the ticket that has it, but cannot be picked again.
+   // VI: Phân loại đã lưu trữ vẫn hiện trên ticket đang dùng, nhưng không chọn lại được.
+   const categoryChoices =
+      ticket?.category && !categories.some((item) => item.id === ticket.category?.id)
+         ? [...categories, { ...ticket.category, archived: true }]
+         : categories;
+   const needsCategory = categories.length > 0 && !categoryId;
    const [files, setFiles] = useState<File[]>([]);
    const [fileError, setFileError] = useState<string>();
    const [dragging, setDragging] = useState(false);
@@ -92,7 +102,14 @@ export function TicketDialog({
    const [saving, setSaving] = useState(false);
    const [error, setError] = useState<string>();
    const project = projects.find((item) => item.id === projectId);
-   const draft = { title: title.trim(), description: description.trim() || null, priority };
+   const draft = {
+      title: title.trim(),
+      description: description.trim() || null,
+      priority,
+      // Sent only when changed, so saving a ticket whose category was archived still works.
+      // VI: Chỉ gửi khi đổi, để lưu ticket có phân loại đã lưu trữ vẫn được.
+      ...(categoryId && categoryId !== ticket?.category?.id ? { categoryId } : {}),
+   };
 
    const addFiles = (added: File[]) => {
       const tooBig = added.filter((file) => file.size > MAX_FILE_BYTES);
@@ -184,6 +201,23 @@ export function TicketDialog({
                         <SelectContent>
                            {projects.map((item) => (
                               <SelectItem key={item.id} value={item.id}>
+                                 {item.name}
+                              </SelectItem>
+                           ))}
+                        </SelectContent>
+                     </Select>
+                  </div>
+               )}
+               {categoryChoices.length > 0 && (
+                  <div className="grid gap-1.5">
+                     <Label htmlFor="ticket-category">{tx('Category')}</Label>
+                     <Select value={categoryId} onValueChange={setCategoryId}>
+                        <SelectTrigger id="ticket-category" className="w-full">
+                           <SelectValue placeholder={tx('Choose a category')} />
+                        </SelectTrigger>
+                        <SelectContent>
+                           {categoryChoices.map((item) => (
+                              <SelectItem key={item.id} value={item.id} disabled={item.archived}>
                                  {item.name}
                               </SelectItem>
                            ))}
@@ -315,7 +349,9 @@ export function TicketDialog({
                <Button
                   type="button"
                   onClick={() => void submit()}
-                  disabled={saving || draft.title.length < 2 || (!ticket && !project)}
+                  disabled={
+                     saving || draft.title.length < 2 || (!ticket && !project) || needsCategory
+                  }
                >
                   {tx(ticket ? 'Save' : 'Create ticket')}
                </Button>
