@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { Paperclip, X } from 'lucide-react';
+import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
    Dialog,
@@ -22,6 +23,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { useMessages } from '@/features/shared/use-messages';
 import { uploadAttachment } from '@/lib/attachments';
+import { cn } from '@/lib/utils';
 import { initialProjectId, type TicketPrefill } from './assistant-draft';
 import { messages } from './messages.vi';
 import {
@@ -31,6 +33,15 @@ import {
    type TicketPriority,
    type TicketProject,
 } from './service-desk-api';
+
+// Matches MAX_ATTACHMENT_BYTES in the API, so a file that would fail is caught before the ticket exists.
+// VI: Bằng MAX_ATTACHMENT_BYTES của API, để file chắc chắn lỗi bị chặn trước khi tạo ticket.
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
+
+const fileSize = (bytes: number) =>
+   bytes < 1024 * 1024
+      ? `${Math.max(1, Math.round(bytes / 1024))} KB`
+      : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
 export const PRIORITY_LABELS = {
    NONE: 'No priority',
@@ -75,10 +86,47 @@ export function TicketDialog({
    );
    const [priority, setPriority] = useState<TicketPriority>(ticket?.priority ?? 'NONE');
    const [files, setFiles] = useState<File[]>([]);
+   const [fileError, setFileError] = useState<string>();
+   const [dragging, setDragging] = useState(false);
+   const fileInput = useRef<HTMLInputElement>(null);
    const [saving, setSaving] = useState(false);
    const [error, setError] = useState<string>();
    const project = projects.find((item) => item.id === projectId);
    const draft = { title: title.trim(), description: description.trim() || null, priority };
+
+   const addFiles = (added: File[]) => {
+      const tooBig = added.filter((file) => file.size > MAX_FILE_BYTES);
+      setFileError(
+         tooBig.length
+            ? tx('{file} is larger than 10 MB.', {
+                 file: tooBig.map((file) => file.name).join(', '),
+              })
+            : undefined
+      );
+      setFiles((current) => [...current, ...added.filter((file) => file.size <= MAX_FILE_BYTES)]);
+   };
+   // Pasted screenshots all arrive as "image.png", so each gets a distinct name.
+   // VI: Ảnh dán từ clipboard đều tên "image.png", nên mỗi ảnh được đặt tên riêng.
+   const paste = (event: React.ClipboardEvent) => {
+      if (ticket) return;
+      const pasted = Array.from(event.clipboardData.files);
+      if (pasted.length === 0) return;
+      event.preventDefault();
+      const stamp = Date.now();
+      addFiles(
+         pasted.map((file, index) =>
+            file.type.startsWith('image/')
+               ? new File(
+                    [file],
+                    `screenshot-${stamp}-${index + 1}.${file.type.split('/')[1] || 'png'}`,
+                    {
+                       type: file.type,
+                    }
+                 )
+               : file
+         )
+      );
+   };
 
    const submit = async () => {
       setSaving(true);
@@ -111,7 +159,7 @@ export function TicketDialog({
 
    return (
       <Dialog open onOpenChange={(open) => !open && onClose()}>
-         <DialogContent className="sm:max-w-[560px]">
+         <DialogContent className="sm:max-w-[560px]" onPaste={paste}>
             <DialogHeader>
                <DialogTitle>{tx(ticket ? 'Edit ticket' : 'New ticket')}</DialogTitle>
                <DialogDescription>
@@ -184,12 +232,74 @@ export function TicketDialog({
                {!ticket && (
                   <div className="grid gap-1.5">
                      <Label htmlFor="ticket-files">{tx('Attachments')}</Label>
-                     <Input
+                     <input
+                        ref={fileInput}
                         id="ticket-files"
                         type="file"
                         multiple
-                        onChange={(event) => setFiles(Array.from(event.target.files ?? []))}
+                        className="sr-only"
+                        onChange={(event) => {
+                           addFiles(Array.from(event.target.files ?? []));
+                           event.target.value = '';
+                        }}
                      />
+                     <button
+                        type="button"
+                        className={cn(
+                           'flex flex-col items-center gap-1 rounded-md border border-dashed px-3 py-4 text-center text-sm text-muted-foreground transition-colors hover:bg-muted/50',
+                           dragging && 'border-primary bg-muted/50'
+                        )}
+                        onClick={() => fileInput.current?.click()}
+                        onDragOver={(event) => {
+                           event.preventDefault();
+                           setDragging(true);
+                        }}
+                        onDragLeave={() => setDragging(false)}
+                        onDrop={(event) => {
+                           event.preventDefault();
+                           setDragging(false);
+                           addFiles(Array.from(event.dataTransfer.files));
+                        }}
+                     >
+                        <Paperclip className="size-4" />
+                        <span>
+                           {tx('Drop files here, paste a screenshot, or click to choose.')}
+                        </span>
+                        <span className="text-xs">
+                           {tx('Images, PDF, Word, Excel and other files, up to 10 MB each.')}
+                        </span>
+                     </button>
+                     {fileError && (
+                        <p role="alert" className="text-sm text-destructive">
+                           {fileError}
+                        </p>
+                     )}
+                     {files.map((file, index) => (
+                        <div
+                           key={`${file.name}-${index}`}
+                           className="flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm"
+                        >
+                           <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
+                           <span className="min-w-0 flex-1 truncate">{file.name}</span>
+                           <span className="shrink-0 text-xs text-muted-foreground">
+                              {fileSize(file.size)}
+                           </span>
+                           <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="size-6"
+                              aria-label={tx('Remove {file}', { file: file.name })}
+                              onClick={() =>
+                                 setFiles((current) =>
+                                    current.filter((_, position) => position !== index)
+                                 )
+                              }
+                           >
+                              <X className="size-3.5" />
+                           </Button>
+                        </div>
+                     ))}
                   </div>
                )}
                {error && (
