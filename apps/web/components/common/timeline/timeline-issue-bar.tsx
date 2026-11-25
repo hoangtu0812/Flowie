@@ -2,6 +2,7 @@
 
 import { cn } from '@/lib/utils';
 import { type PointerEvent, useEffect, useRef, useState } from 'react';
+import { labelFitsInside } from './timeline-gantt';
 import { addDays, barGeometry, type DragMode, dragSchedule } from './timeline-scale';
 
 /** Dates and save callback that make a bar draggable. VI: Ngày và hàm lưu giúp thanh kéo được. */
@@ -22,7 +23,8 @@ export type BarSchedule = {
  * `width` are pixel offsets from the timeline scale; `label` is the accessible description
  * (identifier, title and date range). `warning` adds an amber outline (a sub-issue outside its
  * parent's dates). `progress` (0–100) turns the bar into a Gantt bar: tinted in `color`, the done
- * part filled deeper and the percent at the right end.
+ * part filled deeper and the percent at the right end. A bar too narrow for its title shows the
+ * title (and percent) just right of the bar instead.
  *
  * With `schedule` the bar can be dragged: the body moves the whole range, the 6 px handles on each
  * edge move the start or the end. Pixels become whole days (snap per day) and `dragSchedule` keeps
@@ -36,7 +38,8 @@ export type BarSchedule = {
  * VI: `width` là toạ độ pixel theo thang timeline; `label` là mô tả cho trình đọc màn hình (mã, tiêu
  * VI: đề và khoảng ngày). `warning` thêm viền cam (sub-issue nằm ngoài khoảng ngày của cha).
  * VI: `progress` (0–100) biến thanh thành thanh Gantt: nhuộm theo `color`, phần đã xong tô đậm hơn
- * VI: và phần trăm ở đầu phải.
+ * VI: và phần trăm ở đầu phải. Thanh quá hẹp so với tiêu đề thì tiêu đề (và phần trăm) nằm ngay
+ * VI: bên phải thanh.
  * VI:
  * VI: Có `schedule` thì thanh kéo được: thân thanh dời cả khoảng, tay nắm 6 px ở mỗi mép dời ngày
  * VI: bắt đầu hoặc kết thúc. Pixel được đổi thành ngày nguyên (snap theo ngày) và `dragSchedule`
@@ -126,6 +129,11 @@ export function TimelineIssueBar({
          />
       );
 
+   const inside = labelFitsInside(box.width, title, progress !== undefined);
+   const percent = progress !== undefined && (
+      <span className="shrink-0 tabular-nums text-[11px] text-muted-foreground">{progress}%</span>
+   );
+
    return (
       <div className="absolute inset-0">
          <button
@@ -161,16 +169,24 @@ export function TimelineIssueBar({
             }}
          >
             {handle('start')}
-            <span className="relative z-10 flex items-center gap-2 px-2 text-xs font-medium text-foreground">
-               <span className="truncate">{title}</span>
-               {progress !== undefined && box.width >= 80 && (
-                  <span className="ml-auto shrink-0 tabular-nums text-[11px] text-muted-foreground">
-                     {progress}%
-                  </span>
-               )}
-            </span>
+            {inside && (
+               <span className="relative z-10 flex items-center justify-between gap-2 px-2 text-xs font-medium text-foreground">
+                  <span className="truncate">{title}</span>
+                  {percent}
+               </span>
+            )}
             {handle('end')}
          </button>
+         {!inside && (
+            <span
+               aria-hidden="true"
+               className="absolute top-1 h-6 flex items-center gap-2 whitespace-nowrap text-xs font-medium text-foreground pointer-events-none"
+               style={{ left: box.left + box.width + 6 }}
+            >
+               <span className="max-w-64 truncate">{title}</span>
+               {percent}
+            </span>
+         )}
       </div>
    );
 }
