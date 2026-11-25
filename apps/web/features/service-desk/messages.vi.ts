@@ -97,7 +97,6 @@ export const messages = {
    'The requester reopened this ticket. Move {issue} back to work, or mark the ticket as resolved.':
       'Người yêu cầu đã mở lại ticket này. Hãy chuyển {issue} về đang làm, hoặc đánh dấu ticket đã giải quyết.',
    'Ask the assistant': 'Hỏi trợ lý',
-   'Back': 'Quay lại',
    'Conversation': 'Hội thoại',
    'Ask about an application and I will look in its approved documents.':
       'Hãy hỏi về một ứng dụng, mình sẽ tìm trong tài liệu đã duyệt của ứng dụng đó.',

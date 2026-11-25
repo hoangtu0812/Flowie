@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, FileText, Plus, SendHorizontal } from 'lucide-react';
+import { FileText, MessageCircle, Plus, SendHorizontal, X } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
@@ -8,6 +8,7 @@ import { Text } from '@astryxdesign/core/Text';
 import { MarkdownPreview } from '@/components/common/markdown/markdown-preview';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { cn } from '@/lib/utils';
 import { useMessages } from '@/features/shared/use-messages';
 import { ApiRequestError } from '@/lib/http';
 import {
@@ -115,18 +116,6 @@ export function ServiceDeskAssistant({
    return (
       <VStack className="h-full min-h-0 w-full">
          <HStack gap={2} className="h-10 shrink-0 items-center border-b px-4">
-            {onClose && (
-               <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="size-7"
-                  aria-label={tx('Back')}
-                  onClick={onClose}
-               >
-                  <ArrowLeft className="size-4" />
-               </Button>
-            )}
             <Text type="label" className="flex-1">
                {tx('Ask the assistant')}
             </Text>
@@ -139,6 +128,18 @@ export function ServiceDeskAssistant({
                <Plus className="size-3.5" />
                {tx('Create ticket')}
             </Button>
+            {onClose && (
+               <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  aria-label={tx('Close')}
+                  onClick={onClose}
+               >
+                  <X className="size-4" />
+               </Button>
+            )}
          </HStack>
          <VStack
             gap={4}
@@ -253,6 +254,49 @@ export function ServiceDeskAssistant({
             </Button>
          </form>
       </VStack>
+   );
+}
+
+type AssistantProps = Omit<Parameters<typeof ServiceDeskAssistant>[0], 'onClose'>;
+
+/**
+ * Floating chat button with the assistant in a pop-up panel (full screen on phones). The panel
+ * is only hidden when closed, so the conversation survives closing and reopening it.
+ * VI: Nút chat nổi, trợ lý mở trong khung pop-up (toàn màn hình trên điện thoại). Khung chỉ bị ẩn
+ * VI: khi đóng, nên hội thoại vẫn còn khi đóng rồi mở lại.
+ */
+export function AssistantBubble({
+   open,
+   onOpenChange,
+   ...props
+}: AssistantProps & { open: boolean; onOpenChange: (open: boolean) => void }) {
+   const tx = useMessages(messages);
+   return (
+      <>
+         <div
+            role="dialog"
+            aria-label={tx('Ask the assistant')}
+            className={cn(
+               'fixed inset-0 z-40 flex-col overflow-hidden bg-background sm:inset-auto sm:right-6 sm:bottom-22 sm:h-[min(640px,calc(100svh-8rem))] sm:w-[400px] sm:rounded-xl sm:border sm:shadow-xl',
+               open ? 'flex' : 'hidden'
+            )}
+         >
+            <ServiceDeskAssistant {...props} onClose={() => onOpenChange(false)} />
+         </div>
+         <Button
+            type="button"
+            size="icon"
+            aria-label={tx(open ? 'Close' : 'Ask the assistant')}
+            aria-expanded={open}
+            className={cn(
+               'fixed right-6 bottom-6 z-40 size-12 rounded-full shadow-lg',
+               open && 'hidden sm:inline-flex'
+            )}
+            onClick={() => onOpenChange(!open)}
+         >
+            {open ? <X className="size-5" /> : <MessageCircle className="size-5" />}
+         </Button>
+      </>
    );
 }
 
