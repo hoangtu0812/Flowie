@@ -68,6 +68,8 @@ export const messages = {
    'Write a reply': 'Viết phản hồi',
    'Send': 'Gửi',
    'Add file': 'Thêm tệp',
+   'Attach files to the reply': 'Đính kèm tệp vào trả lời',
+   'Write a reply or paste a screenshot': 'Viết trả lời hoặc dán ảnh chụp màn hình',
    'Convert to issue': 'Chuyển thành Issue',
    'Decline': 'Từ chối',
    'Reopen': 'Mở lại',
