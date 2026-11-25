@@ -21,7 +21,7 @@ pull request and commit references, which are for us.
 
 ### Changed
 
-- Service Desk has an "Assigned to me" tab for team members, listing the team tickets assigned to them, with the same state and project filters as the queue. Rebuild `web`. (#PR)
+- Service Desk has an "Assigned to me" tab for team members, listing the team tickets assigned to them, with the same state and project filters as the queue. Rebuild `web`. (#322)
   VI: Service Desk có thêm tab "Được giao cho tôi" cho thành viên team, liệt kê các ticket của team đang giao cho họ, lọc theo trạng thái và dự án giống hàng đợi. Build lại `web`.
 
 - The Service Desk assistant now opens from a chat button in the bottom-right corner instead of filling the ticket pane, so the pane always shows the selected ticket. Closing the chat keeps the conversation; on phones the chat opens full screen. Rebuild `web`. (#321)
