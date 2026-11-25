@@ -6,13 +6,7 @@ import {
    dragSchedule,
    monthWidthOf,
 } from '../components/common/timeline/timeline-scale';
-import {
-   dependencyPath,
-   isLateDependency,
-   issueProgress,
-   labelFitsInside,
-} from '../components/common/timeline/timeline-gantt';
-import { hasPlannedDates, issueSpan, outsideParent } from '../lib/issue-span';
+import { outsideParent } from '../lib/issue-span';
 import { byManualOrder } from '../features/manual-order/sub-issue-sort';
 
 test('dragging a bar snaps to whole days and never ends before it starts', () => {
@@ -61,36 +55,4 @@ test('manual order follows the stored position, then id, like the sub-issues API
       byManualOrder(rows).map((row) => row.id),
       ['b', 'a', 'c', 'd']
    );
-});
-
-test('Gantt progress, late dependencies and arrow paths come from real dates and statuses', () => {
-   assert.equal(issueProgress('completed', []), 100);
-   assert.equal(issueProgress('started', []), 0);
-   // Canceled sub-issues do not count against the parent.
-   assert.equal(issueProgress('started', ['completed', 'started', 'canceled', 'unstarted']), 33);
-   assert.equal(isLateDependency({ end: '2026-11-20', done: false }, '2026-11-18'), true);
-   assert.equal(isLateDependency({ end: '2026-11-20', done: true }, '2026-11-18'), false);
-   assert.equal(isLateDependency({ end: '2026-11-17', done: false }, '2026-11-18'), false);
-   assert.equal(isLateDependency({ end: null, done: false }, '2026-11-18'), false);
-   assert.equal(dependencyPath(100, 16, 200, 80, 32), 'M100 16H108V80H200');
-   // A blocked bar starting left of the blocker's end turns back between the rows.
-   assert.equal(dependencyPath(100, 16, 90, 80, 32), 'M100 16H108V64H82V80H90');
-});
-
-test('narrow bars put their label outside, and issues without a start begin no later than their end', () => {
-   // A 1–2 day bar at the Week zoom (~32 px per day) cannot hold a normal title.
-   assert.equal(labelFitsInside(64, 'Fix login redirect', true), false);
-   assert.equal(labelFitsInside(400, 'Fix login redirect', true), true);
-   assert.equal(labelFitsInside(140, 'Fix login redirect', false), true);
-   // Created after its end date: the bar starts on the end date instead of after it.
-   assert.deepEqual(issueSpan({ createdAt: '2026-11-20T08:00:00Z', targetDate: '2026-11-10' }), {
-      start: '2026-11-10',
-      end: '2026-11-10',
-   });
-   assert.deepEqual(issueSpan({ createdAt: '2026-11-01T08:00:00Z', dueDate: '2026-11-10' }), {
-      start: '2026-11-01',
-      end: '2026-11-10',
-   });
-   assert.equal(hasPlannedDates({ createdAt: '2026-11-01' }), false);
-   assert.equal(hasPlannedDates({ createdAt: '2026-11-01', dueDate: '2026-11-10' }), true);
 });

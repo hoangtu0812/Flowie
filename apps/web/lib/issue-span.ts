@@ -19,16 +19,11 @@ const day = (value?: string | null) => (value ? value.slice(0, 10) : null);
  * VI: nào, khi đó thanh có viền nét đứt.
  */
 export function issueSpan(issue: ScheduledIssue): { start: string; end: string | null } {
-   const end = day(issue.targetDate) ?? day(issue.dueDate);
-   const created = day(issue.createdAt) ?? '';
-   // An end set before the issue was created starts the bar on that end, not after it.
-   // VI: Ngày kết thúc trước ngày tạo issue thì thanh bắt đầu tại ngày kết thúc, không phải sau đó.
-   return { start: day(issue.startDate) ?? (end && end < created ? end : created), end };
+   return {
+      start: day(issue.startDate) ?? day(issue.createdAt) ?? '',
+      end: day(issue.targetDate) ?? day(issue.dueDate),
+   };
 }
-
-/** Whether an issue has any planned date. VI: Issue có ngày dự kiến nào không. */
-export const hasPlannedDates = (issue: ScheduledIssue): boolean =>
-   Boolean(issue.startDate || issue.targetDate || issue.dueDate);
 
 /**
  * Whether a sub-issue's bar leaves its parent's dates: it starts before the parent's planned start

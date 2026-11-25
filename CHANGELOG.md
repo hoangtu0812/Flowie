@@ -19,15 +19,10 @@ pull request and commit references, which are for us.
 
 ## Unreleased
 
-### Fixed
-
-- The project Timeline is easier to read: a bar too short for its title shows the title and percent beside it, the view opens where the open work starts instead of on empty rows, group progress lines are thin and muted and only cover the group's planned issues, the list shows the priority, identifier and assignee again with the dates in the row's tooltip, issues with only an end date start no later than that date, and issues without any date show "No dates". Rebuild `web`. (DTD-1026, #319)
-  VI: Timeline của dự án dễ đọc hơn: thanh quá ngắn so với tiêu đề hiện tiêu đề và phần trăm bên cạnh, màn hình mở tại nơi việc còn mở bắt đầu thay vì các hàng trống, đường tiến độ của nhóm mảnh và nhạt, chỉ phủ các issue có lịch của nhóm, danh sách hiện lại độ ưu tiên, mã issue và người phụ trách, ngày nằm trong tooltip của hàng, issue chỉ có ngày kết thúc bắt đầu không muộn hơn ngày đó, và issue không có ngày nào hiện "No dates". Build lại `web`.
-
 ### Changed
 
-- The project Timeline is now a Gantt chart: issues are grouped by milestone or by status in folding groups with a progress bar, bars take the group colour and show how much is done, milestones are diamonds with their date, "blocks" relations are drawn as arrows (red when the blocker ends after the blocked issue starts), and the list shows the assignee, the end date and a warning for overdue or blocked issues. Timelines get a Day scale, a Day/Week/Month/Quarter/Year switch that keeps the dates in view, shaded weekends and a labelled Today line, and dragged bars can be undone or reset. Rebuild `api` and `web`. (DTD-1026, #318)
-  VI: Timeline của dự án nay là biểu đồ Gantt: issue được nhóm theo milestone hoặc trạng thái thành các nhóm thu gọn được có thanh tiến độ, thanh mang màu nhóm và cho thấy phần đã xong, milestone là hình thoi kèm ngày, quan hệ "blocks" vẽ thành mũi tên (màu đỏ khi issue chặn kết thúc sau ngày issue bị chặn bắt đầu), danh sách hiện người phụ trách, ngày kết thúc và cảnh báo cho issue quá hạn hoặc bị chặn. Timeline có thêm thang Day, nút chuyển Day/Week/Month/Quarter/Year giữ nguyên vùng ngày đang xem, cuối tuần tô nhạt và vạch Today có nhãn; thanh đã kéo có thể Undo hoặc Reset. Build lại `api` và `web`.
+- The project Timeline is back to its earlier layout: the Gantt view tried in DTD-1026 (#318, #319) is withdrawn because it was harder to read than the old timeline. The API keeps the extra `milestoneId` and `blockedBy` issue fields. Rebuild `web`. (DTD-1026, #320)
+  VI: Timeline của dự án trở lại giao diện trước đây: bản Gantt thử trong DTD-1026 (#318, #319) được gỡ vì khó đọc hơn timeline cũ. API vẫn giữ hai trường `milestoneId` và `blockedBy` của issue. Build lại `web`.
 
 ## [0.25.0] — 2026-11-19 14:31 +07
 
