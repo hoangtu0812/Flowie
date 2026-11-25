@@ -67,3 +67,6 @@ apps/web/playwright-report/
 
 # editors
 .idea/
+
+# graphify knowledge graph output
+graphify-out/
