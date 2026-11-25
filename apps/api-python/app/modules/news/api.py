@@ -7,14 +7,18 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import utcnow
+from ...core.dates import parse_date
 from ...core.errors import ApiError
 from ...core.identifiers import cuid
+from ...core.pagination import CursorCodec
 from ...core.utc_responses import UtcAPIRouter
 from ...db.session import get_session
 from ...services.microsoft_teams import valid_teams_webhook
 from ..identity.auth import current_user
 from ..identity.password_reset import limit_request
 from ..integrations.api import send_teams_test
+from ..mcp.commands import CALL_UPDATE_MCP_CONNECTIONS
+from ..mcp.connections import authenticate
 from .ai import summarize_item
 from .commands import (
     CREATE_CATEGORY_INSERT_NEWS_CATEGORIES,
@@ -28,6 +32,7 @@ from .commands import (
 )
 from .feeds import NEWS_PRESETS, feed_url
 from .queries import (
+    FEED_SELECT_NEWS_ITEMS,
     TEST_CATEGORY_WEBHOOK_SELECT_NEWS_CATEGORIES,
 )
 from .service import member_role, news_page, refresh_workspace, require_manager
@@ -85,6 +90,49 @@ async def list_news(
     db: AsyncSession = Depends(get_session),
 ):
     return {'data': await news_page(db, workspaceId, user['id'])}
+
+
+@router.get('/feed')
+async def news_feed(
+    request: Request,
+    category: str | None = Query(default=None, min_length=1, max_length=100),
+    since: str | None = Query(default=None, max_length=40),
+    until: str | None = Query(default=None, max_length=40),
+    limit: int = Query(default=50, ge=1, le=100),
+    cursor: str | None = Query(default=None, max_length=1000),
+    db: AsyncSession = Depends(get_session),
+):
+    # Read-only news for other systems. It takes the workspace's MCP connection token
+    # (Bearer flowie_mcp_...) instead of a browser session and shares that token's per-minute limit.
+    # VI: Tin chỉ-đọc cho hệ thống khác. Dùng token kết nối MCP của workspace (Bearer flowie_mcp_...)
+    # VI: thay cho phiên trình duyệt và dùng chung giới hạn mỗi phút của token đó.
+    scheme, _, token = request.headers.get('authorization', '').partition(' ')
+    if scheme.lower() != 'bearer' or not token:
+        raise ApiError(401, 'A Bearer MCP connection token is required.', 'Unauthorized')
+    principal = await authenticate(db, token)
+    calls = (await db.execute(CALL_UPDATE_MCP_CONNECTIONS, {'id': principal.connection_id, 'now': utcnow()})).scalar_one()
+    await db.commit()
+    if calls > request.app.state.settings.mcp_rate_limit:
+        raise ApiError(429, 'Request limit exceeded.', 'Too Many Requests')
+    filters = {'category': category, 'since': parse_date(since), 'until': parse_date(until)}
+    codec = CursorCodec(request.app.state.settings.auth_jwt_secret, principal.connection_id, 'news-feed', filters)
+    after, after_id = codec.decode(cursor) if cursor else (None, None)
+    rows = (
+        await db.execute(
+            FEED_SELECT_NEWS_ITEMS,
+            {**filters, 'workspace_id': principal.workspace_id, 'after': after, 'after_id': after_id, 'limit': limit + 1},
+        )
+    ).mappings().all()
+    items = [
+        {
+            'id': row['id'], 'title': row['title'], 'url': row['url'], 'source': row['source_name'],
+            'category': row['category_name'], 'publishedAt': row['published_at'], 'summary': row['summary'],
+            'aiSummary': row['ai_summary'], 'riskLevel': row['risk_level'], 'riskScore': row['risk_score'],
+        }
+        for row in rows[:limit]
+    ]
+    last = rows[limit - 1] if len(rows) > limit else None
+    return {'data': {'items': items, 'nextCursor': codec.encode(last['published_at'], last['id']) if last else None}}
 
 
 @router.post('/categories')
