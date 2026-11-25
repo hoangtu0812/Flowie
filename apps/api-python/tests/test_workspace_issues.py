@@ -176,6 +176,28 @@ async def verify_workspace_issues():
             )
             assert [row["id"] for row in project_rows] == [bug["id"]]
             assert project_rows[0]["team"] is None
+            assert project_rows[0]["milestoneId"] is None
+            assert project_rows[0]["blockedBy"] == []
+            # A blocker in the project reaches the Timeline; one outside it stays hidden.
+            await update_issue(
+                child["id"], UpdateIssueInput(projectId=project_id), workspace, member, db
+            )
+            for blocker in (child["id"], private["id"]):
+                await db.execute(
+                    text(
+                        """INSERT INTO issue_relations(workspace_id,issue_id,related_issue_id,type,created_by,created_at)
+                    VALUES (:workspace,:blocker,:blocked,'BLOCKS',:user,:now)"""
+                    ),
+                    {"workspace": workspace, "blocker": blocker, "blocked": bug["id"], "user": member["id"], "now": now},
+                )
+            blocked = {
+                row["id"]: row["blockedBy"]
+                for row in await _project_issue_rows(db, project_id, workspace, member["id"])
+            }
+            assert blocked == {bug["id"]: [child["id"]], child["id"]: []}
+            await update_issue(
+                child["id"], UpdateIssueInput(projectId=None), workspace, member, db
+            )
             assert [
                 row["id"]
                 for row in (await _project(db, project_id, workspace, member["id"]))[

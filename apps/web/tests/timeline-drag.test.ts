@@ -6,6 +6,11 @@ import {
    dragSchedule,
    monthWidthOf,
 } from '../components/common/timeline/timeline-scale';
+import {
+   dependencyPath,
+   isLateDependency,
+   issueProgress,
+} from '../components/common/timeline/timeline-gantt';
 import { outsideParent } from '../lib/issue-span';
 import { byManualOrder } from '../features/manual-order/sub-issue-sort';
 
@@ -55,4 +60,18 @@ test('manual order follows the stored position, then id, like the sub-issues API
       byManualOrder(rows).map((row) => row.id),
       ['b', 'a', 'c', 'd']
    );
+});
+
+test('Gantt progress, late dependencies and arrow paths come from real dates and statuses', () => {
+   assert.equal(issueProgress('completed', []), 100);
+   assert.equal(issueProgress('started', []), 0);
+   // Canceled sub-issues do not count against the parent.
+   assert.equal(issueProgress('started', ['completed', 'started', 'canceled', 'unstarted']), 33);
+   assert.equal(isLateDependency({ end: '2026-11-20', done: false }, '2026-11-18'), true);
+   assert.equal(isLateDependency({ end: '2026-11-20', done: true }, '2026-11-18'), false);
+   assert.equal(isLateDependency({ end: '2026-11-17', done: false }, '2026-11-18'), false);
+   assert.equal(isLateDependency({ end: null, done: false }, '2026-11-18'), false);
+   assert.equal(dependencyPath(100, 16, 200, 80, 32), 'M100 16H108V80H200');
+   // A blocked bar starting left of the blocker's end turns back between the rows.
+   assert.equal(dependencyPath(100, 16, 90, 80, 32), 'M100 16H108V64H82V80H90');
 });

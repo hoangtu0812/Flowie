@@ -39,6 +39,8 @@ export type ProjectDetailUiIssue = Issue & {
    /** The team status as stored (the presentation status is mapped by name), for workflow order.
     * VI: Trạng thái team như đã lưu (trạng thái hiển thị được map theo tên), để sắp theo workflow. */
    workflowStatus?: { id: string; name: string; position: number };
+   milestoneId?: string | null;
+   blockedBy?: string[];
 };
 
 const titleCase = (value: string) =>
@@ -240,6 +242,8 @@ export function toIssueUi(
       version: issue.version,
       manualOrder: issue.manualOrder,
       subIssueSort: issue.subIssueSort,
+      milestoneId: issue.milestoneId ?? null,
+      blockedBy: issue.blockedBy ?? [],
       workflowStatus: {
          id: issue.status.id,
          name: issue.status.name,

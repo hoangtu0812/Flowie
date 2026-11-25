@@ -221,6 +221,16 @@ PROJECT_ISSUE_ROWS_SELECT_ISSUE_LABELS = text(
 )
 
 
+# Only BLOCKS relations between issues of the same rows, so the Timeline never learns about an
+# issue the caller cannot see. VI: Chỉ quan hệ BLOCKS giữa các issue trong cùng tập hàng, nên
+# Timeline không biết tới issue mà người gọi không được xem.
+PROJECT_ISSUE_ROWS_SELECT_BLOCKERS = text(
+    """SELECT ir.issue_id, ir.related_issue_id FROM issue_relations ir
+               WHERE ir.type = 'BLOCKS' AND ir.issue_id = ANY(:issue_ids)
+               AND ir.related_issue_id = ANY(:issue_ids) ORDER BY ir.created_at"""
+)
+
+
 PROJECT_ISSUE_ROWS_SELECT_ISSUE_CYCLES = text(
     """SELECT ic.issue_id, ic.cycle_id, ic.created_at, cy.name
                FROM issue_cycles ic JOIN cycles cy ON cy.id = ic.cycle_id

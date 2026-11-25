@@ -21,7 +21,8 @@ export type BarSchedule = {
  * in both themes, a dashed edge when the issue has no end date, and a hover fill. `left` and
  * `width` are pixel offsets from the timeline scale; `label` is the accessible description
  * (identifier, title and date range). `warning` adds an amber outline (a sub-issue outside its
- * parent's dates).
+ * parent's dates). `progress` (0–100) turns the bar into a Gantt bar: tinted in `color`, the done
+ * part filled deeper and the percent at the right end.
  *
  * With `schedule` the bar can be dragged: the body moves the whole range, the 6 px handles on each
  * edge move the start or the end. Pixels become whole days (snap per day) and `dragSchedule` keeps
@@ -34,6 +35,8 @@ export type BarSchedule = {
  * VI: hai theme, viền nét đứt khi issue chưa có ngày kết thúc, và đổi nền khi hover. `left` và
  * VI: `width` là toạ độ pixel theo thang timeline; `label` là mô tả cho trình đọc màn hình (mã, tiêu
  * VI: đề và khoảng ngày). `warning` thêm viền cam (sub-issue nằm ngoài khoảng ngày của cha).
+ * VI: `progress` (0–100) biến thanh thành thanh Gantt: nhuộm theo `color`, phần đã xong tô đậm hơn
+ * VI: và phần trăm ở đầu phải.
  * VI:
  * VI: Có `schedule` thì thanh kéo được: thân thanh dời cả khoảng, tay nắm 6 px ở mỗi mép dời ngày
  * VI: bắt đầu hoặc kết thúc. Pixel được đổi thành ngày nguyên (snap theo ngày) và `dragSchedule`
@@ -52,6 +55,7 @@ export function TimelineIssueBar({
    onClick,
    warning = false,
    schedule,
+   progress,
 }: {
    left: number;
    width: number;
@@ -62,6 +66,7 @@ export function TimelineIssueBar({
    onClick: () => void;
    warning?: boolean;
    schedule?: BarSchedule;
+   progress?: number;
 }) {
    const [drag, setDrag] = useState<{ mode: DragMode; originX: number; days: number } | null>(null);
    const [pending, setPending] = useState<{ start: string; end: string | null } | null>(null);
@@ -146,11 +151,23 @@ export function TimelineIssueBar({
                schedule && 'touch-none cursor-grab',
                drag && 'cursor-grabbing'
             )}
-            style={{ left: box.left, width: box.width, borderColor: color }}
+            style={{
+               left: box.left,
+               width: box.width,
+               borderColor: color,
+               ...(progress !== undefined && {
+                  backgroundImage: `linear-gradient(to right, color-mix(in srgb, ${color} 45%, transparent) ${progress}%, color-mix(in srgb, ${color} 18%, transparent) ${progress}%)`,
+               }),
+            }}
          >
             {handle('start')}
-            <span className="relative z-10 block truncate px-2 text-xs font-medium text-foreground">
-               {title}
+            <span className="relative z-10 flex items-center gap-2 px-2 text-xs font-medium text-foreground">
+               <span className="truncate">{title}</span>
+               {progress !== undefined && box.width >= 80 && (
+                  <span className="ml-auto shrink-0 tabular-nums text-[11px] text-muted-foreground">
+                     {progress}%
+                  </span>
+               )}
             </span>
             {handle('end')}
          </button>
