@@ -21,7 +21,7 @@ pull request and commit references, which are for us.
 
 ### Changed
 
-- The project Timeline is back to its earlier layout: the Gantt view tried in DTD-1026 (#318, #319) is withdrawn because it was harder to read than the old timeline. The API keeps the extra `milestoneId` and `blockedBy` issue fields. Rebuild `web`. (DTD-1026, #PR)
+- The project Timeline is back to its earlier layout: the Gantt view tried in DTD-1026 (#318, #319) is withdrawn because it was harder to read than the old timeline. The API keeps the extra `milestoneId` and `blockedBy` issue fields. Rebuild `web`. (DTD-1026, #320)
   VI: Timeline của dự án trở lại giao diện trước đây: bản Gantt thử trong DTD-1026 (#318, #319) được gỡ vì khó đọc hơn timeline cũ. API vẫn giữ hai trường `milestoneId` và `blockedBy` của issue. Build lại `web`.
 
 ## [0.25.0] — 2026-11-19 14:31 +07
