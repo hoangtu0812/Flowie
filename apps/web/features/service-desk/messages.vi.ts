@@ -15,6 +15,12 @@ export const messages = {
    'Description': 'Mô tả',
    'Priority': 'Độ ưu tiên',
    'Attachments': 'Tệp đính kèm',
+   'Drop files here, paste a screenshot, or click to choose.':
+      'Kéo thả tệp vào đây, dán ảnh chụp màn hình, hoặc bấm để chọn.',
+   'Images, PDF, Word, Excel and other files, up to 10 MB each.':
+      'Ảnh, PDF, Word, Excel và các tệp khác, tối đa 10 MB mỗi tệp.',
+   '{file} is larger than 10 MB.': '{file} lớn hơn 10 MB.',
+   'Remove {file}': 'Bỏ {file}',
    'What do you need help with?': 'Bạn cần hỗ trợ gì?',
    'Add the details the team needs to help you.': 'Thêm thông tin để team hỗ trợ bạn.',
    'All projects': 'Tất cả dự án',

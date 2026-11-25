@@ -21,6 +21,9 @@ pull request and commit references, which are for us.
 
 ### Changed
 
+- The new ticket form takes files by drag and drop or by pasting a screenshot, lists the chosen files with their size so they can be removed, and says up front that images, PDF, Word, Excel and other files up to 10 MB are accepted. Rebuild `web`. (#323)
+  VI: Form tạo ticket nhận tệp bằng kéo thả hoặc dán ảnh chụp màn hình, liệt kê các tệp đã chọn kèm dung lượng để bỏ bớt, và ghi rõ nhận ảnh, PDF, Word, Excel và tệp khác tối đa 10 MB. Build lại `web`.
+
 - The Service Desk ticket view is easier to read: the title stands out, the content keeps a comfortable width, messages show who wrote them, and the floating assistant button no longer covers the Send button. Rebuild `web`. (#322)
   VI: Màn hình ticket trong Service Desk dễ đọc hơn: tiêu đề nổi bật, nội dung có độ rộng vừa phải, tin nhắn ghi rõ người viết, và nút trợ lý nổi không còn che nút Gửi. Build lại `web`.
 
