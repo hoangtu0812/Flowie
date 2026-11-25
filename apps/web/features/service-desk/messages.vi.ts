@@ -2,6 +2,8 @@ export const messages = {
    'Service Desk': 'Service Desk',
    'My tickets ({count})': 'Ticket của tôi ({count})',
    'Queue ({count})': 'Hàng đợi ({count})',
+   'Assigned to me ({count})': 'Được giao cho tôi ({count})',
+   'No tickets are assigned to you.': 'Không có ticket nào được giao cho bạn.',
    'New ticket': 'Tạo ticket',
    'Edit ticket': 'Sửa ticket',
    'Save': 'Lưu',
