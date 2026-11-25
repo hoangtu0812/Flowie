@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronLeft, Paperclip } from 'lucide-react';
+import { ChevronLeft, Paperclip, X } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -25,6 +25,7 @@ import { parseInstant } from '@/lib/time';
 import { useUiPreferencesStore } from '@/store/ui-preferences-store';
 import { messages } from './messages.vi';
 import { TicketActionDialog, type TicketDialogAction } from './ticket-action-dialog';
+import { fileSize, MAX_FILE_BYTES, pastedFiles } from './ticket-files';
 import {
    api,
    archiveTicket,
@@ -92,6 +93,7 @@ export function TicketDetail({
    const [thread, setThread] = useState<TicketMessage[]>([]);
    const [files, setFiles] = useState<Attachment[]>([]);
    const [reply, setReply] = useState('');
+   const [attached, setAttached] = useState<File[]>([]);
    const [busy, setBusy] = useState(false);
    const [error, setError] = useState<string>();
    const [pending, setPending] = useState<TicketDialogAction>();
@@ -102,6 +104,7 @@ export function TicketDetail({
       .sort((a, b) => (a.supportTier ?? 0) - (b.supportTier ?? 0) || a.name.localeCompare(b.name));
    const target = targets.find((team) => team.id === moveTeam);
    const fileInput = useRef<HTMLInputElement>(null);
+   const replyFileInput = useRef<HTMLInputElement>(null);
 
    const loadConversation = useCallback(async () => {
       const [nextThread, nextFiles] = await Promise.all([
@@ -138,12 +141,32 @@ export function TicketDetail({
          await action();
          await onChanged();
       });
+   // Files go up first, so a failed upload keeps the reply text for another try.
+   // VI: Tệp được tải lên trước, nên nếu tải lỗi thì nội dung trả lời vẫn còn để gửi lại.
    const send = () =>
       change(async () => {
-         await sendTicketMessage(workspaceId, ticket.id, reply.trim());
+         for (const file of attached) {
+            await uploadAttachment(workspaceId, 'ticket', ticket.id, file);
+            setAttached((current) => current.filter((item) => item !== file));
+         }
+         if (reply.trim()) await sendTicketMessage(workspaceId, ticket.id, reply.trim());
          setReply('');
          await loadConversation();
       });
+   const attach = (added: File[]) => {
+      const tooBig = added.filter((file) => file.size > MAX_FILE_BYTES);
+      setError(
+         tooBig.length
+            ? tx('{file} is larger than 10 MB.', {
+                 file: tooBig.map((file) => file.name).join(', '),
+              })
+            : undefined
+      );
+      setAttached((current) => [
+         ...current,
+         ...added.filter((file) => file.size <= MAX_FILE_BYTES),
+      ]);
+   };
    const upload = (selected: File[]) =>
       act(async () => {
          for (const file of selected)
@@ -445,7 +468,16 @@ export function TicketDetail({
                         target="_blank"
                         rel="noreferrer"
                      >
-                        <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
+                        {file.mimeType.startsWith('image/') ? (
+                           // eslint-disable-next-line @next/next/no-img-element -- authenticated download URL
+                           <img
+                              src={`${api}/attachments/${encodeURIComponent(file.id)}/download`}
+                              alt=""
+                              className="size-10 shrink-0 rounded object-cover"
+                           />
+                        ) : (
+                           <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
+                        )}
                         {file.filename}
                      </a>
                   ))}
@@ -492,24 +524,80 @@ export function TicketDetail({
                      </Button>
                   </HStack>
                ) : (
-                  <HStack gap={2} className="items-end">
-                     <Textarea
-                        value={reply}
-                        rows={2}
-                        maxLength={10000}
-                        aria-label={tx('Write a reply')}
-                        placeholder={tx('Write a reply')}
-                        className="min-h-0 resize-none"
-                        onChange={(event) => setReply(event.target.value)}
-                     />
-                     <Button
-                        type="button"
-                        disabled={busy || !reply.trim()}
-                        onClick={() => void send()}
-                     >
-                        {tx('Send')}
-                     </Button>
-                  </HStack>
+                  <>
+                     {attached.map((file, index) => (
+                        <HStack
+                           key={`${file.name}-${index}`}
+                           gap={2}
+                           className="items-center rounded-md border px-3 py-1.5 text-sm"
+                        >
+                           <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
+                           <span className="min-w-0 flex-1 truncate">{file.name}</span>
+                           <span className="shrink-0 text-xs text-muted-foreground">
+                              {fileSize(file.size)}
+                           </span>
+                           <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="size-6"
+                              aria-label={tx('Remove {file}', { file: file.name })}
+                              onClick={() =>
+                                 setAttached((current) =>
+                                    current.filter((_, position) => position !== index)
+                                 )
+                              }
+                           >
+                              <X className="size-3.5" />
+                           </Button>
+                        </HStack>
+                     ))}
+                     <HStack gap={2} className="items-end">
+                        <Button
+                           type="button"
+                           variant="ghost"
+                           size="icon"
+                           disabled={busy}
+                           aria-label={tx('Attach files to the reply')}
+                           onClick={() => replyFileInput.current?.click()}
+                        >
+                           <Paperclip className="size-4" />
+                        </Button>
+                        <input
+                           ref={replyFileInput}
+                           type="file"
+                           multiple
+                           hidden
+                           aria-label={tx('Attach files to the reply')}
+                           onChange={(event) => {
+                              attach(Array.from(event.target.files ?? []));
+                              event.target.value = '';
+                           }}
+                        />
+                        <Textarea
+                           value={reply}
+                           rows={2}
+                           maxLength={10000}
+                           aria-label={tx('Write a reply')}
+                           placeholder={tx('Write a reply or paste a screenshot')}
+                           className="min-h-0 resize-none"
+                           onChange={(event) => setReply(event.target.value)}
+                           onPaste={(event) => {
+                              const pasted = pastedFiles(event);
+                              if (pasted.length === 0) return;
+                              event.preventDefault();
+                              attach(pasted);
+                           }}
+                        />
+                        <Button
+                           type="button"
+                           disabled={busy || (!reply.trim() && attached.length === 0)}
+                           onClick={() => void send()}
+                        >
+                           {tx('Send')}
+                        </Button>
+                     </HStack>
+                  </>
                )}
             </VStack>
          </div>

@@ -34,15 +34,7 @@ import {
    type TicketPriority,
    type TicketProject,
 } from './service-desk-api';
-
-// Matches MAX_ATTACHMENT_BYTES in the API, so a file that would fail is caught before the ticket exists.
-// VI: Bằng MAX_ATTACHMENT_BYTES của API, để file chắc chắn lỗi bị chặn trước khi tạo ticket.
-const MAX_FILE_BYTES = 10 * 1024 * 1024;
-
-const fileSize = (bytes: number) =>
-   bytes < 1024 * 1024
-      ? `${Math.max(1, Math.round(bytes / 1024))} KB`
-      : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+import { fileSize, MAX_FILE_BYTES, pastedFiles } from './ticket-files';
 
 export const PRIORITY_LABELS = {
    NONE: 'No priority',
@@ -122,27 +114,12 @@ export function TicketDialog({
       );
       setFiles((current) => [...current, ...added.filter((file) => file.size <= MAX_FILE_BYTES)]);
    };
-   // Pasted screenshots all arrive as "image.png", so each gets a distinct name.
-   // VI: Ảnh dán từ clipboard đều tên "image.png", nên mỗi ảnh được đặt tên riêng.
    const paste = (event: React.ClipboardEvent) => {
       if (ticket) return;
-      const pasted = Array.from(event.clipboardData.files);
+      const pasted = pastedFiles(event);
       if (pasted.length === 0) return;
       event.preventDefault();
-      const stamp = Date.now();
-      addFiles(
-         pasted.map((file, index) =>
-            file.type.startsWith('image/')
-               ? new File(
-                    [file],
-                    `screenshot-${stamp}-${index + 1}.${file.type.split('/')[1] || 'png'}`,
-                    {
-                       type: file.type,
-                    }
-                 )
-               : file
-         )
-      );
+      addFiles(pasted);
    };
 
    const submit = async () => {
