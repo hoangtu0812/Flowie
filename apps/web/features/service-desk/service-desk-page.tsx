@@ -31,6 +31,7 @@ import {
    type Ticket,
    type TicketProject,
 } from './service-desk-api';
+import { useTicketCategories } from './ticket-categories';
 import { TicketDetail } from './ticket-detail';
 import { TicketDialog } from './ticket-dialog';
 import { useSelectedTicket } from './use-selected-ticket';
@@ -69,6 +70,7 @@ export function ServiceDeskPage() {
    const [tab, setTab] = useState<DeskTab>('mine');
    const [selected, setSelected] = useSelectedTicket(`/${orgId}/service-desk`);
    const [projectFilter, setProjectFilter] = useState(ALL_PROJECTS);
+   const [categoryFilter, setCategoryFilter] = useState(ALL_PROJECTS);
    const [ticketState, setTicketState] = useState<TicketState>('open');
    const [dialog, setDialog] = useState<'new' | 'edit'>();
    const [draft, setDraft] = useState<TicketPrefill>();
@@ -99,6 +101,7 @@ export function ServiceDeskPage() {
    useEffect(() => void load(), [load]);
    useTicketUpdates(data?.workspaceId, load);
    const assistant = useAssistantStatus(data?.workspaceId);
+   const categories = useTicketCategories(data?.workspaceId);
    const newTicket = (prefill?: TicketPrefill) => {
       setDraft(prefill);
       setDialog('new');
@@ -131,7 +134,10 @@ export function ServiceDeskPage() {
    ).filter(
       (ticket) =>
          inState(ticket, ticketState) &&
-         (tab === 'mine' || projectFilter === ALL_PROJECTS || ticket.projectId === projectFilter)
+         (tab === 'mine' || projectFilter === ALL_PROJECTS || ticket.projectId === projectFilter) &&
+         (tab === 'mine' ||
+            categoryFilter === ALL_PROJECTS ||
+            ticket.category?.id === categoryFilter)
    );
    const queued = data?.queue.find((ticket) => ticket.id === selected);
    const ticket = queued ?? data?.mine.find((item) => item.id === selected);
@@ -185,6 +191,21 @@ export function ServiceDeskPage() {
                      {queueProjects.map((project) => (
                         <SelectItem key={project.id} value={project.id}>
                            {project.name}
+                        </SelectItem>
+                     ))}
+                  </SelectContent>
+               </Select>
+            )}
+            {tab !== 'mine' && categories.length > 0 && (
+               <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                  <SelectTrigger aria-label={tx('Category')} className="w-full">
+                     <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                     <SelectItem value={ALL_PROJECTS}>{tx('All categories')}</SelectItem>
+                     {categories.map((category) => (
+                        <SelectItem key={category.id} value={category.id}>
+                           {category.name}
                         </SelectItem>
                      ))}
                   </SelectContent>

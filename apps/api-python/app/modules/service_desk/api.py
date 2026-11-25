@@ -38,16 +38,22 @@ from .commands import (
     CREATE_ASK_INSERT_ASKS,
     CREATE_ASK_MESSAGE_UPDATE_ASKS,
     CREATE_ASK_UPDATE_WORKSPACES,
+    CREATE_CATEGORY_INSERT_TICKET_CATEGORIES,
     RECORD_TICKET_FILE_UPDATE_ASKS,
     TRANSITION_ASK_UPDATE_ASKS,
+    UPDATE_CATEGORY_UPDATE_TICKET_CATEGORIES,
     update_ask_update_asks_sql,
 )
 from .queries import (
     ACCEPTS_TICKETS_SELECT_PROJECTS,
     ASK_SELECT_ASK_MESSAGES,
+    CATEGORY_NAME_TAKEN_SELECT_TICKET_CATEGORIES,
+    CATEGORY_SELECT_TICKET_CATEGORIES,
+    HAS_CATEGORIES_SELECT_TICKET_CATEGORIES,
     IS_HANDLER_SELECT_TEAM_MEMBERS,
     LIST_ASKS_SELECT_ASKS,
     LIST_ASKS_SELECT_ASKS_2,
+    LIST_CATEGORIES_SELECT_TICKET_CATEGORIES,
     LIST_SERVICE_DESK_PROJECTS_SELECT_PROJECTS,
     RECORD_TICKET_FILE_SELECT_AUDIT_LOGS,
     REFERENCES_SELECT_PROJECTS,
@@ -80,6 +86,7 @@ class CreateAskInput(BaseModel):
     title: str = Field(min_length=2, max_length=500)
     description: str | None = Field(default=None, max_length=10_000)
     priority: AskPriority = 'NONE'
+    categoryId: str | None = None
 
 
 class UpdateAskInput(BaseModel):
@@ -89,6 +96,17 @@ class UpdateAskInput(BaseModel):
     description: str | None = Field(default=None, max_length=10_000)
     priority: AskPriority | None = None
     assigneeId: str | None = None
+    categoryId: str | None = None
+
+
+class CategoryInput(BaseModel):
+    workspaceId: str = Field(min_length=1)
+    name: str = Field(min_length=1, max_length=80)
+
+
+class UpdateCategoryInput(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=80)
+    archived: bool | None = None
 
 
 class AskMessageInput(BaseModel):
@@ -131,6 +149,31 @@ async def _audit(db: AsyncSession, workspace_id: str, actor_id: str, action: str
     await db.execute(AUDIT_INSERT_AUDIT_LOGS, {'id': cuid(), 'workspace_id': workspace_id, 'actor_id': actor_id, 'action': action, 'entity_id': ask_id, 'metadata': json.dumps(metadata), 'now': utcnow()})
 
 
+async def _admin(db: AsyncSession, workspace_id: str, user_id: str) -> None:
+    if await _role(db, workspace_id, user_id) not in {'OWNER', 'ADMIN'}:
+        raise ApiError(403, 'Only a workspace administrator can manage ticket categories.', 'Forbidden')
+
+
+def _category_view(row: Any) -> dict[str, Any]:
+    return {'id': row['id'], 'name': row['name'], 'archived': row['archived_at'] is not None}
+
+
+async def _check_category(db: AsyncSession, workspace_id: str, category_id: str | None, *, intake: bool) -> None:
+    """A chosen category must be live in the workspace; ticket intake must choose one once any exist.
+
+    Only intake requires it, so Asks a team files for itself and older clients keep working.
+    VI: Phân loại được chọn phải còn hiệu lực trong workspace; ticket tiếp nhận phải chọn khi đã có
+    VI: phân loại. Chỉ tiếp nhận mới bắt buộc, để Ask team tự tạo và client cũ vẫn chạy.
+    """
+    if category_id is None:
+        if intake and (await db.execute(HAS_CATEGORIES_SELECT_TICKET_CATEGORIES, {'workspace_id': workspace_id})).first():
+            raise ApiError(400, 'Choose a category for this ticket.', 'Bad Request')
+        return
+    row = (await db.execute(CATEGORY_SELECT_TICKET_CATEGORIES, {'id': category_id, 'workspace_id': workspace_id})).mappings().first()
+    if not row or row['archived_at'] is not None:
+        raise ApiError(400, 'This ticket category is not available.', 'Bad Request')
+
+
 def ticket_identifier(number: int) -> str:
     return f'SD-{number}'
 
@@ -170,7 +213,7 @@ async def _ask(db: AsyncSession, ask_id: str, workspace_id: str) -> dict[str, An
     row = result.mappings().first()
     if not row: raise ApiError(404, 'Ask not found.', 'Not Found')
     pending = reopen_pending(row['status'], row['issue_category'], row['reopened_at'], row['issue_closed_at'])
-    return {'id': row['id'], 'number': row['number'], 'identifier': ticket_identifier(row['number']), 'workspaceId': row['workspace_id'], 'teamId': row['team_id'], 'projectId': row['project_id'], 'title': row['title'], 'description': row['description'], 'priority': row['priority'], 'status': row['status'], 'ticketStatus': ticket_status(row['status'], row['issue_category'], row['last_message_author'] not in {None, row['created_by']}, pending), 'reopenPending': pending, 'createdById': row['created_by'], 'assigneeId': row['assignee_id'], 'assignee': {'id': row['assignee_id'], 'name': row['assignee_name'], 'avatarUrl': row['assignee_avatar_url']} if row['assignee_id'] else None, 'convertedIssueId': row['converted_issue_id'], 'createdAt': row['created_at'], 'updatedAt': row['updated_at'],
+    return {'id': row['id'], 'number': row['number'], 'identifier': ticket_identifier(row['number']), 'workspaceId': row['workspace_id'], 'teamId': row['team_id'], 'projectId': row['project_id'], 'title': row['title'], 'description': row['description'], 'priority': row['priority'], 'status': row['status'], 'ticketStatus': ticket_status(row['status'], row['issue_category'], row['last_message_author'] not in {None, row['created_by']}, pending), 'reopenPending': pending, 'createdById': row['created_by'], 'categoryId': row['category_id'], 'category': {'id': row['category_id'], 'name': row['category_name']} if row['category_id'] else None, 'assigneeId': row['assignee_id'], 'assignee': {'id': row['assignee_id'], 'name': row['assignee_name'], 'avatarUrl': row['assignee_avatar_url']} if row['assignee_id'] else None, 'convertedIssueId': row['converted_issue_id'], 'createdAt': row['created_at'], 'updatedAt': row['updated_at'],
             'team': {'id': row['team_id_value'], 'name': row['team_name'], 'identifier': row['team_identifier'], 'icon': row['team_icon']},
             'project': {'id': row['project_id_value'], 'name': row['project_name'], 'identifier': row['project_identifier'], 'team': {'id': row['team_id']} if row['team_id'] else None} if row['project_id_value'] else None,
             'createdBy': {'id': row['creator_id'], 'name': row['creator_name'], 'avatarUrl': row['creator_avatar_url']},
@@ -210,6 +253,47 @@ async def list_service_desk_projects(workspaceId: str = Query(min_length=1), use
     await workspace_access(db, workspaceId, user['id'])
     result = await db.execute(LIST_SERVICE_DESK_PROJECTS_SELECT_PROJECTS, {'workspace_id': workspaceId})
     return {'data': [{'id': row['id'], 'name': row['name'], 'teamId': row['team_id']} for row in result.mappings().all()]}
+
+
+@router.get('/categories')
+async def list_categories(workspaceId: str = Query(min_length=1), archived: bool = False, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
+    # Every member reads the live list for the ticket form; archived ones are for the settings page.
+    # VI: Mọi thành viên đọc danh sách còn hiệu lực cho form ticket; mục đã lưu trữ dành cho trang cài đặt.
+    await workspace_access(db, workspaceId, user['id'])
+    if archived: await _admin(db, workspaceId, user['id'])
+    result = await db.execute(LIST_CATEGORIES_SELECT_TICKET_CATEGORIES, {'workspace_id': workspaceId, 'archived': archived})
+    return {'data': [_category_view(row) for row in result.mappings().all()]}
+
+
+async def _name_free(db: AsyncSession, workspace_id: str, name: str, category_id: str = '') -> None:
+    if (await db.execute(CATEGORY_NAME_TAKEN_SELECT_TICKET_CATEGORIES, {'workspace_id': workspace_id, 'name': name, 'id': category_id})).first():
+        raise ApiError(409, 'A ticket category with this name already exists.', 'Conflict')
+
+
+@router.post('/categories')
+async def create_category(payload: CategoryInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    await _admin(db, payload.workspaceId, user['id'])
+    name = payload.name.strip()
+    if not name: raise ApiError(400, 'A category needs a name.', 'Bad Request')
+    await _name_free(db, payload.workspaceId, name)
+    category_id = cuid()
+    await db.execute(CREATE_CATEGORY_INSERT_TICKET_CATEGORIES, {'id': category_id, 'workspace_id': payload.workspaceId, 'name': name, 'now': utcnow()})
+    await db.commit()
+    return {'data': {'id': category_id, 'name': name, 'archived': False}}
+
+
+@router.patch('/categories/{category_id}')
+async def update_category(category_id: str, payload: UpdateCategoryInput, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    await _admin(db, workspaceId, user['id'])
+    row = (await db.execute(CATEGORY_SELECT_TICKET_CATEGORIES, {'id': category_id, 'workspace_id': workspaceId})).mappings().first()
+    if not row: raise ApiError(404, 'Ticket category not found.', 'Not Found')
+    name = payload.name.strip() if payload.name is not None else row['name']
+    if not name: raise ApiError(400, 'A category needs a name.', 'Bad Request')
+    if name != row['name']: await _name_free(db, workspaceId, name, category_id)
+    archived = payload.archived if payload.archived is not None else row['archived_at'] is not None
+    await db.execute(UPDATE_CATEGORY_UPDATE_TICKET_CATEGORIES, {'id': category_id, 'workspace_id': workspaceId, 'name': name, 'archived': archived, 'now': utcnow()})
+    await db.commit()
+    return {'data': {'id': category_id, 'name': name, 'archived': archived}}
 
 
 @router.get('/assistant/status')
@@ -276,11 +360,12 @@ async def _add_message(db: AsyncSession, ask_id: str, author_id: str, content: s
 async def create_ask(payload: CreateAskInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     await workspace_access(db, payload.workspaceId, user['id'])
     await _references(db, payload.workspaceId, payload.teamId, payload.projectId, user['id'])
+    await _check_category(db, payload.workspaceId, payload.categoryId, intake=await _accepts_tickets(db, payload.workspaceId, payload.teamId, payload.projectId))
     ask_id, now = cuid(), utcnow()
     # The row lock lasts until commit, so concurrent tickets in a workspace take numbers in turn.
     # VI: Khoá dòng giữ đến khi commit, nên các ticket tạo đồng thời trong workspace lấy số lần lượt.
     number = (await db.execute(CREATE_ASK_UPDATE_WORKSPACES, {'id': payload.workspaceId})).scalar_one()
-    await db.execute(CREATE_ASK_INSERT_ASKS, {'id': ask_id, 'number': number, 'workspace_id': payload.workspaceId, 'team_id': payload.teamId, 'project_id': payload.projectId, 'title': payload.title.strip(), 'description': payload.description.strip() if payload.description else None, 'priority': payload.priority, 'created_by': user['id'], 'now': now})
+    await db.execute(CREATE_ASK_INSERT_ASKS, {'id': ask_id, 'number': number, 'workspace_id': payload.workspaceId, 'team_id': payload.teamId, 'project_id': payload.projectId, 'category_id': payload.categoryId, 'title': payload.title.strip(), 'description': payload.description.strip() if payload.description else None, 'priority': payload.priority, 'created_by': user['id'], 'now': now})
     await _audit(db, payload.workspaceId, user['id'], 'ask.created', ask_id, {'title': payload.title.strip(), 'teamId': payload.teamId})
     # Only Service Desk intake reaches the team's Inbox; Asks a team files for itself stay quiet.
     # VI: Chỉ ticket từ Service Desk mới báo vào Inbox của team; Ask do team tự tạo thì không báo.
@@ -305,12 +390,13 @@ async def update_ask(ask_id: str, payload: UpdateAskInput, workspaceId: str = Qu
     if 'assigneeId' in values: await _triage(db, ask, workspaceId, user['id'])
     team_id, project_id = values.get('teamId', ask['teamId']), values.get('projectId', ask['projectId'])
     await _references(db, workspaceId, team_id, project_id, user['id'])
+    if 'categoryId' in values: await _check_category(db, workspaceId, values['categoryId'], intake=await _accepts_tickets(db, workspaceId, team_id, project_id))
     # An assignee belongs to the ticket's team, so moving the ticket clears the old one.
     # VI: Người được giao thuộc team của ticket, nên chuyển ticket sang team khác sẽ bỏ giao.
     if team_id != ask['teamId'] and 'assigneeId' not in values: values['assigneeId'] = None
     if values.get('assigneeId') and values['assigneeId'] not in await team_recipient_ids(db, team_id):
         raise ApiError(400, 'A ticket can only be assigned to a member of its team.', 'Bad Request')
-    columns = {'teamId': 'team_id', 'projectId': 'project_id', 'title': 'title', 'description': 'description', 'priority': 'priority', 'assigneeId': 'assignee_id'}
+    columns = {'teamId': 'team_id', 'projectId': 'project_id', 'title': 'title', 'description': 'description', 'priority': 'priority', 'assigneeId': 'assignee_id', 'categoryId': 'category_id'}
     sets, params = [], {'ask_id': ask_id, 'now': utcnow()}
     for field, column in columns.items():
         if field in values:

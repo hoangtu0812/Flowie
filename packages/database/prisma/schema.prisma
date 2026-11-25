@@ -657,6 +657,7 @@ model Workspace {
   customerRequests        CustomerRequest[]
   slaPolicies             SlaPolicy[]
   asks                    Ask[]
+  ticketCategories        TicketCategory[]
   emojis                  WorkspaceEmoji[]
   agentProviders          WorkspaceAgentProvider[]
   agentTools              WorkspaceAgentTool[]
@@ -1829,6 +1830,9 @@ model Ask {
   /// Team member handling the ticket; null leaves it to the whole team.
   /// VI: Thành viên team xử lý ticket; null nghĩa là cả team cùng theo dõi.
   assigneeId       String?       @map("assignee_id")
+  /// Workspace ticket category; null for tickets raised before categories or without one.
+  /// VI: Phân loại ticket của workspace; null với ticket tạo trước khi có phân loại hoặc không chọn.
+  categoryId       String?       @map("category_id")
   /// Last ticket status the requester was told about; null until the first comparison sets a baseline.
   /// VI: Trạng thái ticket gần nhất đã báo cho người yêu cầu; null đến khi lần so sánh đầu đặt mốc.
   notifiedTicketStatus String? @map("notified_ticket_status")
@@ -1846,6 +1850,7 @@ model Ask {
   convertedIssue Issue?    @relation("AskConvertedIssue", fields: [convertedIssueId], references: [id], onDelete: SetNull)
   messages       AskMessage[]
   assignee       User?     @relation("AskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  category       TicketCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
   @@unique([workspaceId, number])
   @@index([workspaceId, archivedAt, status])
@@ -1853,7 +1858,26 @@ model Ask {
   @@index([projectId])
   @@index([convertedIssueId])
   @@index([assigneeId])
+  @@index([categoryId])
   @@map("asks")
+}
+
+/// Kinds of Service Desk ticket a workspace offers, managed by its administrators. Archiving keeps
+/// the name on old tickets while removing it from the ticket form.
+/// VI: Các loại ticket Service Desk của workspace, do quản trị viên quản lý. Lưu trữ giữ tên trên
+/// VI: ticket cũ nhưng bỏ khỏi form tạo ticket.
+model TicketCategory {
+  id          String    @id @default(cuid())
+  workspaceId String    @map("workspace_id")
+  name        String
+  archivedAt  DateTime? @map("archived_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  asks      Ask[]
+
+  @@unique([workspaceId, name])
+  @@map("ticket_categories")
 }
 
 /// Conversation between a requester and the team. Kept apart from issue comments, which stay internal.

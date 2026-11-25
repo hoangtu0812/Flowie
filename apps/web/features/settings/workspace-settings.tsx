@@ -14,6 +14,7 @@ import { Check, Link2 } from 'lucide-react';
 import { HStack } from '@astryxdesign/core/HStack';
 import { VStack } from '@astryxdesign/core/VStack';
 import { AutoJoinSetting } from '@/features/service-desk/auto-join-setting';
+import { TicketCategorySettings } from '@/features/service-desk/ticket-categories';
 import { DeleteWorkspace } from './delete-workspace';
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
@@ -236,6 +237,9 @@ export default function WorkspaceSettings() {
          </SettingsSection>
          {role && managesWorkspace(role) && workspace && (
             <AutoJoinSetting key={workspace.id} workspaceId={workspace.id} />
+         )}
+         {role && managesWorkspace(role) && workspace && (
+            <TicketCategorySettings key={workspace.id} workspaceId={workspace.id} />
          )}
          {role === 'OWNER' && workspace && <DeleteWorkspace workspace={workspace} />}
       </SettingsShell>

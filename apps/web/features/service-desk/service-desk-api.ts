@@ -25,6 +25,7 @@ export type Ticket = {
    project: { id: string; name: string } | null;
    createdBy: { id: string; name: string };
    assignee: { id: string; name: string } | null;
+   category: { id: string; name: string } | null;
    /**
     * Present only in the team queue; "my tickets" never carries issue data.
     * VI: Chỉ có trong hàng đợi của team; "ticket của tôi" không bao giờ kèm dữ liệu Issue.
@@ -42,7 +43,9 @@ export type TicketDraft = {
    title: string;
    description: string | null;
    priority: TicketPriority;
+   categoryId?: string | null;
 };
+export type TicketCategory = { id: string; name: string; archived: boolean };
 
 const json = (method: string, body?: unknown): RequestInit => ({
    method,
@@ -88,6 +91,33 @@ export const updateTicket = async (
          json('PATCH', changes)
       ),
       'Could not update the ticket.'
+   );
+
+export const listTicketCategories = async (workspaceId: string, archived = false) =>
+   responseData<TicketCategory[]>(
+      await authenticatedFetch(
+         `${api}/asks/categories?${scoped(workspaceId, archived ? { archived: 'true' } : {})}`
+      ),
+      'Could not load ticket categories.'
+   );
+
+export const createTicketCategory = async (workspaceId: string, name: string) =>
+   responseData<TicketCategory>(
+      await authenticatedFetch(`${api}/asks/categories`, json('POST', { workspaceId, name })),
+      'Could not add the category.'
+   );
+
+export const updateTicketCategory = async (
+   workspaceId: string,
+   categoryId: string,
+   changes: { name?: string; archived?: boolean }
+) =>
+   responseData<TicketCategory>(
+      await authenticatedFetch(
+         `${api}/asks/categories/${categoryId}?${scoped(workspaceId)}`,
+         json('PATCH', changes)
+      ),
+      'Could not update the category.'
    );
 
 export type TicketAction = 'resolve' | 'decline' | 'reopen' | 'cancel';

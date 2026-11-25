@@ -86,6 +86,7 @@ export function TicketList({
                   <Text type="supporting">
                      {[
                         row.identifier,
+                        row.category?.name,
                         row.project?.name ?? row.team.name,
                         row.createdBy.name,
                         row.assignee && tx('Assigned to {name}', { name: row.assignee.name }),
