@@ -43,15 +43,15 @@ NEWS_FEED_HOSTS = frozenset(
     }
 )
 
-# Suggested groups and feeds, all checked from the production server (192.168.90.53). cisa.gov
-# answers 403 there, so the Known Exploited Vulnerabilities list comes from CISA's GitHub mirror.
-# VI: Nhóm và feed gợi ý, đều đã kiểm tra gọi được từ server production (192.168.90.53). cisa.gov
-# VI: trả 403 ở đó nên danh sách lỗ hổng bị khai thác (KEV) lấy từ bản mirror GitHub của CISA.
+# Suggested groups and feeds, all checked from the production server (192.168.90.53). cisa.gov and
+# BleepingComputer answer 403 there, so CISA's data comes from its GitHub mirror and BleepingComputer
+# is left out.
+# VI: Nhóm và feed gợi ý, đều đã kiểm tra gọi được từ server production (192.168.90.53). cisa.gov và
+# VI: BleepingComputer trả 403 ở đó, nên dữ liệu CISA lấy từ bản mirror GitHub và bỏ BleepingComputer.
 NEWS_PRESETS: dict[str, list[tuple[str, str]]] = {
     'Security': [
         ('CISA KEV', 'https://raw.githubusercontent.com/cisagov/kev-data/develop/known_exploited_vulnerabilities.json'),
         ('The Hacker News', 'https://feeds.feedburner.com/TheHackersNews'),
-        ('BleepingComputer', 'https://www.bleepingcomputer.com/feed/'),
         ('SecurityWeek', 'https://www.securityweek.com/feed/'),
     ],
     'Thị trường': [

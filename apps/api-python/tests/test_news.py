@@ -90,9 +90,9 @@ def test_every_preset_feed_is_allowlisted_and_every_host_is_used():
     urls = [url for feeds in NEWS_PRESETS.values() for _name, url in feeds]
     assert [feed_url(url) for url in urls] == urls
     assert len(set(urls)) == len(urls)
-    # www.cisa.gov and the older security hosts stay allowed for sources added by hand.
-    # VI: www.cisa.gov và các host bảo mật cũ vẫn được phép cho nguồn admin tự thêm.
-    manual = {'www.cisa.gov', 'krebsonsecurity.com', 'www.darkreading.com'}
+    # www.cisa.gov, BleepingComputer and the older security hosts stay allowed for sources added by hand.
+    # VI: www.cisa.gov, BleepingComputer và các host bảo mật cũ vẫn được phép cho nguồn admin tự thêm.
+    manual = {'www.cisa.gov', 'www.bleepingcomputer.com', 'krebsonsecurity.com', 'www.darkreading.com'}
     assert NEWS_FEED_HOSTS - manual == {urlsplit(url).hostname for url in urls}
 
 
@@ -123,7 +123,7 @@ def test_presets_reuse_groups_and_skip_known_feeds(monkeypatch):
                 )
                 await db.execute(
                     text('''INSERT INTO news_sources (id, workspace_id, category_id, name, feed_url, created_at)
-                            VALUES (:id, :ws, :cat, 'BC', 'https://www.bleepingcomputer.com/feed/', now())'''),
+                            VALUES (:id, :ws, :cat, 'THN', 'https://feeds.feedburner.com/TheHackersNews', now())'''),
                     {'id': cuid(), 'ws': ws, 'cat': security},
                 )
                 await db.commit()
