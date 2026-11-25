@@ -145,6 +145,37 @@ def test_presets_reuse_groups_and_skip_known_feeds(monkeypatch):
     assert groups == {name: len(feeds) for name, feeds in NEWS_PRESETS.items()}
 
 
+@pytest.mark.skipif(not os.getenv('MCP_TEST_DATABASE_URL'), reason='Test database not configured')
+def test_suggested_groups_are_seeded_once_per_workspace():
+    from sqlalchemy import text
+
+    from app.modules.news import service
+    from tests.seeded_workspace import seeded_workspace
+
+    async def run():
+        async with seeded_workspace() as (factory, workspace, _member):
+            async with factory() as db:
+                seed, _owner = await workspace(db)
+                ws = seed['workspace_id']
+                count = text('SELECT count(*) FROM news_sources WHERE workspace_id = :ws')
+                assert await service.seed_presets(db) >= 1
+                seeded = (await db.execute(count, {'ws': ws})).scalar_one()
+                # VI: Nguồn quản trị viên đã xóa không bị thêm lại ở lượt sau.
+                await db.execute(text('DELETE FROM news_sources WHERE workspace_id = :ws'), {'ws': ws})
+                await db.commit()
+                await service.seed_presets(db)
+                again = (await db.execute(count, {'ws': ws})).scalar_one()
+                marked = (
+                    await db.execute(text('SELECT news_presets_at FROM workspaces WHERE id = :ws'), {'ws': ws})
+                ).scalar_one()
+        return seeded, again, marked
+
+    seeded, again, marked = asyncio.run(run())
+    assert seeded == sum(len(feeds) for feeds in NEWS_PRESETS.values())
+    assert again == 0
+    assert marked is not None
+
+
 def test_plain_text_truncates():
     assert plain_text('<i>a</i>   b' * 3, 6) == 'a b a…'
 

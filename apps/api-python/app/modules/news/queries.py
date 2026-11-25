@@ -32,6 +32,11 @@ SUMMARIZE_ITEM_SELECT_NEWS_ITEMS = text(
 TEST_CATEGORY_WEBHOOK_SELECT_NEWS_CATEGORIES =text('SELECT webhook_url FROM news_categories WHERE id = :id AND workspace_id = :workspace_id')
 
 
+SEED_PRESETS_SELECT_WORKSPACES = text(
+    '''SELECT id FROM workspaces WHERE news_presets_at IS NULL ORDER BY created_at'''
+)
+
+
 DUE_WORKSPACES_SELECT_NEWS_SOURCES = text(
     '''SELECT DISTINCT workspace_id FROM news_sources
                WHERE enabled AND (last_fetched_at IS NULL OR last_fetched_at < :cutoff)'''

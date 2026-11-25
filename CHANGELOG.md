@@ -21,6 +21,9 @@ pull request and commit references, which are for us.
 
 ### Added
 
+- Every workspace now gets the suggested News groups — Security, Thị trường, AI and Công nghệ — on its own: the news job adds them once to existing and new workspaces, and groups or feeds an administrator deletes afterwards stay deleted. Run migrations, then rebuild `api`. (#PR)
+  VI: Mọi workspace giờ tự có các nhóm tin gợi ý — Security, Thị trường, AI và Công nghệ: tác vụ tin tức thêm một lần cho workspace hiện có và workspace mới, và nhóm hay nguồn tin quản trị viên xóa sau đó sẽ không bị thêm lại. Chạy migration rồi build lại `api`.
+
 - Other systems can fetch News over a REST API: `GET /api/v1/news/feed` with an MCP connection token from Settings → Integrations returns the workspace's items newest first — title, link, source, group, published time and summaries — filtered by group and time, page by page. No migration: rebuild `api`. (#329)
   VI: Hệ thống khác lấy được tin từ News qua REST API: `GET /api/v1/news/feed` kèm token kết nối MCP tạo trong Cài đặt → Tích hợp trả về tin của workspace, mới nhất trước — tiêu đề, liên kết, nguồn, nhóm, thời gian đăng và tóm tắt — lọc theo nhóm và thời gian, theo từng trang. Không có migration: build lại `api`.
 

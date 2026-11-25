@@ -25,17 +25,21 @@ from .commands import (
     CREATE_SOURCE_INSERT_NEWS_SOURCES,
     DELETE_CATEGORY_DELETE_NEWS_CATEGORIES,
     DELETE_SOURCE_DELETE_NEWS_SOURCES,
-    INSTALL_PRESETS_INSERT_NEWS_SOURCES,
-    INSTALL_PRESETS_UPSERT_NEWS_CATEGORIES,
     UPDATE_CATEGORY_UPDATE_NEWS_CATEGORIES,
     UPDATE_SOURCE_UPDATE_NEWS_SOURCES,
 )
-from .feeds import NEWS_PRESETS, feed_url
+from .feeds import feed_url
 from .queries import (
     FEED_SELECT_NEWS_ITEMS,
     TEST_CATEGORY_WEBHOOK_SELECT_NEWS_CATEGORIES,
 )
-from .service import member_role, news_page, refresh_workspace, require_manager
+from .service import (
+    install_presets_for,
+    member_role,
+    news_page,
+    refresh_workspace,
+    require_manager,
+)
 
 router = UtcAPIRouter(prefix='/api/v1/news', tags=['news'])
 
@@ -252,30 +256,8 @@ async def install_presets(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ):
-    # Adds the suggested groups and feeds from code; a group with the same name is reused and a
-    # feed URL the workspace already has is skipped, so running it again changes nothing.
-    # VI: Thêm nhóm và feed gợi ý có sẵn trong code; nhóm trùng tên được dùng lại và URL feed mà
-    # VI: workspace đã có thì bỏ qua, nên chạy lại không đổi gì.
     await require_manager(db, workspaceId, user['id'])
-    now, added = utcnow(), 0
-    for name, feeds in NEWS_PRESETS.items():
-        category_id = (
-            await db.execute(
-                INSTALL_PRESETS_UPSERT_NEWS_CATEGORIES,
-                {'id': cuid(), 'workspace_id': workspaceId, 'name': name, 'now': now},
-            )
-        ).scalar_one()
-        for source_name, url in feeds:
-            row = (
-                await db.execute(
-                    INSTALL_PRESETS_INSERT_NEWS_SOURCES,
-                    {
-                        'id': cuid(), 'workspace_id': workspaceId, 'category_id': category_id,
-                        'name': source_name, 'feed_url': feed_url(url), 'now': now,
-                    },
-                )
-            ).first()
-            added += row is not None
+    added = await install_presets_for(db, workspaceId)
     await db.commit()
     return {'data': {'added': added}}
 
