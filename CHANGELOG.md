@@ -21,7 +21,7 @@ pull request and commit references, which are for us.
 
 ### Fixed
 
-- The project Timeline is easier to read: a bar too short for its title shows the title and percent beside it, the view opens where the open work starts instead of on empty rows, group progress lines are thin and muted and only cover the group's planned issues, the list shows the priority, identifier and assignee again with the dates in the row's tooltip, issues with only an end date start no later than that date, and issues without any date show "No dates". Rebuild `web`. (DTD-1026)
+- The project Timeline is easier to read: a bar too short for its title shows the title and percent beside it, the view opens where the open work starts instead of on empty rows, group progress lines are thin and muted and only cover the group's planned issues, the list shows the priority, identifier and assignee again with the dates in the row's tooltip, issues with only an end date start no later than that date, and issues without any date show "No dates". Rebuild `web`. (DTD-1026, #319)
   VI: Timeline của dự án dễ đọc hơn: thanh quá ngắn so với tiêu đề hiện tiêu đề và phần trăm bên cạnh, màn hình mở tại nơi việc còn mở bắt đầu thay vì các hàng trống, đường tiến độ của nhóm mảnh và nhạt, chỉ phủ các issue có lịch của nhóm, danh sách hiện lại độ ưu tiên, mã issue và người phụ trách, ngày nằm trong tooltip của hàng, issue chỉ có ngày kết thúc bắt đầu không muộn hơn ngày đó, và issue không có ngày nào hiện "No dates". Build lại `web`.
 
 ### Changed
