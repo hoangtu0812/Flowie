@@ -58,3 +58,17 @@ export function dependencyPath(
    const turn = y2 + (y2 > y1 ? -rowHeight / 2 : rowHeight / 2);
    return `M${x1} ${y1}H${x1 + GAP}V${turn}H${x2 - GAP}V${y2}H${x2}`;
 }
+
+/**
+ * Whether a bar `width` px wide can show `title` (and a percent) inside it. Text is estimated at
+ * 6.5 px per character of the 12 px label plus padding; a bar that cannot fit it shows the label to
+ * its right instead, so 1–2 day bars stay readable.
+ * shortcut: estimated, not measured text width; measure with canvas if labels clip or jump.
+ * VI: Thanh rộng `width` px có chứa được `title` (và phần trăm) không. Ước 6,5 px mỗi ký tự của
+ * VI: nhãn 12 px cộng lề; thanh không chứa được thì nhãn nằm bên phải thanh, để thanh 1–2 ngày vẫn
+ * VI: đọc được.
+ */
+export function labelFitsInside(width: number, title: string, withPercent: boolean): boolean {
+   const needed = 16 + Math.min(title.length, 24) * 6.5 + (withPercent ? 36 : 0);
+   return width >= needed;
+}

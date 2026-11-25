@@ -22,7 +22,7 @@ import {
    type SubIssueSort,
 } from '@/features/manual-order/sub-issue-sort';
 import { cn } from '@/lib/utils';
-import { issueSpan } from '@/lib/issue-span';
+import { hasPlannedDates, issueSpan } from '@/lib/issue-span';
 import { issueTree } from '@/lib/issue-tree';
 import { TimelineIssueBar } from '@/components/common/timeline/timeline-issue-bar';
 import { IssuePeekPanel } from '@/features/issues/issue-peek-panel';
@@ -231,6 +231,16 @@ export function ProjectIssuesTimeline({
 
    const datedMilestones = milestones.filter((milestone) => milestone.targetDate);
 
+   // Open where the open work starts (else where any planned work starts), not only around today,
+   // so a project whose finished work sits in the past does not open on empty rows.
+   // VI: Mở tại nơi việc còn mở bắt đầu (không có thì nơi việc có lịch bắt đầu), không chỉ quanh
+   // VI: hôm nay, để dự án có việc đã xong nằm trong quá khứ không mở ra toàn hàng trống.
+   const dated = issues.filter(hasPlannedDates);
+   const focusIso = [dated.filter((issue) => !isDone(issue)), dated]
+      .find((list) => list.length > 0)
+      ?.map((issue) => issueSpan(issue).start)
+      .sort()[0];
+
    if (issues.length === 0 && datedMilestones.length === 0) {
       return (
          <div className="h-full grid place-items-center text-sm text-muted-foreground">
@@ -351,7 +361,7 @@ export function ProjectIssuesTimeline({
       if (row.kind === 'group') {
          const { group } = row;
          const collapsed = collapsedGroups.has(group.key);
-         const spans = group.issues.map(issueSpan);
+         const spans = group.issues.filter(hasPlannedDates).map(issueSpan);
          const start = spans.map((span) => span.start).sort()[0];
          const end = spans
             .map((span) => span.end ?? span.start)
@@ -372,13 +382,13 @@ export function ProjectIssuesTimeline({
             >
                {summary && (
                   <div
-                     className="absolute h-1.5 rounded-full bg-foreground/10 overflow-hidden"
+                     className="absolute h-1 rounded-full bg-foreground/5 overflow-hidden"
                      style={{ left: summary.left, width: summary.width }}
                      title={`${group.name}: ${progress}% done`}
                      aria-hidden="true"
                   >
                      <div
-                        className="h-full rounded-full"
+                        className="h-full rounded-full opacity-40"
                         style={{ width: `${progress}%`, backgroundColor: group.color }}
                      />
                   </div>
@@ -412,6 +422,7 @@ export function ProjectIssuesTimeline({
 
       const { issue, depth, color, children } = row;
       const expanded = expandedParents.has(issue.id);
+      const planned = hasPlannedDates(issue);
       const { start, end } = issueSpan(issue);
       const { left, width } = barGeometry(start, end, monthWidth);
       const overdue = !isDone(issue) && !!today && !!end && end < today;
@@ -423,36 +434,43 @@ export function ProjectIssuesTimeline({
            : null;
       return (
          <div key={issue.id} className="relative h-8 flex items-center">
-            <TimelineIssueBar
-               left={left}
-               width={width}
-               color={color}
-               dashed={!end}
-               title={issue.title}
-               label={`${issue.identifier} · ${issue.title} — ${rangeLabel(issue)}`}
-               progress={progressOf(issue)}
-               onClick={() => setPeekIssueId((current) => (current === issue.id ? null : issue.id))}
-               schedule={
-                  canEdit
-                     ? {
-                          start,
-                          end,
-                          monthWidth,
-                          dayWidth: dayWidthOf(monthWidth),
-                          onChange: async (nextStart, nextEnd) => {
-                             const saved = await save(issue.id, nextStart, nextEnd);
-                             if (saved)
-                                setHistory((current) => [...current, { id: issue.id, start, end }]);
-                             return saved;
-                          },
-                       }
-                     : undefined
-               }
-            />
+            {planned ? (
+               <TimelineIssueBar
+                  left={left}
+                  width={width}
+                  color={color}
+                  dashed={!end}
+                  title={issue.title}
+                  label={`${issue.identifier} · ${issue.title} — ${rangeLabel(issue)}`}
+                  progress={progressOf(issue)}
+                  onClick={() =>
+                     setPeekIssueId((current) => (current === issue.id ? null : issue.id))
+                  }
+                  schedule={
+                     canEdit
+                        ? {
+                             start,
+                             end,
+                             monthWidth,
+                             dayWidth: dayWidthOf(monthWidth),
+                             onChange: async (nextStart, nextEnd) => {
+                                const saved = await save(issue.id, nextStart, nextEnd);
+                                if (saved)
+                                   setHistory((current) => [
+                                      ...current,
+                                      { id: issue.id, start, end },
+                                   ]);
+                                return saved;
+                             },
+                          }
+                        : undefined
+                  }
+               />
+            ) : null}
             <div
-               className={cn(listCell, 'text-xs')}
-               style={{ paddingLeft: 8 + depth * 16 }}
-               title={`${issue.identifier} · ${issue.title}`}
+               className={cn(listCell, 'text-[11px]')}
+               style={{ paddingLeft: 16 + depth * 20 }}
+               title={`${issue.identifier} · ${issue.title} — ${planned ? rangeLabel(issue) : 'No dates'}`}
             >
                {children.length > 0 ? (
                   <button
@@ -473,43 +491,37 @@ export function ProjectIssuesTimeline({
                ) : (
                   <span className="size-3.5 shrink-0" aria-hidden="true" />
                )}
-               {issue.assignee ? (
-                  <Avatar className="size-4 shrink-0">
-                     <AvatarImage src={issue.assignee.avatarUrl} alt={issue.assignee.name} />
-                     <AvatarFallback className="text-[9px]">
-                        {issue.assignee.name[0]}
-                     </AvatarFallback>
-                  </Avatar>
-               ) : (
-                  <span
-                     className="size-4 shrink-0 rounded-full border border-dashed border-muted-foreground/50"
-                     aria-label="Unassigned"
-                  />
-               )}
+               <issue.priority.icon className="size-3.5 shrink-0 text-muted-foreground" />
+               <span className="text-muted-foreground shrink-0">{issue.identifier}</span>
                <span className="truncate flex-1 text-muted-foreground">{issue.title}</span>
                {risk && (
                   <span role="img" aria-label={risk} title={risk} className="shrink-0">
                      <CircleAlert className="size-3.5 text-red-500" />
                   </span>
                )}
-               {end && (
-                  <span
-                     className={cn(
-                        'shrink-0 tabular-nums text-[11px] text-muted-foreground',
-                        overdue && 'text-red-500'
-                     )}
-                  >
-                     {shortDate(end)}
-                  </span>
+               {issue.assignee && (
+                  <Avatar className="size-4 shrink-0">
+                     <AvatarImage src={issue.assignee.avatarUrl} alt={issue.assignee.name} />
+                     <AvatarFallback className="text-[9px]">
+                        {issue.assignee.name[0]}
+                     </AvatarFallback>
+                  </Avatar>
                )}
             </div>
+            {!planned && (
+               // Stays beside the list while scrolling, since the row has no place on the scale.
+               // VI: Nằm cạnh danh sách khi cuộn, vì hàng không có vị trí trên thang thời gian.
+               <span className="sticky left-60 z-[1] rounded border border-dashed border-muted-foreground/40 px-1.5 text-[10px] text-muted-foreground">
+                  No dates
+               </span>
+            )}
          </div>
       );
    };
 
    const arrows = (monthWidth: number) =>
       rows.flatMap((row, index) => {
-         if (row.kind !== 'issue') return [];
+         if (row.kind !== 'issue' || !hasPlannedDates(row.issue)) return [];
          const blocked = row.issue;
          const { start: blockedStart, end: blockedEnd } = issueSpan(blocked);
          const x2 = barGeometry(blockedStart, blockedEnd, monthWidth).left;
@@ -517,7 +529,7 @@ export function ProjectIssuesTimeline({
          return (blocked.blockedBy ?? []).flatMap((id) => {
             const from = rowOf.get(id);
             const blocker = byId.get(id);
-            if (from === undefined || !blocker) return [];
+            if (from === undefined || !blocker || !hasPlannedDates(blocker)) return [];
             const span = issueSpan(blocker);
             const box = barGeometry(span.start, span.end, monthWidth);
             const isLate = late.has(id);
@@ -552,6 +564,7 @@ export function ProjectIssuesTimeline({
          )}
          <TimelineFrame
             className="h-full"
+            focusIso={focusIso}
             toolbarStart={
                <>
                   {canEdit && (
