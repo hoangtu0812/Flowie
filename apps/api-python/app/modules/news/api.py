@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from fastapi import Depends, Query, Request
@@ -19,8 +18,6 @@ from ..api_keys import service as api_keys
 from ..identity.auth import current_user
 from ..identity.password_reset import limit_request
 from ..integrations.api import send_teams_test
-from ..mcp.commands import CALL_UPDATE_MCP_CONNECTIONS
-from ..mcp.connections import authenticate
 from .ai import summarize_item
 from .commands import (
     CREATE_CATEGORY_INSERT_NEWS_CATEGORIES,
@@ -43,7 +40,6 @@ from .service import (
     require_manager,
 )
 
-logger = logging.getLogger(__name__)
 router = UtcAPIRouter(prefix='/api/v1/news', tags=['news'])
 
 
@@ -109,23 +105,14 @@ async def news_feed(
     cursor: str | None = Query(default=None, max_length=1000),
     db: AsyncSession = Depends(get_session),
 ):
-    # Read-only news for other systems. It takes a workspace API key with the news:read scope
-    # (Bearer flowie_api_...) instead of a browser session. MCP connection tokens are still
-    # accepted, with a warning, because poc-dtd had a caller using one; remove that branch once
-    # the log shows none.
-    # VI: Tin chỉ-đọc cho hệ thống khác. Dùng API key của workspace có scope news:read (Bearer
-    # VI: flowie_api_...) thay cho phiên trình duyệt. Token kết nối MCP vẫn được nhận kèm cảnh báo vì
-    # VI: poc-dtd đã có nơi gọi bằng token đó; bỏ nhánh này khi log không còn cảnh báo.
+    # Read-only news for other systems. It takes only a workspace API key with the news:read
+    # scope (Bearer flowie_api_...); MCP connection tokens are refused.
+    # VI: Tin chỉ-đọc cho hệ thống khác. Chỉ nhận API key của workspace có scope news:read
+    # VI: (Bearer flowie_api_...); token kết nối MCP bị từ chối.
     scheme, _, token = request.headers.get('authorization', '').partition(' ')
     if scheme.lower() != 'bearer' or not token:
         raise ApiError(401, 'A Bearer API key is required.', 'Unauthorized')
-    if token.startswith('flowie_mcp_'):
-        principal = await authenticate(db, token)
-        logger.warning('news_feed_mcp_token_deprecated connection=%s; use an API key', principal.connection_id)
-        subject, workspace_id = principal.connection_id, principal.workspace_id
-        calls = (await db.execute(CALL_UPDATE_MCP_CONNECTIONS, {'id': subject, 'now': utcnow()})).scalar_one()
-    else:
-        subject, workspace_id, calls = await api_keys.authenticate(db, token, 'news:read')
+    subject, workspace_id, calls = await api_keys.authenticate(db, token, 'news:read')
     await db.commit()
     # shortcut: API keys share MCP_RATE_LIMIT per minute; add an own setting if they need a different limit.
     if calls > request.app.state.settings.mcp_rate_limit:
