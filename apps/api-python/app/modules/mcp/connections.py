@@ -14,6 +14,8 @@ from .commands import (
     AUTHENTICATE_UPDATE_MCP_CONNECTIONS,
     CREATE_INSERT_AUDIT_LOGS,
     CREATE_INSERT_MCP_CONNECTIONS,
+    DELETE_DELETE_MCP_CONNECTIONS,
+    DELETE_INSERT_AUDIT_LOGS,
     REVOKE_INSERT_AUDIT_LOGS,
     REVOKE_UPDATE_MCP_CONNECTIONS,
     UPDATE_INSERT_AUDIT_LOGS,
@@ -287,6 +289,50 @@ async def revoke(
             "workspace": workspace_id,
             "user": user["id"],
             "connection": connection_id,
+            "now": utcnow(),
+        },
+    )
+    await db.commit()
+
+
+async def delete(
+    db: AsyncSession, workspace_id: str, user: dict, connection_id: str
+) -> None:
+    # Same visibility as revoke; an active connection is refused so a live token is never
+    # removed in one step. The audit row keeps the name, since logs can no longer join it.
+    # VI: Cùng phạm vi với thu hồi; kết nối đang hoạt động bị từ chối để token còn hiệu lực
+    # VI: không bị xoá trong một bước. Dòng audit giữ tên vì log không còn join được kết nối.
+    role = await workspace_role(db, workspace_id, user["id"])
+    row = (
+        (
+            await db.execute(
+                DELETE_DELETE_MCP_CONNECTIONS,
+                {
+                    "id": connection_id,
+                    "workspace": workspace_id,
+                    "user": user["id"],
+                    "manager": role in {"OWNER", "ADMIN"},
+                    "now": utcnow(),
+                },
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if not row:
+        raise ApiError(
+            409,
+            "Only a revoked or expired connection you can manage can be deleted.",
+            "Conflict",
+        )
+    await db.execute(
+        DELETE_INSERT_AUDIT_LOGS,
+        {
+            "id": cuid(),
+            "workspace": workspace_id,
+            "user": user["id"],
+            "connection": connection_id,
+            "metadata": json.dumps({"name": row["name"]}),
             "now": utcnow(),
         },
     )

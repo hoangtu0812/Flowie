@@ -1345,6 +1345,41 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             await self.call("get_issue", issueId=self.issue["id"])
         self.assertEqual(error.exception.status_code, 401)
 
+    async def test_only_revoked_connections_can_be_deleted(self):
+        from app.modules.mcp.connections import delete
+
+        connection_id = self.connection["id"]
+        async with self.factory() as db:
+            with self.assertRaises(ApiError) as error:
+                await delete(db, self.workspace, self.user, connection_id)
+            self.assertEqual(error.exception.status_code, 409)
+            await db.rollback()
+            await revoke(db, self.workspace, self.user, connection_id)
+            await delete(db, self.workspace, self.user, connection_id)
+            remaining = await db.execute(
+                text("SELECT count(*) FROM mcp_connections WHERE id=:id"),
+                {"id": connection_id},
+            )
+            self.assertEqual(remaining.scalar_one(), 0)
+            # Audit history survives the deletion and records the connection's name.
+            audit = (
+                await db.execute(
+                    text("""SELECT action,metadata FROM audit_logs WHERE entity_id=:id
+                    ORDER BY created_at,action"""),
+                    {"id": connection_id},
+                )
+            ).all()
+            self.assertEqual(
+                {row.action for row in audit},
+                {
+                    "mcp.connection.created",
+                    "mcp.connection.revoked",
+                    "mcp.connection.deleted",
+                },
+            )
+            deleted = next(row for row in audit if row.action.endswith("deleted"))
+            self.assertEqual(deleted.metadata["name"], "Integration test")
+
     async def test_expired_token_and_write_kill_switch(self):
         read_only_app = ToolApplication(
             self.factory, replace(self.settings, mcp_writes_enabled=False)

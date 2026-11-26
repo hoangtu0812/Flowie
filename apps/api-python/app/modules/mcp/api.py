@@ -128,6 +128,19 @@ async def revoke_connection(
     return {"data": {"id": connection_id, "revoked": True}}
 
 
+# Permanently removes a revoked or expired connection; DELETE /connections/{id} only revokes.
+# VI: Xoá hẳn kết nối đã thu hồi hoặc hết hạn; DELETE /connections/{id} chỉ thu hồi.
+@router.delete("/connections/{connection_id}/record")
+async def delete_connection(
+    connection_id: str,
+    workspaceId: str = Query(min_length=1),
+    user=Depends(current_user),
+    db=Depends(get_session),
+):
+    await connections.delete(db, workspaceId, user, connection_id)
+    return {"data": {"id": connection_id, "deleted": True}}
+
+
 @router.get("/instructions")
 async def read_instructions(
     workspaceId: str = Query(min_length=1),

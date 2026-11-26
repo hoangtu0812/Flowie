@@ -37,7 +37,7 @@ Do not use a wildcard host allowlist in production.
 
 ## Create and verify a connection
 
-1. Open **Settings → Integrations → AI connections (MCP)**.
+1. Open **Settings → Integrations → AI connections (MCP) → Manage**, then **New connection**.
 2. Name the connection, choose its expiry, select scopes and optional team/project
    restrictions. Empty restrictions mean the user's existing access applies.
 3. Create the credential and copy the one-time token into the client's secret

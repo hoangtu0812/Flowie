@@ -75,6 +75,7 @@ const SETTINGS: Record<string, string> = {
    'ai-operations': 'AI provider usage',
    'integrations': 'Integrations',
    'code-and-reviews': 'Code & reviews',
+   'mcp': 'AI connections (MCP)',
    'mcp-logs': 'MCP logs',
    'teams/new': 'New team',
 };

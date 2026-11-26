@@ -18,6 +18,16 @@ import {
 } from '@astryxdesign/core/Table';
 import { Text } from '@astryxdesign/core/Text';
 import { TextInput } from '@astryxdesign/core/TextInput';
+import {
+   AlertDialog,
+   AlertDialogAction,
+   AlertDialogCancel,
+   AlertDialogContent,
+   AlertDialogDescription,
+   AlertDialogFooter,
+   AlertDialogHeader,
+   AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { parseInstant, relativeTime } from '@/lib/time';
 import type { McpConnection } from '@/lib/mcp';
 
@@ -37,6 +47,7 @@ type Props = {
    createdId?: string;
    onEdit: (connection: McpConnection) => void;
    onRevoke: (id: string) => Promise<unknown>;
+   onDelete: (id: string) => Promise<boolean>;
 };
 
 /**
@@ -60,11 +71,15 @@ export function ConnectionsTable({
    createdId,
    onEdit,
    onRevoke,
+   onDelete,
 }: Props) {
    const [query, setQuery] = useState('');
    const [status, setStatus] = useState<StatusFilter>('active');
    const [page, setPage] = useState(1);
    const [confirmRevokeId, setConfirmRevokeId] = useState<string>();
+   /** An inactive connection the trash icon deletes for good, after the dialog confirms. */
+   /** VI: Kết nối không hoạt động mà biểu tượng thùng rác xoá hẳn, sau khi hộp thoại xác nhận. */
+   const [deleteTarget, setDeleteTarget] = useState<McpConnection>();
 
    const counts = useMemo(() => {
       const inactive = connections.filter(isInactive).length;
@@ -187,14 +202,16 @@ export function ConnectionsTable({
                      />
                   )}
                   <Button
-                     label="Revoke connection"
-                     tooltip="Revoke connection"
+                     label={inactive ? `Delete ${connection.name}` : 'Revoke connection'}
+                     tooltip={inactive ? 'Delete connection' : 'Revoke connection'}
                      icon={<Trash2 className="size-4" />}
                      isIconOnly
                      size="sm"
                      variant="ghost"
-                     isDisabled={inactive || busy}
-                     onClick={() => setConfirmRevokeId(connection.id)}
+                     isDisabled={busy}
+                     onClick={() =>
+                        inactive ? setDeleteTarget(connection) : setConfirmRevokeId(connection.id)
+                     }
                   />
                </HStack>
             );
@@ -264,6 +281,36 @@ export function ConnectionsTable({
                size="sm"
             />
          )}
+         <AlertDialog
+            open={Boolean(deleteTarget)}
+            onOpenChange={(visible) => !visible && !busy && setDeleteTarget(undefined)}
+         >
+            <AlertDialogContent>
+               <AlertDialogHeader>
+                  <AlertDialogTitle>Delete {deleteTarget?.name}?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                     The connection is removed from this list for good. Its MCP log entries are
+                     kept.
+                  </AlertDialogDescription>
+               </AlertDialogHeader>
+               <AlertDialogFooter>
+                  <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                     disabled={busy}
+                     variant="destructive"
+                     onClick={(event) => {
+                        event.preventDefault();
+                        if (deleteTarget)
+                           void onDelete(deleteTarget.id).then((deleted) => {
+                              if (deleted) setDeleteTarget(undefined);
+                           });
+                     }}
+                  >
+                     {busy ? 'Deleting…' : 'Delete connection'}
+                  </AlertDialogAction>
+               </AlertDialogFooter>
+            </AlertDialogContent>
+         </AlertDialog>
       </VStack>
    );
 }

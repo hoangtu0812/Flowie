@@ -25,7 +25,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowUpRight, FolderUp, MessagesSquare, Webhook } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { INTEGRATION_LOGOS } from './integration-logos';
-import { McpSettings } from '@/features/settings/mcp/mcp-settings';
+import { McpSummary } from '@/features/settings/mcp/mcp-summary';
 import { SettingsShell } from './shared';
 
 const DiscordLogo = INTEGRATION_LOGOS.discord;
@@ -142,7 +142,7 @@ export default function Integrations() {
                   </Button>
                </div>
             </section>
-            <McpSettings />
+            <McpSummary />
          </SettingsShell>
          <OutgoingWebhooksDialog
             open={webhooksOpen}

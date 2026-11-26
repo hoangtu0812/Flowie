@@ -6,6 +6,7 @@ import { SubmissionGate } from '@/features/shared/submission-gate';
 import { loadCurrentWorkspaceMembership } from '@/lib/workspaces';
 import {
    createMcpConnection,
+   deleteMcpConnection,
    getMcpConfiguration,
    getMcpResources,
    listMcpConnections,
@@ -108,6 +109,14 @@ export function useMcpSettings() {
       }, 'Connection revoked.');
    }
 
+   async function remove(connectionId: string) {
+      if (!workspaceId) return false;
+      return perform(async () => {
+         await deleteMcpConnection(workspaceId, connectionId);
+         await refresh(workspaceId);
+      }, 'Connection deleted.');
+   }
+
    return {
       configuration,
       workspaceId,
@@ -122,6 +131,7 @@ export function useMcpSettings() {
       create,
       update,
       revoke,
+      remove,
       dismissToken: () => setToken(undefined),
    };
 }
