@@ -1,0 +1,55 @@
+export const messages: Readonly<Record<string, string>> = {
+   'API keys': 'API key',
+   'API key': 'API key',
+   'Let other systems read Flowie data, such as the news feed, over REST.':
+      'Cho hệ thống khác đọc dữ liệu Flowie, như news feed, qua REST.',
+   'Loading API keys…': 'Đang tải API key…',
+   'Could not load API keys.': 'Không tải được API key.',
+   '{active} active · {inactive} inactive keys':
+      '{active} key đang hoạt động · {inactive} key ngừng hoạt động',
+   'Only workspace owners and admins can manage API keys.':
+      'Chỉ owner và admin của workspace quản lý được API key.',
+   'Manage': 'Quản lý',
+   'Keys let other systems call the Flowie API. They are separate from AI connections (MCP).':
+      'Key cho phép hệ thống khác gọi API Flowie. Key tách riêng với kết nối AI (MCP).',
+   'Keys ({count})': 'Key ({count})',
+   'New API key': 'Tạo API key',
+   'No API keys have been created.': 'Chưa có API key nào.',
+   'Name': 'Tên',
+   'Key': 'Key',
+   'Expires': 'Hết hạn',
+   'Last used': 'Dùng lần cuối',
+   'Created by': 'Người tạo',
+   'Actions': 'Thao tác',
+   'Active': 'Đang hoạt động',
+   'Inactive': 'Ngừng hoạt động',
+   'Revoked': 'Đã thu hồi',
+   'Never': 'Chưa dùng',
+   'Revoke API key': 'Thu hồi API key',
+   'Delete API key': 'Xoá API key',
+   'Copy this key into the other system. It is shown once.':
+      'Sao chép key này vào hệ thống kia. Key chỉ hiện một lần.',
+   'Copy API key': 'Sao chép API key',
+   'Copied.': 'Đã sao chép.',
+   'Clipboard unavailable; copy the value manually.':
+      'Không dùng được clipboard; hãy sao chép thủ công.',
+   'Dismiss': 'Ẩn',
+   'Read the news feed': 'Đọc news feed',
+   'Send the key as a Bearer token. See docs/api-keys.md for the parameters.':
+      'Gửi key dạng Bearer token. Xem tham số trong docs/api-keys.md.',
+   'Cancel': 'Huỷ',
+   'Create API key': 'Tạo API key',
+   'Key name': 'Tên key',
+   'Expires in days (1–365)': 'Hết hạn sau số ngày (1–365)',
+   'Permissions': 'Quyền',
+   'Read news (news feed)': 'Đọc tin tức (news feed)',
+   'Delete {name}?': 'Xoá {name}?',
+   'Revoke {name}?': 'Thu hồi {name}?',
+   'The key is removed from this list for good.': 'Key bị xoá hẳn khỏi danh sách này.',
+   'Systems using this key lose access at once. This cannot be undone.':
+      'Hệ thống đang dùng key này mất quyền truy cập ngay. Không thể hoàn tác.',
+   'API key "{name}" created. Copy it now.': 'Đã tạo API key "{name}". Hãy sao chép ngay.',
+   'API key revoked.': 'Đã thu hồi API key.',
+   'API key deleted.': 'Đã xoá API key.',
+   'The operation failed.': 'Thao tác thất bại.',
+};

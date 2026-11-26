@@ -225,6 +225,7 @@ model User {
   mfaChallenges            MfaChallenge[]
   personalApiKeys          PersonalApiKey[]
   mcpConnections           McpConnection[]
+  workspaceApiKeys         WorkspaceApiKey[]
   passwordResetTokens      PasswordResetToken[]
   emailVerificationTokens  EmailVerificationToken[]
   memberships              WorkspaceMember[]
@@ -416,6 +417,30 @@ model McpConnection {
 
   @@index([workspaceId, userId])
   @@map("mcp_connections")
+}
+
+// Workspace API keys for system-to-system REST access (the news feed today); separate from
+// MCP connections, which authorize AI clients. VI: API key của workspace cho hệ thống khác gọi
+// REST (hiện là news feed); tách khỏi kết nối MCP vốn dành cho AI client.
+model WorkspaceApiKey {
+  id          String    @id @default(cuid())
+  workspaceId String    @map("workspace_id")
+  userId      String    @map("user_id")
+  name        String
+  prefix      String
+  tokenHash   String    @unique @map("token_hash")
+  scopes      String[]
+  expiresAt   DateTime  @map("expires_at")
+  revokedAt   DateTime? @map("revoked_at")
+  lastUsedAt  DateTime? @map("last_used_at")
+  rateWindow  DateTime? @map("rate_window")
+  rateCount   Int       @default(0) @map("rate_count")
+  createdAt   DateTime  @default(dbgenerated("(CURRENT_TIMESTAMP AT TIME ZONE 'UTC'::text)")) @map("created_at")
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([workspaceId])
+  @@map("workspace_api_keys")
 }
 
 model McpRequest {
@@ -671,6 +696,7 @@ model Workspace {
   codeReviews             CodeReview[]
   codeReviewIssueLinks    CodeReviewIssueLink[]
   mcpConnections          McpConnection[]
+  apiKeys                 WorkspaceApiKey[]
   documentLinks           DocumentLink[]
   projectRepositories     ProjectRepository[]
   notificationOutbox      NotificationOutbox[]

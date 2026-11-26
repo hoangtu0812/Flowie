@@ -12,6 +12,7 @@ import { messages as recurring } from '../features/recurring/messages.vi';
 import { messages as dataExchange } from '../features/data-exchange/messages.vi';
 import { messages as navigation } from '../features/navigation/messages.vi';
 import { messages as resources } from '../features/shared/messages.vi';
+import { messages as apiKeys } from '../features/settings/api-keys/messages.vi';
 import { preferenceMessages as preferences } from '../features/identity/preference-messages';
 test('feature translations retain interpolation fields and valid Unicode', () => {
    const placeholders = (value: string) =>
@@ -29,6 +30,7 @@ test('feature translations retain interpolation fields and valid Unicode', () =>
       dataExchange,
       navigation,
       resources,
+      apiKeys,
       preferences,
    ]) {
       for (const [english, vietnamese] of Object.entries(catalog)) {

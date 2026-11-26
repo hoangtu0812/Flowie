@@ -26,6 +26,7 @@ import { ArrowUpRight, FolderUp, MessagesSquare, Webhook } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { INTEGRATION_LOGOS } from './integration-logos';
 import { McpSummary } from '@/features/settings/mcp/mcp-summary';
+import { ApiKeysSummary } from '@/features/settings/api-keys/api-keys-summary';
 import { SettingsShell } from './shared';
 
 const DiscordLogo = INTEGRATION_LOGOS.discord;
@@ -64,7 +65,7 @@ export default function Integrations() {
       <>
          <SettingsShell
             title="Integrations"
-            description="Connect Discord or Microsoft Teams notifications, signed webhooks, SharePoint publishing, and authorize AI access to project work."
+            description="Connect Discord or Microsoft Teams notifications, signed webhooks, SharePoint publishing, authorize AI access to project work, and issue API keys for other systems."
          >
             <section className="flex flex-col gap-3">
                <h2 className="text-base font-medium">Discord</h2>
@@ -142,6 +143,7 @@ export default function Integrations() {
                   </Button>
                </div>
             </section>
+            <ApiKeysSummary />
             <McpSummary />
          </SettingsShell>
          <OutgoingWebhooksDialog

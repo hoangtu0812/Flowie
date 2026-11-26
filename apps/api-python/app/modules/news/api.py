@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from fastapi import Depends, Query, Request
@@ -14,6 +15,7 @@ from ...core.pagination import CursorCodec
 from ...core.utc_responses import UtcAPIRouter
 from ...db.session import get_session
 from ...services.microsoft_teams import valid_teams_webhook
+from ..api_keys import service as api_keys
 from ..identity.auth import current_user
 from ..identity.password_reset import limit_request
 from ..integrations.api import send_teams_test
@@ -41,6 +43,7 @@ from .service import (
     require_manager,
 )
 
+logger = logging.getLogger(__name__)
 router = UtcAPIRouter(prefix='/api/v1/news', tags=['news'])
 
 
@@ -106,25 +109,34 @@ async def news_feed(
     cursor: str | None = Query(default=None, max_length=1000),
     db: AsyncSession = Depends(get_session),
 ):
-    # Read-only news for other systems. It takes the workspace's MCP connection token
-    # (Bearer flowie_mcp_...) instead of a browser session and shares that token's per-minute limit.
-    # VI: Tin chỉ-đọc cho hệ thống khác. Dùng token kết nối MCP của workspace (Bearer flowie_mcp_...)
-    # VI: thay cho phiên trình duyệt và dùng chung giới hạn mỗi phút của token đó.
+    # Read-only news for other systems. It takes a workspace API key with the news:read scope
+    # (Bearer flowie_api_...) instead of a browser session. MCP connection tokens are still
+    # accepted, with a warning, because poc-dtd had a caller using one; remove that branch once
+    # the log shows none.
+    # VI: Tin chỉ-đọc cho hệ thống khác. Dùng API key của workspace có scope news:read (Bearer
+    # VI: flowie_api_...) thay cho phiên trình duyệt. Token kết nối MCP vẫn được nhận kèm cảnh báo vì
+    # VI: poc-dtd đã có nơi gọi bằng token đó; bỏ nhánh này khi log không còn cảnh báo.
     scheme, _, token = request.headers.get('authorization', '').partition(' ')
     if scheme.lower() != 'bearer' or not token:
-        raise ApiError(401, 'A Bearer MCP connection token is required.', 'Unauthorized')
-    principal = await authenticate(db, token)
-    calls = (await db.execute(CALL_UPDATE_MCP_CONNECTIONS, {'id': principal.connection_id, 'now': utcnow()})).scalar_one()
+        raise ApiError(401, 'A Bearer API key is required.', 'Unauthorized')
+    if token.startswith('flowie_mcp_'):
+        principal = await authenticate(db, token)
+        logger.warning('news_feed_mcp_token_deprecated connection=%s; use an API key', principal.connection_id)
+        subject, workspace_id = principal.connection_id, principal.workspace_id
+        calls = (await db.execute(CALL_UPDATE_MCP_CONNECTIONS, {'id': subject, 'now': utcnow()})).scalar_one()
+    else:
+        subject, workspace_id, calls = await api_keys.authenticate(db, token, 'news:read')
     await db.commit()
+    # shortcut: API keys share MCP_RATE_LIMIT per minute; add an own setting if they need a different limit.
     if calls > request.app.state.settings.mcp_rate_limit:
         raise ApiError(429, 'Request limit exceeded.', 'Too Many Requests')
     filters = {'category': category, 'since': parse_date(since), 'until': parse_date(until)}
-    codec = CursorCodec(request.app.state.settings.auth_jwt_secret, principal.connection_id, 'news-feed', filters)
+    codec = CursorCodec(request.app.state.settings.auth_jwt_secret, subject, 'news-feed', filters)
     after, after_id = codec.decode(cursor) if cursor else (None, None)
     rows = (
         await db.execute(
             FEED_SELECT_NEWS_ITEMS,
-            {**filters, 'workspace_id': principal.workspace_id, 'after': after, 'after_id': after_id, 'limit': limit + 1},
+            {**filters, 'workspace_id': workspace_id, 'after': after, 'after_id': after_id, 'limit': limit + 1},
         )
     ).mappings().all()
     items = [
