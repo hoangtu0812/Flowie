@@ -317,7 +317,7 @@ def test_webhook_test_posts_only_to_the_stored_url(monkeypatch):
 
 
 @pytest.mark.skipif(not os.getenv('MCP_TEST_DATABASE_URL'), reason='Test database not configured')
-def test_feed_reads_the_api_key_workspace_with_filters_and_cursor(caplog):
+def test_feed_reads_the_api_key_workspace_with_filters_and_cursor():
     from dataclasses import replace
 
     from sqlalchemy import text
@@ -379,7 +379,7 @@ def test_feed_reads_the_api_key_workspace_with_filters_and_cursor(caplog):
                 denied = await client.get('/api/v1/news/feed')
                 wrong = await client.get('/api/v1/news/feed', headers={'Authorization': 'Bearer flowie_api_nope'})
                 gone = await client.get('/api/v1/news/feed', headers={'Authorization': f"Bearer {revoked['token']}"})
-                # MCP tokens still read the feed for now, with a deprecation warning.
+                # MCP connection tokens do not open the feed; only API keys do.
                 legacy = await client.get('/api/v1/news/feed', headers={'Authorization': f'Bearer {mcp_token}'})
                 first = (await client.get('/api/v1/news/feed', params={'limit': 2}, headers=headers)).json()['data']
                 rest = (
@@ -391,12 +391,11 @@ def test_feed_reads_the_api_key_workspace_with_filters_and_cursor(caplog):
                 used = await api_keys.list_keys(db, seed['workspace_id'], owner)
             assert [key['name'] for key in listed] == ['News reader'] and listed[0]['lastUsedAt'] is None
             assert used[0]['lastUsedAt'] is not None and used[0]['createdBy']
-            assert (gone.status_code, legacy.status_code, len(legacy.json()['data']['items'])) == (401, 200, 3)
+            assert (gone.status_code, legacy.status_code) == (401, 401)
         return denied.status_code, wrong.status_code, first, rest, ai, reused.status_code
 
     denied, wrong, first, rest, ai, reused = asyncio.run(run())
     assert (denied, wrong, reused) == (401, 401, 400)
-    assert 'news_feed_mcp_token_deprecated' in caplog.text
     assert [item['title'] for item in first['items']] == ['a2', 's1']
     assert first['items'][0] | {'id': None} == {
         'id': None, 'title': 'a2', 'url': 'https://example.com/a2', 'source': 'AI feed', 'category': 'AI',

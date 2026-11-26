@@ -49,7 +49,4 @@ first. Each item has `id`, `title`, `url`, `source`, `category`, `publishedAt`
 is limited to `MCP_RATE_LIMIT` calls per minute (HTTP 429 beyond it). A key without
 `news:read` gets HTTP 403; a missing, unknown, expired or revoked key gets 401.
 
-**Deprecated:** the feed still accepts an MCP connection token (`flowie_mcp_...`), because
-a caller on poc-dtd used one, and logs `news_feed_mcp_token_deprecated connection=<id>`
-for each such call. Move that caller to an API key; the MCP path will be removed once the
-log shows no more warnings.
+MCP connection tokens (`flowie_mcp_...`) are refused here with HTTP 401; use an API key.
