@@ -51,6 +51,19 @@ REVOKE_INSERT_AUDIT_LOGS = text("""INSERT INTO audit_logs (id,workspace_id,actor
         VALUES (:id,:workspace,:user,'mcp.connection.revoked','mcp-connection',:connection,'{}'::jsonb,:now)""")
 
 
+# Only an inactive (revoked or expired) connection may be deleted; an active token is revoked
+# first. mcp_requests rows cascade; audit_logs keep the connection id and are not touched.
+# VI: Chỉ xoá được kết nối không còn hoạt động (đã thu hồi hoặc hết hạn); token đang hoạt động
+# VI: phải thu hồi trước. Dòng mcp_requests bị xoá theo; audit_logs giữ id kết nối, không bị xoá.
+DELETE_DELETE_MCP_CONNECTIONS = text("""DELETE FROM mcp_connections
+        WHERE id=:id AND workspace_id=:workspace AND (:manager OR user_id=:user)
+        AND (revoked_at IS NOT NULL OR expires_at<=:now) RETURNING id,name""")
+
+
+DELETE_INSERT_AUDIT_LOGS = text("""INSERT INTO audit_logs (id,workspace_id,actor_id,action,entity_type,entity_id,metadata,created_at)
+        VALUES (:id,:workspace,:user,'mcp.connection.deleted','mcp-connection',:connection,CAST(:metadata AS jsonb),:now)""")
+
+
 UPDATE_UPDATE_MCP_CONNECTIONS = text("""UPDATE mcp_connections SET name=:name,scopes=:scopes,team_ids=:teams,
         project_ids=:projects WHERE id=:id RETURNING *""")
 

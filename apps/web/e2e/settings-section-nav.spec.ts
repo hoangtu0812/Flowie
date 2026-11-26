@@ -27,7 +27,7 @@ test('Settings pages navigate to their sections from "On this page"', async ({ p
    await expect(heading).toBeAttached();
    const nav = page.getByRole('navigation', { name: 'On this page' });
    await expect(nav).toBeVisible();
-   for (const name of ['Discord', 'SharePoint', 'AI connections (MCP)', 'Connections']) {
+   for (const name of ['Discord', 'SharePoint', 'AI connections (MCP)', 'Tool call limits']) {
       await expect(nav.getByRole('link', { name, exact: true })).toBeVisible();
    }
    await expect(heading).not.toBeInViewport();

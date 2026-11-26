@@ -21,6 +21,9 @@ pull request and commit references, which are for us.
 
 ### Added
 
+- A revoked or expired AI (MCP) connection can now be deleted for good: its trash icon in the connection list asks for confirmation, then removes it. An active connection still has to be revoked first, and its MCP log entries are kept. On Settings → Integrations, AI connections (MCP) is now a short card with the status, server URL and connection counts; Manage opens a separate page with the connection list, New connection and the install guide. No migration: rebuild `api` and `web`. (#PR)
+  VI: Kết nối AI (MCP) đã thu hồi hoặc hết hạn giờ xóa hẳn được: biểu tượng thùng rác trong danh sách kết nối hỏi xác nhận rồi xóa. Kết nối đang hoạt động vẫn phải thu hồi trước, và nhật ký MCP của nó được giữ lại. Ở Cài đặt → Tích hợp, mục AI connections (MCP) giờ là một thẻ ngắn gồm trạng thái, URL server và số kết nối; nút Manage mở trang riêng chứa danh sách kết nối, New connection và hướng dẫn cài đặt. Không có migration: build lại `api` và `web`.
+
 - Every workspace now gets the suggested News groups — Security, Thị trường, AI and Công nghệ — on its own: the news job adds them once to existing and new workspaces, and groups or feeds an administrator deletes afterwards stay deleted. Run migrations, then rebuild `api`. (#330)
   VI: Mọi workspace giờ tự có các nhóm tin gợi ý — Security, Thị trường, AI và Công nghệ: tác vụ tin tức thêm một lần cho workspace hiện có và workspace mới, và nhóm hay nguồn tin quản trị viên xóa sau đó sẽ không bị thêm lại. Chạy migration rồi build lại `api`.
 

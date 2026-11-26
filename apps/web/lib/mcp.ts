@@ -156,6 +156,14 @@ export function revokeMcpConnection(workspaceId: string, connectionId: string): 
    );
 }
 
+/** Permanently deletes a revoked or expired connection; an active one must be revoked first. */
+export function deleteMcpConnection(workspaceId: string, connectionId: string): Promise<unknown> {
+   return request(
+      `connections/${encodeURIComponent(connectionId)}/record?workspaceId=${encodeURIComponent(workspaceId)}`,
+      { method: 'DELETE' }
+   );
+}
+
 export function updateMcpConnection(
    workspaceId: string,
    connectionId: string,
