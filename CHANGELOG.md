@@ -43,8 +43,8 @@ pull request and commit references, which are for us.
 
 ### Changed
 
-- The news feed `GET /api/v1/news/feed` now accepts only API keys: an AI (MCP) connection token gets 401. Systems that read news with an MCP token must switch to an API key from Settings → Integrations → API keys. No migration: rebuild `api`.
-  VI: News feed `GET /api/v1/news/feed` giờ chỉ nhận API key: token kết nối AI (MCP) bị trả 401. Hệ thống nào đang đọc tin bằng token MCP phải chuyển sang API key tạo ở Cài đặt → Tích hợp → API keys. Không có migration: build lại `api`.
+- The news feed `GET /api/v1/news/feed` now accepts only API keys: an AI (MCP) connection token gets 401. Systems that read news with an MCP token must switch to an API key from Settings → Integrations → API keys. No migration: rebuild `api`. (#334)
+  VI: News feed `GET /api/v1/news/feed` giờ chỉ nhận API key: token kết nối AI (MCP) bị trả 401. Hệ thống nào đang đọc tin bằng token MCP phải chuyển sang API key tạo ở Cài đặt → Tích hợp → API keys. Không có migration: build lại `api`. (#334)
 
 - News no longer suggests BleepingComputer, and the cisa.gov advisories and BleepingComputer feeds that the first news release added to every workspace are removed where they never delivered an item; both answer 403 from the production server. CISA's data keeps coming from its GitHub mirror (CISA KEV). Run migrations; rebuild `api`. (#331)
   VI: News không còn gợi ý BleepingComputer, và feed advisories của cisa.gov cùng BleepingComputer mà bản tin tức đầu tiên thêm cho mọi workspace được xóa ở nơi chưa từng lấy được tin nào; cả hai trả 403 từ server production. Dữ liệu CISA vẫn lấy từ bản mirror GitHub (CISA KEV). Chạy migration; build lại `api`.
