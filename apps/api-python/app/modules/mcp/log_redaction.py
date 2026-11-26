@@ -27,7 +27,7 @@ SENSITIVE_KEY = re.compile(
     re.IGNORECASE,
 )
 SAFE_KEYS = {"idempotencyKey"}
-SECRET_VALUE = re.compile(r"(?i)bearer\s+\S+|flowie_mcp_[\w-]+")
+SECRET_VALUE = re.compile(r"(?i)bearer\s+\S+|flowie_(?:mcp|api)_[\w-]+")
 URL = re.compile(r"(?i)\b(https?://[^\s/?#]+)[^\s]*")
 
 

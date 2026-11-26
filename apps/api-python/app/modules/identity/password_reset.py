@@ -120,7 +120,7 @@ async def consume_reset(db: AsyncSession, token: str, password: str) -> str:
         CONSUME_RESET_UPDATE_PASSWORD_RESET_TOKENS,
         {"now": now, "user": user},
     )
-    for table in ("sessions", "personal_api_keys", "mcp_connections"):
+    for table in ("sessions", "personal_api_keys", "mcp_connections", "workspace_api_keys"):
         await db.execute(
             consume_reset_update_sql(table),
             {"now": now, "user": user},

@@ -20,6 +20,7 @@ from fastapi import APIRouter
 from .modules.agent.api import router as agent_router
 from .modules.agent_runs.api import router as agent_runs_router
 from .modules.agent_runs.operations import router as operations_router
+from .modules.api_keys.api import router as api_keys_router
 from .modules.archive.api import router as archive_router
 from .modules.attachments.api import public_router as attachments_router
 from .modules.attachments.api import router as native_attachments_router
@@ -128,6 +129,7 @@ ROUTERS: list[APIRouter] = [
     native_documents_router,
     sharepoint_router,
     news_router,
+    api_keys_router,
     customer_requests_router,
     asks_router,
     slas_router,

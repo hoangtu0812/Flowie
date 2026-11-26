@@ -69,28 +69,8 @@ terminal and do not attach sensitive output to public tickets.
 
 ## News API for other systems
 
-Other systems read the workspace's News items over plain REST with the same
-connection token; no MCP client is needed. Create a connection as above (any
-scope; read-only scopes are enough) and send its token:
-
-```bash
-curl -H "Authorization: Bearer $FLOWIE_MCP_TOKEN" \
-  "https://<host>/api/v1/news/feed?category=AI&since=2026-11-01T00:00:00Z&limit=50"
-```
-
-| Query | Meaning |
-| --- | --- |
-| `category` | News group id or exact name, for example `Security` or `Thị trường`; omit for every group |
-| `since`, `until` | ISO 8601 instants; items published at or after `since` and before `until` |
-| `limit` | 1–100 items per page, default 50 |
-| `cursor` | `nextCursor` from the previous page, sent with the same filters |
-
-The response is `{"data": {"items": [...], "nextCursor": "..." | null}}`, newest
-first. Each item has `id`, `title`, `url`, `source`, `category`, `publishedAt`
-(UTC), `summary` (from the feed), and the AI's `aiSummary`, `riskLevel` and
-`riskScore` when it has rated the item. The token only reads its own workspace,
-stops working when it expires, is revoked or its owner leaves the workspace, and
-shares the connection's `MCP_RATE_LIMIT` per minute (HTTP 429 beyond it).
+Other systems read News with a workspace API key (`flowie_api_...`), not an MCP
+connection token. See [API keys for other systems](api-keys.md).
 
 ## Local AI client configuration
 

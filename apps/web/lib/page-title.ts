@@ -77,6 +77,7 @@ const SETTINGS: Record<string, string> = {
    'code-and-reviews': 'Code & reviews',
    'mcp': 'AI connections (MCP)',
    'mcp-logs': 'MCP logs',
+   'api-keys': 'API keys',
    'teams/new': 'New team',
 };
 
