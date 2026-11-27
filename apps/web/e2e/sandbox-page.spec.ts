@@ -91,19 +91,62 @@ test('Open with Codex on an issue opens the Sandbox page on the issue session', 
    );
 });
 
-test('The Sandbox page switches, adds and closes terminal sessions', async ({ page }) => {
-   let sessions = [{ name: 'DTD-7-flowie' }, { name: 'main' }];
-   const closed: string[] = [];
+test('The Sandbox page lists agent sessions and creates, renames and closes them', async ({
+   page,
+}) => {
+   const home = '/home/node';
+   let sessions = [
+      {
+         name: 'DTD-7-flowie',
+         dir: `${home}/work/DTD-7-flowie`,
+         agent: 'claude',
+         state: 'idle',
+         preview: 'Done.',
+      },
+      { name: 'main', dir: home, agent: null, state: 'shell', preview: '$' },
+      { name: 'review', dir: home, agent: 'codex', state: 'waiting', preview: 'Allow command?' },
+   ];
+   const calls: string[] = [];
+   let created: unknown;
    await page.route('**/api/v1/sandbox', (route) =>
       route.fulfill({ json: { data: { state: 'running' } } })
    );
-   await page.route('**/api/v1/sandbox/sessions', (route) =>
-      route.fulfill({ json: { data: sessions } })
+   await page.route('**/api/v1/sandbox/dirs', (route) =>
+      route.fulfill({ json: { data: { home, recent: [`${home}/work/DTD-7-flowie`] } } })
    );
-   await page.route('**/api/v1/sandbox/sessions/*', (route) => {
-      const name = decodeURIComponent(route.request().url().split('/').pop() ?? '');
-      closed.push(name);
-      sessions = sessions.filter((session) => session.name !== name);
+   await page.route('**/api/v1/sandbox/conversations?*', (route) =>
+      route.fulfill({
+         json: {
+            data: [
+               {
+                  agent: 'claude',
+                  id: '0f8fad5b-d9cb-469f-a165-70867728950e',
+                  cwd: `${home}/work/DTD-7-flowie`,
+                  title: 'Fix the login page',
+                  mtime: 1,
+               },
+            ],
+         },
+      })
+   );
+   await page.route('**/api/v1/sandbox/sessions', (route) => {
+      if (route.request().method() === 'POST') {
+         created = route.request().postDataJSON();
+         const body = created as { name: string; dir: string; agent: string };
+         sessions = [...sessions, { ...body, state: 'working', preview: '' }];
+         return route.fulfill({ status: 201, json: { data: { name: body.name } } });
+      }
+      return route.fulfill({ json: { data: sessions } });
+   });
+   await page.route('**/api/v1/sandbox/sessions/**', (route) => {
+      const url = route.request().url();
+      calls.push(`${route.request().method()} ${url.slice(url.indexOf('/sessions/'))}`);
+      if (url.endsWith('/rename')) {
+         const to = (route.request().postDataJSON() as { to: string }).to;
+         sessions = sessions.map((s) => (s.name === 'main' ? { ...s, name: to } : s));
+         return route.fulfill({ json: { data: { name: to } } });
+      }
+      sessions = sessions.filter((s) => !url.endsWith(`/sessions/${s.name}`));
       return route.fulfill({ status: 204 });
    });
    await page.route(/\/api\/v1\/sandbox\/ui\/\?arg=/, (route) =>
@@ -112,21 +155,41 @@ test('The Sandbox page switches, adds and closes terminal sessions', async ({ pa
    await signIn(page);
    await page.goto(`/${fixture.slug}/sandbox`);
 
+   const list = page.getByRole('list', { name: 'Terminal sessions' });
    const terminal = page.locator('iframe[title="Sandbox terminal"]');
-   const tabs = page.getByRole('tablist', { name: 'Terminal sessions' });
-   await expect(tabs.getByRole('tab')).toHaveText(['DTD-7-flowie', 'main']);
+   // Sessions waiting for the person come first, then working, idle and plain shells.
+   await expect(list.getByRole('listitem')).toHaveCount(3);
+   await expect(list.getByRole('listitem').first()).toContainText('review');
+   await expect(list.getByRole('listitem').first()).toContainText('Allow command?');
+   await expect(list.getByText('~/work/DTD-7-flowie')).toBeVisible();
+
+   await list.getByRole('button', { name: /^DTD-7-flowie/ }).click();
    await expect(terminal).toHaveAttribute('src', /\?arg=DTD-7-flowie$/);
 
-   await tabs.getByRole('tab', { name: 'main' }).click();
-   await expect(terminal).toHaveAttribute('src', /\?arg=main$/);
+   await page.getByRole('button', { name: 'New session' }).click();
+   const dialog = page.getByRole('dialog', { name: 'New session' });
+   await expect(dialog.getByLabel('Session name')).toHaveValue('DTD-7-flowie-claude');
+   await expect(dialog.getByText('Fix the login page')).toBeHidden();
+   await dialog.getByRole('button', { name: 'Create session' }).click();
+   await expect(dialog).toBeHidden();
+   expect(created).toEqual({
+      name: 'DTD-7-flowie-claude',
+      dir: `${home}/work/DTD-7-flowie`,
+      agent: 'claude',
+   });
+   await expect(terminal).toHaveAttribute('src', /\?arg=DTD-7-flowie-claude$/);
 
-   await page.getByRole('button', { name: 'New terminal' }).click();
-   await expect(tabs.getByRole('tab', { selected: true })).toHaveText(/^term-/);
-   await expect(terminal).toHaveAttribute('src', /\?arg=term-/);
+   await page.getByRole('button', { name: 'Actions for main' }).click();
+   await page.getByRole('menuitem', { name: 'Rename' }).click();
+   await page
+      .getByRole('dialog', { name: 'Rename session' })
+      .getByLabel('Session name')
+      .fill('scratch');
+   await page.getByRole('button', { name: 'Rename', exact: true }).click();
+   await expect(list.getByRole('button', { name: /^scratch/ })).toBeVisible();
 
-   await tabs.getByRole('tab', { name: 'DTD-7-flowie' }).click();
-   await page.getByRole('button', { name: 'Close this session' }).click();
-   await expect(tabs.getByRole('tab')).toHaveText(['main']);
-   expect(closed).toEqual(['DTD-7-flowie']);
-   await expect(terminal).toHaveAttribute('src', /\?arg=main$/);
+   await page.getByRole('button', { name: 'Actions for review' }).click();
+   await page.getByRole('menuitem', { name: 'Close session' }).click();
+   await expect(list.getByRole('button', { name: /^review/ })).toHaveCount(0);
+   expect(calls).toEqual(['POST /sessions/main/rename', 'DELETE /sessions/review']);
 });

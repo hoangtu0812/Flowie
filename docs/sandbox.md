@@ -10,14 +10,15 @@ only for people in `SANDBOX_USERS`), which starts and stops the sandbox and
 shows its terminal sessions; phase 4 adds "Open with…" on an issue (below);
 DTD-1062 stops sandboxes left idle; DTD-1063 replaced the termi UI the first
 phases used with plain ttyd and tmux, so nothing outside this repository is
-needed.
+needed; DTD-1066 adds Flowie's own sandbox agent and termi-like sessions
+(agent state, new session with a folder and a past conversation, rename).
 
 ## Pieces
 
 | Piece | Where | Role |
 | --- | --- | --- |
-| `flowie-sandbox` image | `infrastructure/sandbox/Dockerfile`, `sandbox-start.sh`, `sandbox-session.sh` | Debian, Node 24, git, `gh`, tmux, ttyd, Claude Code, Codex. Runs as `node` (uid 1000); ttyd listens on port 7680 of the sandbox network under the user's secret base path, and each connection attaches to the tmux session named by `?arg=<name>` (created in `/home/node` if new). |
-| `sandbox-manager` | `apps/api-python/app/sandbox_manager.py`, Compose profile `sandbox` | The only service with the Docker socket. Internal HTTP API behind a bearer token; lists, creates and closes tmux sessions with `docker exec`. |
+| `flowie-sandbox` image | `infrastructure/sandbox/Dockerfile`, `sandbox-start.sh`, `sandbox-session.sh`, `sandbox_agent.py` | Debian, Node 24, git, `gh`, tmux, ttyd, Claude Code, Codex. Runs as `node` (uid 1000); ttyd listens on port 7680 of the sandbox network under the user's secret base path, and each connection attaches to the tmux session named by `?arg=<name>` (created in `/home/node` if new). The sandbox agent (Python standard library) listens on port 7681 under the same base path and manages the tmux sessions. |
+| `sandbox-manager` | `apps/api-python/app/sandbox_manager.py`, Compose profile `sandbox` | The only service with the Docker socket. Internal HTTP API behind a bearer token; only creates, starts, stops and removes containers. |
 | API module | `apps/api-python/app/modules/sandbox/api.py` | `/api/v1/sandbox` (state, start, stop) and `/api/v1/sandbox/sessions`, and `/api/v1/sandbox/ui/...`, the reverse proxy to the caller's ttyd (HTTP and the terminal WebSocket). |
 | Sandbox network | `flowie-sandbox`, bridge `flowie-sbx0`, `172.31.250.0/24` | Created by Compose with the `api` service. The API has the fixed address `172.31.250.2`; sandboxes get addresses from `172.31.250.128/25`. |
 | Firewall | `infrastructure/sandbox/sandbox-firewall.sh`, `flowie-sandbox-firewall.service` | Sandboxes reach the internet only. |
@@ -50,8 +51,12 @@ For a signed-in user whose email is in `SANDBOX_USERS` (everyone else gets 403):
 | `POST /api/v1/sandbox/stop` | Stop it |
 | `GET /api/v1/sandbox/repositories?issueId=` | `{data: [{id, name}]}`: repositories of the issue's project the caller can read |
 | `POST /api/v1/sandbox/open` | `{issueId, repositoryId, agent}` with `agent` `claude` or `codex`: start the sandbox and open the issue's session; `{data: {session}}` |
-| `GET /api/v1/sandbox/sessions` | `{data: [{name}]}`: tmux sessions, most recently used first; empty while stopped |
+| `GET /api/v1/sandbox/sessions` | `{data: [{name, dir, agent, state, preview}]}`: tmux sessions, most recently used first; `agent` is `claude`, `codex` or null, `state` is `working`, `waiting`, `idle` or `shell`; empty while stopped |
+| `POST /api/v1/sandbox/sessions` | `{name, dir?, agent?, resume?}`: a session in a folder of the home running Claude Code or Codex (optionally `--resume <conversation id>`) or a shell; `201`, `409` if the name exists |
+| `POST /api/v1/sandbox/sessions/<name>/rename` | `{to}` |
 | `DELETE /api/v1/sandbox/sessions/<name>` | Close that session (`204`) |
+| `GET /api/v1/sandbox/dirs` | `{data: {home, recent}}`: open sessions' folders, `~/work/*`, `~/repos/*`, folders of past conversations |
+| `GET /api/v1/sandbox/conversations?dir=` | `{data: [{agent, id, cwd, title, mtime}]}`: past Claude Code and Codex conversations, newest first |
 | `/api/v1/sandbox/ui/?arg=<name>` | ttyd attached to that session (created if new), for the caller's own container only |
 
 ## Open with Claude/Codex
@@ -63,7 +68,7 @@ calls `POST /api/v1/sandbox/open`, which:
 1. checks that the caller can read the issue and that the repository belongs
    to its project;
 2. starts the sandbox;
-3. asks the manager for the tmux session `<issue identifier>-<repository
+3. asks the sandbox agent for the tmux session `<issue identifier>-<repository
    name>` in `/home/node` with one shell line typed into it: clone the repository into
    `~/repos/<name>` if it is not there, fetch, add the worktree
    `~/work/<session>` on branch `flowie/<session>` from `origin/<base branch>`
@@ -92,14 +97,22 @@ app. The Sandbox page asks for the sandbox state every minute, which renews
 it. A terminal opened in a tab of its own needs a Flowie page (the Sandbox
 page or any other) open alongside it.
 
-The Sandbox page shows the sandbox's sessions as tabs. "New terminal" opens a
-fresh `term-…` session (tmux creates it when ttyd attaches), and "Close this
-session" ends the selected one with everything running in it.
+The Sandbox page lists the sessions beside the terminal, as termi does: the
+ones waiting for the person first, then working, idle and plain shells, each
+with its agent, folder and the last lines of its screen, refreshed every 5
+seconds. "New session" picks an agent (Claude Code, Codex or a shell), a
+folder and, if any, one of that agent's past conversations in the folder; a
+session's menu renames or closes it (closing ends everything running in it).
+
+The agent's state comes from its screen, with the rules termi uses: "Do you
+want to", "Allow command", a `❯ 1.` menu and similar in the last lines mean
+waiting, "esc to interrupt" means working, anything else idle. The agent of a
+session is found by walking the process tree from the pane's shell.
 
 ## Stopping idle sandboxes
 
 Every 5 minutes the API lists the running sandboxes (`GET /sandboxes` on the
-manager) and asks the manager for each one's tmux sessions. A sandbox is idle since
+manager) and asks each one's sandbox agent for its tmux sessions. A sandbox is idle since
 the latest of its start and the last input or output in any of its tmux
 sessions; past `SANDBOX_IDLE_MINUTES` (default 60) the API stops it. An agent
 that is still working prints to its screen, so it keeps the sandbox running;
@@ -121,9 +134,6 @@ listens on port 4100 of the default Compose network.
 | `PUT /sandboxes/<id>` | Create if missing, start if stopped; `200 {userId, state, address}` |
 | `POST /sandboxes/<id>/stop` | `200` with the new state, `404` if none |
 | `DELETE /sandboxes/<id>` | Remove the container, keep the volume; `204` |
-| `GET /sandboxes/<id>/sessions` | `200 [{name, activity, output}]` (last input and output, epoch seconds); `409` when stopped |
-| `POST /sandboxes/<id>/sessions` | `{name, command?}`: create the tmux session and type `command` plus Enter into it; `201`, `409` if it exists |
-| `DELETE /sandboxes/<id>/sessions/<name>` | Close the session; `204`, `404` if none |
 
 A container with a sandbox's name but without the manager's label is never
 touched (`409`).
@@ -205,9 +215,11 @@ first sandbox starts: a sandbox started without it can reach the whole LAN.
 
 - The manager holds the Docker socket, which is root on the host. It is on the
   default network only, publishes nothing, and requires the token.
-- ttyd inside a sandbox listens on the sandbox network, which only the API
-  can reach, and answers only under the user's secret base path, which only
-  the API knows.
+- ttyd and the sandbox agent inside a sandbox listen on the sandbox network,
+  which only the API can reach, and answer only under the user's secret base
+  path, which only the API knows. The agent runs as the sandbox user, refuses
+  folders outside the home (symlinks included) and runs tmux with argument
+  lists, never a shell.
 - Credentials in the home volumes are readable by anyone with root on the
   server. Tell users before they sign in.
 - Using a personal Claude or Codex subscription on a shared server may be

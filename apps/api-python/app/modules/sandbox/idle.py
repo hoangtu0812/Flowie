@@ -1,12 +1,12 @@
 """Stops sandboxes nobody has used for SANDBOX_IDLE_MINUTES (docs/sandbox.md).
 
 Use means terminal input or output in any of the sandbox's tmux sessions, which
-sandbox-manager reads with `tmux list-sessions`. An agent that is still working prints to its screen,
+the Flowie agent inside the sandbox reads from tmux. An agent that is still working prints to its screen,
 so it is never stopped mid-task; a tab that is merely open is not use. The home
 volume stays, so the next Start or "Open with…" brings everything back.
 VI: Dừng các sandbox không ai dùng trong SANDBOX_IDLE_MINUTES phút (docs/sandbox.md).
 VI: Dùng nghĩa là có nhập hoặc output terminal trong bất kỳ phiên tmux nào của sandbox,
-VI: sandbox-manager đọc bằng `tmux list-sessions`. Agent còn đang làm việc thì in ra màn hình nên không bao
+VI: agent Flowie bên trong sandbox đọc từ tmux. Agent còn đang làm việc thì in ra màn hình nên không bao
 VI: giờ bị dừng giữa chừng; chỉ mở tab thì không tính là dùng. Volume home được giữ, nên
 VI: lần Khởi động hoặc "Mở bằng…" sau sẽ có lại mọi thứ.
 """
@@ -22,7 +22,7 @@ from typing import Any
 
 from ...core.config import Settings
 from ...core.errors import ApiError
-from .api import _manager
+from .api import _agent, _manager
 
 logger = logging.getLogger(__name__)
 
@@ -49,10 +49,10 @@ async def _sessions(settings: Settings, user_id: str) -> list[dict[str, Any]]:
     """The sandbox's tmux sessions, or none when they cannot be read: then only the start time counts.
     VI: Các phiên tmux của sandbox, hoặc rỗng khi không đọc được: khi đó chỉ tính giờ khởi động."""
     try:
-        status, body = await _manager(settings, 'GET', f'/sandboxes/{user_id}/sessions')
+        _, body = await _agent(settings, user_id, 'GET', 'sessions')
     except ApiError:
         return []
-    return body if status == 200 and isinstance(body, list) else []
+    return body if isinstance(body, list) else []
 
 
 async def stop_idle_sandboxes(settings: Settings, now: Callable[[], float] = time.time) -> list[str]:

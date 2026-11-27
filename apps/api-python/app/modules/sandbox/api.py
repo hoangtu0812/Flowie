@@ -44,6 +44,7 @@ from ...core.config import Settings
 from ...core.errors import ApiError
 from ...db.session import get_session
 from ...sandbox_manager import (
+    AGENT_PORT,
     SESSION_NAME,
     TERMINAL_PORT,
     USER_ID,
@@ -125,23 +126,121 @@ async def stop_sandbox(request: Request, user: Any = Depends(current_user)):
     return _state(*await _manager(_settings(request), 'POST', f'/sandboxes/{user_id}/stop'))
 
 
+AGENT_READY_ATTEMPTS = 20
+
+
+async def _agent(
+    settings: Settings, user_id: str, method: str, path: str, body: Any = None,
+    params: dict[str, str] | None = None, accept: tuple[int, ...] = (), wait: bool = False,
+) -> tuple[int, Any]:
+    """One call to the Flowie agent inside the caller's sandbox, under its secret base path.
+    A stopped sandbox is 409; `wait` retries while one that has just started brings it up.
+    VI: Một lời gọi tới agent Flowie trong sandbox của người gọi, dưới đường dẫn gốc bí mật.
+    VI: Sandbox đang dừng là 409; `wait` thử lại trong lúc sandbox vừa khởi động bật agent lên."""
+    token = terminal_token(settings.sandbox_manager_token, user_id)
+    url = f'http://{container_name(user_id)}:{AGENT_PORT}/{token}/{path}'
+    failure: Exception | None = None
+    async with httpx.AsyncClient(timeout=30) as client:
+        for _ in range(AGENT_READY_ATTEMPTS if wait else 1):
+            try:
+                response = await client.request(method, url, json=body, params=params)
+                break
+            except httpx.TransportError as error:
+                failure = error
+                if wait:
+                    await asyncio.sleep(1)
+        else:
+            raise ApiError(409, 'The sandbox is not running.', 'Conflict') from failure
+    answer = response.json() if response.content else None
+    if response.status_code >= 400 and response.status_code not in accept:
+        message = answer.get('error') if isinstance(answer, dict) else None
+        if response.status_code in (400, 404, 409) and message:
+            raise ApiError(response.status_code, message, 'Bad Request')
+        raise ApiError(502, 'The sandbox refused the request.', 'Bad Gateway')
+    return response.status_code, answer
+
+
+SESSION_FIELDS = ('name', 'dir', 'agent', 'state', 'preview')
+
+
 @router.get('/sessions')
 async def sandbox_sessions(request: Request, user: Any = Depends(current_user)):
-    """The caller's tmux sessions, most recently used first; none while the sandbox is stopped.
-    VI: Các phiên tmux của người gọi, phiên dùng gần nhất trước; rỗng khi sandbox đang dừng."""
-    user_id = _sandbox_user(_settings(request), user)
-    status, body = await _manager(_settings(request), 'GET', f'/sandboxes/{user_id}/sessions', accept=(409,))
-    sessions = body if status == 200 and isinstance(body, list) else []
-    ordered = sorted(sessions, key=lambda s: max(s.get('activity', 0), s.get('output', 0)), reverse=True)
-    return {'data': [{'name': s['name']} for s in ordered]}
+    """The caller's tmux sessions, most recently used first, with the agent running in each and
+    its state (`working`, `waiting`, `idle`, or `shell` without an agent); none while stopped.
+    VI: Các phiên tmux của người gọi, dùng gần nhất trước, kèm agent đang chạy trong từng phiên và
+    VI: trạng thái (`working`, `waiting`, `idle`, hoặc `shell` khi không có agent); rỗng khi đang dừng."""
+    settings = _settings(request)
+    user_id = _sandbox_user(settings, user)
+    try:
+        _, sessions = await _agent(settings, user_id, 'GET', 'sessions')
+    except ApiError as error:
+        if error.status_code != 409:
+            raise
+        sessions = []
+    return {'data': [{key: session.get(key) for key in SESSION_FIELDS} for session in sessions or []]}
+
+
+class SessionInput(StrictInput):
+    name: str = Field(pattern=SESSION_NAME.pattern)
+    dir: str = Field(default='', max_length=4096)
+    agent: Literal['claude', 'codex'] | None = None
+    resume: str | None = Field(default=None, pattern=r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
+
+
+class RenameInput(StrictInput):
+    to: str = Field(pattern=SESSION_NAME.pattern)
+
+
+@router.post('/sessions', status_code=201)
+async def create_sandbox_session(payload: SessionInput, request: Request, user: Any = Depends(current_user)):
+    """A new tmux session in a folder of the home, running Claude Code or Codex (optionally
+    resuming one of their conversations) or a plain shell.
+    VI: Phiên tmux mới trong một thư mục thuộc home, chạy Claude Code hay Codex (có thể mở lại
+    VI: một hội thoại cũ của chúng) hoặc shell thường."""
+    settings = _settings(request)
+    user_id = _sandbox_user(settings, user)
+    _, created = await _agent(settings, user_id, 'POST', 'sessions', payload.model_dump(exclude_none=True))
+    return {'data': created}
+
+
+@router.post('/sessions/{name}/rename')
+async def rename_sandbox_session(name: str, payload: RenameInput, request: Request, user: Any = Depends(current_user)):
+    settings = _settings(request)
+    user_id = _sandbox_user(settings, user)
+    if not SESSION_NAME.match(name):
+        raise ApiError(400, 'Invalid session name.', 'Bad Request')
+    _, renamed = await _agent(settings, user_id, 'POST', f'sessions/{name}/rename', {'to': payload.to})
+    return {'data': renamed}
 
 
 @router.delete('/sessions/{name}', status_code=204)
 async def close_sandbox_session(name: str, request: Request, user: Any = Depends(current_user)):
-    user_id = _sandbox_user(_settings(request), user)
+    settings = _settings(request)
+    user_id = _sandbox_user(settings, user)
     if not SESSION_NAME.match(name):
         raise ApiError(400, 'Invalid session name.', 'Bad Request')
-    await _manager(_settings(request), 'DELETE', f'/sandboxes/{user_id}/sessions/{name}')
+    await _agent(settings, user_id, 'DELETE', f'sessions/{name}')
+
+
+@router.get('/dirs')
+async def sandbox_dirs(request: Request, user: Any = Depends(current_user)):
+    """Folders to start a session in: the home, open sessions' folders, issue worktrees and clones.
+    VI: Thư mục để mở phiên: home, thư mục của phiên đang mở, worktree của task và bản clone."""
+    settings = _settings(request)
+    _, dirs = await _agent(settings, _sandbox_user(settings, user), 'GET', 'dirs')
+    return {'data': dirs}
+
+
+@router.get('/conversations')
+async def sandbox_conversations(
+    request: Request, dir: str = Query(default='', max_length=4096), user: Any = Depends(current_user)
+):
+    """Past Claude Code and Codex conversations in the sandbox, newest first, optionally of one folder.
+    VI: Các hội thoại Claude Code và Codex cũ trong sandbox, mới nhất trước, có thể lọc theo thư mục."""
+    settings = _settings(request)
+    user_id = _sandbox_user(settings, user)
+    _, found = await _agent(settings, user_id, 'GET', 'conversations', params={'dir': dir} if dir else None)
+    return {'data': found}
 
 
 PROMPT_DESCRIPTION_CHARS = 4000
@@ -242,8 +341,8 @@ async def open_in_sandbox(
     command = open_command(issue, repository, payload.agent, session)
     # 409: the issue's session exists already, so opening again goes back to it untouched.
     # VI: 409: phiên của task đã có, nên mở lại là quay về nó, không gõ gì thêm.
-    await _manager(
-        settings, 'POST', f'/sandboxes/{user_id}/sessions', {'name': session, 'command': command}, accept=(409,)
+    await _agent(
+        settings, user_id, 'POST', 'sessions', {'name': session, 'command': command}, accept=(409,), wait=True
     )
     return {'data': {'session': session}}
 

@@ -218,13 +218,13 @@ def open_client(user, monkeypatch, sessions):
     monkeypatch.setattr(sandbox, '_readable_issue', readable)
     monkeypatch.setattr(sandbox, '_repositories', repositories)
 
-    def manager(request):
-        assert request.url.port == 4100
-        if request.url.path.endswith('/sessions'):
+    def handler(request):
+        if request.url.port == 7681:
             return sessions(request)
+        assert request.url.port == 4100
         return httpx.Response(200, json={'state': 'running'})
 
-    client = make_client(user, monkeypatch, manager)
+    client = make_client(user, monkeypatch, handler)
     client.app.dependency_overrides[sandbox.get_session] = lambda: None
     return client
 
@@ -234,7 +234,8 @@ def test_open_creates_the_issue_session_with_the_command(monkeypatch):
 
     def sessions(request):
         seen.append(request)
-        assert request.url.path == f"/sandboxes/{ME['id']}/sessions"
+        assert request.url.host == f"flowie-sandbox-{ME['id']}"
+        assert request.url.path == f"/{terminal_token(TOKEN, ME['id'])}/sessions"
         return httpx.Response(201, json={'name': 'DTD-7-flowie-web'})
 
     client = open_client(ME, monkeypatch, sessions)
@@ -255,22 +256,78 @@ def test_open_reuses_an_existing_session_and_refuses_strangers_and_other_reposit
     assert stranger.post('/api/v1/sandbox/open', json=body).status_code == 403
 
 
-def test_sessions_are_listed_most_recent_first_and_empty_while_stopped(monkeypatch):
-    answers = [
-        httpx.Response(200, json=[{'name': 'main', 'activity': 10, 'output': 20}, {'name': 'DTD-7', 'activity': 30, 'output': 5}]),
-        httpx.Response(409, json={'error': 'The sandbox is not running.'}),
-    ]
-    closed = []
+def agent_client(user, monkeypatch, agent):
+    """A client whose sandbox agent answers with `agent`, or is down when it raises."""
+    def handler(request):
+        assert request.url.port == 7681
+        assert request.url.host == f"flowie-sandbox-{user['id']}"
+        token = terminal_token(TOKEN, user['id'])
+        assert request.url.path.startswith(f'/{token}/')
+        return agent(request, request.url.path.removeprefix(f'/{token}/'))
 
-    def manager(request):
-        if request.method == 'DELETE':
-            closed.append(request.url.path)
-            return httpx.Response(204)
-        return answers.pop(0)
+    return make_client(user, monkeypatch, handler)
 
-    client = make_client(ME, monkeypatch, manager)
-    assert client.get('/api/v1/sandbox/sessions').json() == {'data': [{'name': 'DTD-7'}, {'name': 'main'}]}
+
+def test_sessions_pass_agent_state_through_and_are_empty_while_stopped(monkeypatch):
+    listed = [{'name': 'DTD-7', 'dir': '/home/node/work/x', 'agent': 'claude', 'state': 'waiting', 'preview': 'Edit?',
+               'activity': 1, 'output': 2}]
+    running = [True]
+
+    def agent(request, path):
+        if not running[0]:
+            raise httpx.ConnectError('stopped')
+        return httpx.Response(200, json=listed)
+
+    client = agent_client(ME, monkeypatch, agent)
+    assert client.get('/api/v1/sandbox/sessions').json() == {'data': [
+        {'name': 'DTD-7', 'dir': '/home/node/work/x', 'agent': 'claude', 'state': 'waiting', 'preview': 'Edit?'}
+    ]}
+    running[0] = False
     assert client.get('/api/v1/sandbox/sessions').json() == {'data': []}
-    assert client.delete('/api/v1/sandbox/sessions/DTD-7').status_code == 204
+
+
+def test_session_writes_are_validated_here_and_forwarded(monkeypatch):
+    seen = []
+
+    def agent(request, path):
+        seen.append((request.method, path, json.loads(request.content) if request.content else None))
+        if path == 'sessions' and request.method == 'POST':
+            return httpx.Response(409, json={'error': 'The session exists.'}) if len(seen) > 1 else httpx.Response(201, json={'name': 'x'})
+        return httpx.Response(204) if request.method == 'DELETE' else httpx.Response(200, json={'name': 'y'})
+
+    client = agent_client(ME, monkeypatch, agent)
+    body = {'name': 'x', 'dir': '/home/node/work/a', 'agent': 'codex', 'resume': '0f8fad5b-d9cb-469f-a165-70867728950e'}
+    assert client.post('/api/v1/sandbox/sessions', json=body).status_code == 201
+    response = client.post('/api/v1/sandbox/sessions', json=body)
+    assert response.status_code == 409 and response.json()['message'] == 'The session exists.'
+    assert client.post('/api/v1/sandbox/sessions', json={**body, 'command': 'rm -rf ~'}).status_code == 422
+    assert client.post('/api/v1/sandbox/sessions', json={**body, 'agent': 'bash'}).status_code == 422
+    assert client.post('/api/v1/sandbox/sessions', json={**body, 'resume': 'x'}).status_code == 422
+    assert client.post('/api/v1/sandbox/sessions/x/rename', json={'to': 'y'}).json() == {'data': {'name': 'y'}}
+    assert client.post('/api/v1/sandbox/sessions/x/rename', json={'to': 'a b'}).status_code == 422
+    assert client.delete('/api/v1/sandbox/sessions/x').status_code == 204
     assert client.delete('/api/v1/sandbox/sessions/a.b').status_code == 400
-    assert closed == [f"/sandboxes/{ME['id']}/sessions/DTD-7"]
+    assert seen[0] == ('POST', 'sessions', body)
+    assert ('POST', 'sessions/x/rename', {'to': 'y'}) in seen and ('DELETE', 'sessions/x', None) in seen
+    assert len(seen) == 4
+
+
+def test_dirs_and_conversations_come_from_the_agent(monkeypatch):
+    def agent(request, path):
+        if path == 'dirs':
+            return httpx.Response(200, json={'home': '/home/node', 'recent': ['/home/node']})
+        assert path == 'conversations'
+        return httpx.Response(200, json=[{'agent': 'claude', 'dir': request.url.params.get('dir')}])
+
+    client = agent_client(ME, monkeypatch, agent)
+    assert client.get('/api/v1/sandbox/dirs').json() == {'data': {'home': '/home/node', 'recent': ['/home/node']}}
+    assert client.get('/api/v1/sandbox/conversations?dir=/home/node/w').json() == {
+        'data': [{'agent': 'claude', 'dir': '/home/node/w'}]
+    }
+
+
+def test_strangers_reach_no_agent(monkeypatch):
+    client = agent_client(STRANGER, monkeypatch, lambda request, path: httpx.Response(500))
+    assert client.get('/api/v1/sandbox/dirs').status_code == 403
+    assert client.get('/api/v1/sandbox/conversations').status_code == 403
+    assert client.post('/api/v1/sandbox/sessions', json={'name': 'x'}).status_code == 403

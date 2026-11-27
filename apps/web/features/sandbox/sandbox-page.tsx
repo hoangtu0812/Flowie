@@ -3,29 +3,40 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Button } from '@astryxdesign/core/Button';
-import { HStack, VStack } from '@astryxdesign/core/Layout';
+import { Dialog, DialogHeader } from '@astryxdesign/core/Dialog';
+import { HStack, Layout, LayoutContent, LayoutFooter, VStack } from '@astryxdesign/core/Layout';
 import { Text } from '@astryxdesign/core/Text';
-import { ExternalLink, Play, Plus, Square, X } from 'lucide-react';
+import { TextInput } from '@astryxdesign/core/TextInput';
+import { ExternalLink, Play, Plus, Square } from 'lucide-react';
+import { toast } from 'sonner';
 import { LoadingState } from '@/components/common/loading-state';
 import { QueryState } from '@/components/common/query-state';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useMessages } from '@/features/shared/use-messages';
 import { ApiRequestError } from '@/lib/http';
-import { cn } from '@/lib/utils';
 import {
    closeSandboxSession,
    loadSandbox,
+   loadSandboxDirs,
    loadSandboxSessions,
+   renameSandboxSession,
    sandboxSessionUrl,
    startSandbox,
    stopSandbox,
+   type SandboxSession,
    type SandboxState,
 } from '@/lib/sandbox';
+import { NewSessionDialog } from './new-session-dialog';
+import { SessionList } from './session-list';
 import { messages } from './messages.vi';
 
 // Below the 15-minute access cookie, so the terminal's requests always find a fresh one.
 // VI: Ngắn hơn 15 phút của cookie truy cập, để request của terminal luôn gặp cookie còn hạn.
 const KEEP_ALIVE_MS = 60_000;
+// Agent states change by the second; the list refreshes this often while the sandbox runs.
+// VI: Trạng thái agent đổi theo từng giây; danh sách làm mới theo nhịp này khi sandbox chạy.
+const SESSIONS_MS = 5_000;
+const NAME = /^[A-Za-z0-9_-]{1,40}$/;
 
 type View =
    | { kind: 'loading' }
@@ -37,13 +48,14 @@ export function SandboxPage() {
    const tx = useMessages(messages);
    const [view, setView] = useState<View>({ kind: 'loading' });
    const [busy, setBusy] = useState(false);
-   const [sessions, setSessions] = useState<string[]>([]);
+   const [sessions, setSessions] = useState<SandboxSession[]>([]);
+   const [home, setHome] = useState('');
+   const [creating, setCreating] = useState(false);
+   const [renaming, setRenaming] = useState<{ from: string; to: string } | null>(null);
    // Starts on the session "Open with Claude/Codex" on an issue asked for, if any.
    // VI: Bắt đầu ở phiên mà "Mở bằng Claude/Codex" trên task yêu cầu, nếu có.
    const [selected, setSelected] = useState<string | null>(useSearchParams().get('session'));
-   const current = selected ?? sessions[0] ?? 'main';
-   const tabs = sessions.includes(current) ? sessions : [current, ...sessions];
-   const uiUrl = sandboxSessionUrl(current);
+   const current = selected ?? sessions[0]?.name ?? 'main';
 
    const run = useCallback(async (action: () => Promise<SandboxState>) => {
       try {
@@ -59,14 +71,12 @@ export function SandboxPage() {
 
    useEffect(() => {
       void run(loadSandbox);
-      // Each poll goes through authenticatedFetch, which renews the session cookie termi relies on.
-      // VI: Mỗi lần hỏi đi qua authenticatedFetch, nên cookie phiên mà termi cần được gia hạn.
+      // Each poll goes through authenticatedFetch, which renews the session cookie the terminal relies on.
+      // VI: Mỗi lần hỏi đi qua authenticatedFetch, nên cookie phiên mà terminal cần được gia hạn.
       const timer = setInterval(() => {
          void loadSandbox().then(
             (state) =>
-               setView((current) =>
-                  current.kind === 'ready' ? { kind: 'ready', state } : current
-               ),
+               setView((shown) => (shown.kind === 'ready' ? { kind: 'ready', state } : shown)),
             () => undefined
          );
       }, KEEP_ALIVE_MS);
@@ -81,28 +91,41 @@ export function SandboxPage() {
 
    const running = view.kind === 'ready' && view.state === 'running';
 
-   // The session list follows the sandbox state, so it refreshes with every keep-alive poll.
-   // VI: Danh sách phiên đi theo trạng thái sandbox, nên làm mới theo mỗi lần hỏi giữ phiên.
    const refreshSessions = useCallback(
       () => loadSandboxSessions().then(setSessions, () => undefined),
       []
    );
    useEffect(() => {
-      if (running) void refreshSessions();
-   }, [running, view, refreshSessions]);
-
-   const newTerminal = () => setSelected(`term-${Date.now().toString(36).slice(-5)}`);
-
-   const closeCurrent = async () => {
-      try {
-         await closeSandboxSession(current);
-      } catch {
-         // A session that was never attached does not exist yet; dropping the tab is enough.
-         // VI: Phiên chưa từng gắn thì chưa tồn tại; bỏ tab là đủ.
-      }
-      setSessions((list) => list.filter((name) => name !== current));
-      setSelected(null);
+      if (!running) return;
       void refreshSessions();
+      loadSandboxDirs().then(
+         (dirs) => setHome(dirs.home),
+         () => undefined
+      );
+      const timer = setInterval(() => void refreshSessions(), SESSIONS_MS);
+      return () => clearInterval(timer);
+   }, [running, refreshSessions]);
+
+   const closeSession = async (name: string) => {
+      try {
+         await closeSandboxSession(name);
+      } catch (error) {
+         toast.error(error instanceof Error ? error.message : String(error));
+      }
+      if (name === current) setSelected(null);
+      void refreshSessions();
+   };
+
+   const rename = async () => {
+      if (!renaming) return;
+      try {
+         const name = await renameSandboxSession(renaming.from, renaming.to);
+         if (renaming.from === current) setSelected(name);
+         setRenaming(null);
+         void refreshSessions();
+      } catch (error) {
+         toast.error(error instanceof Error ? error.message : String(error));
+      }
    };
 
    return (
@@ -121,7 +144,7 @@ export function SandboxPage() {
                      <Button
                         label={tx('Open in a new tab')}
                         icon={<ExternalLink className="size-4" />}
-                        href={uiUrl}
+                        href={sandboxSessionUrl(current)}
                         target="_blank"
                         size="sm"
                         variant="ghost"
@@ -171,53 +194,93 @@ export function SandboxPage() {
             </VStack>
          )}
          {running && (
-            <HStack
-               gap={1}
-               className="h-9 shrink-0 items-center overflow-x-auto border-b px-4"
-               role="tablist"
-               aria-label={tx('Terminal sessions')}
-            >
-               {tabs.map((name) => (
-                  <button
-                     key={name}
-                     type="button"
-                     role="tab"
-                     aria-selected={name === current}
-                     onClick={() => setSelected(name)}
-                     className={cn(
-                        'shrink-0 rounded-md px-2 py-1 font-mono text-xs text-muted-foreground hover:bg-accent',
-                        name === current && 'bg-accent text-foreground'
-                     )}
-                  >
-                     {name}
-                  </button>
-               ))}
-               <Button
-                  label={tx('New terminal')}
-                  icon={<Plus className="size-4" />}
-                  isIconOnly
-                  size="sm"
-                  variant="ghost"
-                  onClick={newTerminal}
+            <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+               <aside className="flex max-h-56 shrink-0 flex-col border-b lg:max-h-none lg:w-72 lg:border-b-0 lg:border-r">
+                  <div className="px-3 pt-2">
+                     <Button
+                        label={tx('New session')}
+                        icon={<Plus className="size-4" />}
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setCreating(true)}
+                     />
+                  </div>
+                  <div className="min-h-0 flex-1 overflow-y-auto">
+                     <SessionList
+                        sessions={sessions}
+                        current={current}
+                        home={home}
+                        onSelect={setSelected}
+                        onRename={(name) => setRenaming({ from: name, to: name })}
+                        onClose={(name) => void closeSession(name)}
+                     />
+                  </div>
+               </aside>
+               <iframe
+                  key={current}
+                  title={tx('Sandbox terminal')}
+                  src={sandboxSessionUrl(current)}
+                  allow="clipboard-read; clipboard-write"
+                  className="min-h-0 w-full flex-1 border-0"
                />
-               <Button
-                  label={tx('Close this session')}
-                  icon={<X className="size-4" />}
-                  isIconOnly
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => void closeCurrent()}
-               />
-            </HStack>
+            </div>
          )}
-         {running && (
-            <iframe
-               key={current}
-               title={tx('Sandbox terminal')}
-               src={uiUrl}
-               allow="clipboard-read; clipboard-write"
-               className="min-h-0 w-full flex-1 border-0"
+         {creating && (
+            <NewSessionDialog
+               taken={sessions.map((session) => session.name)}
+               onCancel={() => setCreating(false)}
+               onCreated={(name) => {
+                  setCreating(false);
+                  setSelected(name);
+                  void refreshSessions();
+               }}
             />
+         )}
+         {renaming && (
+            <Dialog
+               isOpen
+               aria-label={tx('Rename session')}
+               purpose="form"
+               width={420}
+               onOpenChange={(open) => !open && setRenaming(null)}
+            >
+               <Layout
+                  height="auto"
+                  padding={4}
+                  header={
+                     <DialogHeader
+                        title={tx('Rename session')}
+                        onOpenChange={() => setRenaming(null)}
+                     />
+                  }
+                  footer={
+                     <LayoutFooter>
+                        <HStack gap={2} hAlign="end">
+                           <Button
+                              label={tx('Cancel')}
+                              variant="ghost"
+                              onClick={() => setRenaming(null)}
+                           />
+                           <Button
+                              label={tx('Rename')}
+                              variant="primary"
+                              isDisabled={!NAME.test(renaming.to) || renaming.to === renaming.from}
+                              onClick={() => void rename()}
+                           />
+                        </HStack>
+                     </LayoutFooter>
+                  }
+               >
+                  <LayoutContent>
+                     <TextInput
+                        label={tx('Session name')}
+                        value={renaming.to}
+                        width="100%"
+                        onChange={(to) => setRenaming({ ...renaming, to })}
+                     />
+                  </LayoutContent>
+               </Layout>
+            </Dialog>
          )}
       </VStack>
    );
