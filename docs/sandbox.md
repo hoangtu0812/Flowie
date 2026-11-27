@@ -11,7 +11,8 @@ shows its terminal sessions; phase 4 adds "Open with…" on an issue (below);
 DTD-1062 stops sandboxes left idle; DTD-1063 replaced the termi UI the first
 phases used with plain ttyd and tmux, so nothing outside this repository is
 needed; DTD-1066 adds Flowie's own sandbox agent and termi-like sessions
-(agent state, new session with a folder and a past conversation, rename).
+(agent state, new session with a folder and a past conversation, rename);
+DTD-1079 lets the agents use Flowie's MCP server as the person (below).
 
 ## Pieces
 
@@ -21,7 +22,7 @@ needed; DTD-1066 adds Flowie's own sandbox agent and termi-like sessions
 | `sandbox-manager` | `apps/api-python/app/sandbox_manager.py`, Compose profile `sandbox` | The only service with the Docker socket. Internal HTTP API behind a bearer token; only creates, starts, stops and removes containers. |
 | API module | `apps/api-python/app/modules/sandbox/api.py` | `/api/v1/sandbox` (state, start, stop) and `/api/v1/sandbox/sessions`, and `/api/v1/sandbox/ui/...`, the reverse proxy to the caller's ttyd (HTTP and the terminal WebSocket). |
 | Sandbox network | `flowie-sandbox`, bridge `flowie-sbx0`, `172.31.250.0/24` | Created by Compose with the `api` service. The API has the fixed address `172.31.250.2`; sandboxes get addresses from `172.31.250.128/25`. |
-| Firewall | `infrastructure/sandbox/sandbox-firewall.sh`, `flowie-sandbox-firewall.service` | Sandboxes reach the internet only. |
+| Firewall | `infrastructure/sandbox/sandbox-firewall.sh`, `flowie-sandbox-firewall.service` | Sandboxes reach the internet and the API's port 4000 only. |
 
 Per user `<id>` (a Flowie user id):
 
@@ -98,6 +99,38 @@ already exists, nothing is typed: opening the issue again goes back to it.
 git asks for credentials in the terminal the first time a private repository
 is cloned (`gh auth login` for GitHub, a personal access token for Azure
 DevOps).
+
+### Flowie MCP in the sandbox
+
+When `MCP_ENABLED` is on, "Open with…" also gives the sandbox a Flowie MCP
+token, so the agent can read the task and post its plan, comments and result
+(`get_issue_context`, `start_issue`, `add_comment`, `finish_issue`) as the
+person who opened it. Before the session is created, the API asks the sandbox
+agent for the SHA-256 of the token it holds. When that is an active connection
+of the same person in the issue's workspace with more than 7 days left, nothing
+changes. Otherwise the API revokes that person's earlier `Flowie sandbox`
+connection in the workspace, creates a new one (90 days; read scopes plus
+`issues:write`, `issues:transition`, `comments:write`, `documents:write`) and
+hands its token to the agent, which:
+
+- stores it in `~/.flowie/mcp-token`, readable by the sandbox user only;
+  Flowie keeps only its hash, and neither side logs it;
+- registers the server `flowie` for the user in Claude Code (`claude mcp
+  add-json -s user`, header `Authorization: Bearer ${FLOWIE_MCP_TOKEN}`) and
+  Codex (`codex mcp add --bearer-token-env-var FLOWIE_MCP_TOKEN`). Neither
+  configuration contains the token: the image's `/etc/bash.bashrc` exports
+  `FLOWIE_MCP_TOKEN` from the file in every new shell, and every tmux session
+  starts one.
+
+The connection shows in Settings → MCP like any other and is revoked there;
+the next "Open with…" creates a new one. One sandbox holds one token at a
+time, the workspace of the last issue opened; a session keeps the token it
+started with. The agent asks before each MCP tool call unless the person allows
+it. The sandbox reaches the API at `SANDBOX_MCP_URL` (default
+`http://circle-api:4000/mcp/`, the API's name on the sandbox network), plain
+HTTP on the internal bridge; the MCP transport accepts that host whenever
+`SANDBOX_USERS` is set. A sandbox created from an older image (no `mcp`
+route) opens issues as before, without a token.
 
 The proxy picks the container from the authenticated user id, never from the
 request, serves only GET and HEAD, refuses `.` and `..` path segments, and
@@ -242,6 +275,10 @@ touched (`409`).
 From interface `flowie-sbx0`:
 
 - from the API (`SANDBOX_API_IP`, default `172.31.250.2`): untouched;
+- to the API on `SANDBOX_API_PORT` (default `4000`), for Flowie's MCP server:
+  allowed. Every other port of the API is dropped; an empty
+  `SANDBOX_API_PORT=` closes this one too. The whole API answers on that port,
+  and every request needs a Flowie session or token, as from the LAN;
 - to the host itself (SSH, the deploy console, anything outside Docker): dropped;
 - to another sandbox: dropped;
 - to `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10`,
@@ -256,7 +293,12 @@ Optional settings in `/etc/flowie-sandbox/firewall.env`:
 - `SANDBOX_ALLOW="10.1.2.3:443 10.1.2.4"`: internal hosts sandboxes may reach,
   for example an internal git server;
 - `SANDBOX_API_IP`: only if `SANDBOX_API_IP` in the Compose `.env` differs from
-  the default.
+  the default;
+- `SANDBOX_API_PORT`: the API port sandboxes may reach (default `4000`; empty
+  closes it).
+
+After changing the script or this file, apply it again:
+`systemctl restart flowie-sandbox-firewall`.
 
 ## Setup on the server
 
@@ -309,6 +351,12 @@ first sandbox starts: a sandbox started without it can reach the whole LAN.
    answers, while `curl -m 5 http://192.168.90.53:8094` (deploy console),
    `curl -m 5 telnet://192.168.90.53:<POSTGRES_PORT>` (Postgres) and the
    address of another sandbox time out.
+
+4. MCP: `curl -m 5 -s -o /dev/null -w '%{http_code}\n' http://circle-api:4000/mcp/`
+   prints `401` (reached, no token), while `curl -m 5 telnet://circle-api:5432`
+   times out. Then open an issue with "Open with Claude Code" and ask the agent
+   to read the issue with the `flowie` MCP server and add a comment; the
+   comment shows on the issue under your name.
 
 ## Security notes
 

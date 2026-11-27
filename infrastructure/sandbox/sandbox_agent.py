@@ -18,6 +18,7 @@ VI: chạy bằng danh sách tham số, không bao giờ qua shell. Chỉ dùng 
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -1335,6 +1336,59 @@ def save_quick_actions(body: dict[str, Any]) -> dict[str, Any]:
     return quick_actions(str(body.get('dir') or '')) if scope == 'project' else {'shared': saved['shared']}
 
 
+# ---- Flowie MCP (docs/sandbox.md): the API hands over a token, both agents read it from the
+# environment of a new shell, which /etc/bash.bashrc fills from the token file. ----
+# VI: ---- MCP của Flowie (docs/sandbox.md): API trao token, cả hai agent đọc nó từ môi trường
+# VI: của shell mới, do /etc/bash.bashrc lấy từ file token. ----
+MCP_SERVER = 'flowie'
+MCP_TOKEN_VAR = 'FLOWIE_MCP_TOKEN'
+MCP_TOKEN = re.compile(r'^flowie_mcp_[A-Za-z0-9_-]{20,100}$')
+MCP_URL = re.compile(r'^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?/[A-Za-z0-9/_-]*$')
+
+
+def _mcp_token_file() -> Path:
+    return home() / '.flowie' / 'mcp-token'
+
+
+def mcp_held() -> dict[str, Any]:
+    """The SHA-256 of the token held, never the token, so the API can tell whether it still works.
+    VI: SHA-256 của token đang giữ, không bao giờ là token, để API biết nó còn dùng được không."""
+    try:
+        token = _mcp_token_file().read_text().strip()
+    except OSError:
+        token = ''
+    return {'hash': hashlib.sha256(token.encode()).hexdigest() if token else None}
+
+
+def save_mcp(body: dict[str, Any]) -> dict[str, Any]:
+    """Stores the token readable by the sandbox user only and registers the server in Claude Code
+    and Codex under the user scope; neither configuration holds the token itself.
+    VI: Lưu token chỉ user của sandbox đọc được và đăng ký server trong Claude Code và Codex ở
+    VI: phạm vi user; cấu hình của cả hai không chứa chính token."""
+    url, token = body.get('url'), body.get('token')
+    if not isinstance(url, str) or not MCP_URL.match(url) or not isinstance(token, str) or not MCP_TOKEN.match(token):
+        raise Refused(400, 'Invalid MCP settings.')
+    target = _mcp_token_file()
+    target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    temporary = target.with_name(f'{target.name}.{os.getpid()}')
+    with os.fdopen(os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), 'w') as file:
+        file.write(token)
+    temporary.replace(target)
+    claude = {'type': 'http', 'url': url, 'headers': {'Authorization': f'Bearer ${{{MCP_TOKEN_VAR}}}'}}
+    commands = [
+        ('claude', 'mcp', 'remove', '-s', 'user', MCP_SERVER),
+        ('claude', 'mcp', 'add-json', '-s', 'user', MCP_SERVER, json.dumps(claude)),
+        ('codex', 'mcp', 'add', MCP_SERVER, '--url', url, '--bearer-token-env-var', MCP_TOKEN_VAR),
+    ]
+    succeeded = []
+    for command in commands:
+        try:
+            succeeded.append(run(*command, timeout=30).returncode == 0)
+        except (OSError, subprocess.TimeoutExpired):
+            succeeded.append(False)
+    return {'claude': succeeded[1], 'codex': succeeded[2]}
+
+
 def _limit(query: dict[str, list[str]]) -> int:
     try:
         return max(10, min(200, int(query.get('limit', [CHAT_LIMIT])[0])))
@@ -1403,6 +1457,10 @@ def route(token: str, method: str, raw_path: str, body: bytes, filename: str = '
             return 200, quick_actions(query.get('dir', [''])[0])
         if method == 'PUT' and path == ['quick']:
             return 200, save_quick_actions(request)
+        if method == 'GET' and path == ['mcp']:
+            return 200, mcp_held()
+        if method == 'PUT' and path == ['mcp']:
+            return 200, save_mcp(request)
         if method == 'GET' and path == ['usage']:
             return 200, usage()
         if method == 'GET' and path == ['dirs']:

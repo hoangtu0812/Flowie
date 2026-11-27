@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+from urllib.parse import urlsplit
 
 from mcp.server.lowlevel import Server
 from mcp.server.transport_security import TransportSecuritySettings
@@ -206,7 +207,12 @@ def build_server(host_app):
         max_request_body_size=262144,
         transport_security=TransportSecuritySettings(
             enable_dns_rebinding_protection=True,
-            allowed_hosts=list(settings.mcp_allowed_hosts),
+            # Sandboxes call the API by its name on the sandbox network (docs/sandbox.md).
+            # VI: Sandbox gọi API bằng tên của nó trên mạng sandbox (docs/sandbox.md).
+            allowed_hosts=[
+                *settings.mcp_allowed_hosts,
+                *([urlsplit(settings.sandbox_mcp_url).netloc] if settings.sandbox_users else []),
+            ],
             allowed_origins=list(settings.cors_origins),
         ),
     )

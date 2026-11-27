@@ -7,7 +7,9 @@
 # SANDBOX_ALLOW (ip or ip:port, for an internal git server) are let through.
 # SANDBOX_API_IP (the Flowie API's fixed address on the sandbox network) is not
 # a sandbox: it may open connections to sandboxes, and its own traffic through
-# the bridge (it may route there) is left alone.
+# the bridge (it may route there) is left alone. Sandboxes may open connections
+# to it on SANDBOX_API_PORT only (default 4000), so their agents reach Flowie's
+# MCP server; empty closes that too.
 # Usage: sandbox-firewall.sh apply|remove|status. Run as root; the rules live in two chains of their own and are rebuilt
 # whole on every apply, so applying twice is harmless.
 # VI: Cô lập sandbox lập trình của từng người trên host (docs/sandbox.md).
@@ -18,12 +20,15 @@
 # VI: (ip hoặc ip:port, cho máy git nội bộ) được cho qua. SANDBOX_API_IP (địa chỉ cố
 # VI: định của API Flowie trên mạng sandbox) không phải sandbox: nó được mở kết nối tới
 # VI: sandbox, và lưu lượng của chính nó qua bridge (nó có thể đi đường đó) không bị đụng.
+# VI: Sandbox chỉ được mở kết nối tới nó ở SANDBOX_API_PORT (mặc định 4000), để agent
+# VI: trong đó gọi được MCP server của Flowie; để rỗng là đóng luôn.
 # VI: Cách dùng: sandbox-firewall.sh apply|remove|status. Chạy bằng root; luật nằm trong hai
 # VI: chain riêng và được dựng lại toàn bộ mỗi lần apply, nên apply hai lần không sao.
 set -euo pipefail
 
 BRIDGE="${SANDBOX_BRIDGE:-flowie-sbx0}"
 API_IP="${SANDBOX_API_IP:-172.31.250.2}"
+API_PORT="${SANDBOX_API_PORT-4000}"
 read -r -a ALLOW <<< "${SANDBOX_ALLOW:-}"
 FORWARD_CHAIN=FLOWIE-SANDBOX
 INPUT_CHAIN=FLOWIE-SANDBOX-IN
@@ -59,6 +64,9 @@ apply() {
 
   iptables -A "$FORWARD_CHAIN" -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN
   iptables -A "$FORWARD_CHAIN" -s "$API_IP" -j RETURN
+  if [[ -n "$API_PORT" ]]; then
+    iptables -A "$FORWARD_CHAIN" -d "$API_IP" -p tcp --dport "$API_PORT" -j RETURN
+  fi
   for target in "${ALLOW[@]}"; do
     if [[ "$target" == *:* ]]; then
       iptables -A "$FORWARD_CHAIN" -d "${target%%:*}" -p tcp --dport "${target##*:}" -j RETURN
