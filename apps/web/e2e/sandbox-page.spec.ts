@@ -38,13 +38,13 @@ test('The Sandbox page starts the sandbox, shows its terminal and stops it', asy
    await page.getByRole('link', { name: 'Sandbox' }).click();
    await page.getByRole('button', { name: 'Start sandbox' }).click();
    await expect(page.getByTestId('sandbox-state')).toHaveText('Running');
-   await expect(
-      page.frameLocator('iframe[title="Sandbox terminal"]').getByText('terminal is here')
-   ).toBeVisible();
+   // No session is open yet, so the start page shows instead of a terminal.
+   await expect(page.getByTestId('sandbox-home')).toBeVisible();
+   await expect(page.locator('iframe[title="Sandbox terminal"]')).toHaveCount(0);
 
    await page.getByRole('button', { name: 'Stop' }).click();
    await expect(page.getByTestId('sandbox-state')).toHaveText('Stopped');
-   await expect(page.locator('iframe[title="Sandbox terminal"]')).toHaveCount(0);
+   await expect(page.getByTestId('sandbox-home')).toHaveCount(0);
 });
 
 test('People without sandbox access see no Sandbox entry', async ({ page }) => {
@@ -166,7 +166,10 @@ test('The Sandbox page lists agent sessions and creates, renames and closes them
    await list.getByRole('button', { name: /^DTD-7-flowie/ }).click();
    await expect(terminal).toHaveAttribute('src', /\?arg=DTD-7-flowie(&|$)/);
 
-   await page.getByRole('button', { name: 'New session' }).click();
+   await page
+      .getByRole('complementary', { name: 'Side panel' })
+      .getByRole('button', { name: 'New session' })
+      .click();
    const dialog = page.getByRole('dialog', { name: 'New session' });
    await expect(dialog.getByLabel('Session name')).toHaveValue('DTD-7-flowie-claude');
    await expect(dialog.getByText('Fix the login page')).toBeHidden();
@@ -231,6 +234,10 @@ test('The message box, quick actions, keys, attachments, copy and font size reac
    );
    await signIn(page);
    await page.goto(`/${fixture.slug}/sandbox`);
+   await page
+      .getByRole('list', { name: 'Terminal sessions' })
+      .getByRole('button', { name: /^cl/ })
+      .click();
 
    const box = page.getByLabel('Message to the session');
    await box.fill('Sửa lỗi đăng nhập');
@@ -266,12 +273,14 @@ test('The message box, quick actions, keys, attachments, copy and font size reac
    await expect.poll(() => sent.length).toBe(4);
    expect(sent[3]).toEqual({ text: '/code-review', enter: true });
 
-   await page
-      .getByRole('toolbar', { name: 'Terminal keys' })
-      .getByRole('button', { name: 'BTab' })
-      .click();
+   // The key row is for touch screens: it is hidden on a desktop and shown on a narrow one.
+   const keys = page.getByRole('toolbar', { name: 'Terminal keys' });
+   await expect(keys.getByRole('button', { name: 'BTab' })).toBeHidden();
+   await page.setViewportSize({ width: 800, height: 900 });
+   await keys.getByRole('button', { name: 'BTab' }).click();
    await expect.poll(() => sent.length).toBe(5);
    expect(sent[4]).toEqual({ key: 'BTab' });
+   await page.setViewportSize({ width: 1280, height: 800 });
 
    await page.getByRole('button', { name: 'Session text' }).click();
    await expect(page.getByTestId('session-text')).toHaveText('line one\nline two');
@@ -377,8 +386,12 @@ test('The Files and Git tabs browse the session folder and run git actions', asy
    await signIn(page);
    await page.goto(`/${fixture.slug}/sandbox`);
 
-   const tabs = page.getByRole('tablist', { name: 'Sandbox views' });
-   await tabs.getByRole('tab', { name: 'Files' }).click();
+   await page
+      .getByRole('list', { name: 'Terminal sessions' })
+      .getByRole('button', { name: /^DTD-7/ })
+      .click();
+   const views = page.getByRole('navigation', { name: 'Sandbox views' });
+   await views.getByRole('button', { name: 'Files' }).click();
    await expect(page.getByTestId('folder-path')).toHaveText('~/work/DTD-7-flowie');
    const files = page.getByRole('list', { name: 'Files' });
    await expect(files.getByRole('button', { name: /README\.md\s*M/ })).toBeVisible();
@@ -389,7 +402,7 @@ test('The Files and Git tabs browse the session folder and run git actions', asy
    await page.getByRole('button', { name: 'Add to message' }).click();
    await expect(page.getByLabel('Message to the session')).toHaveValue(`${repo}/README.md`);
 
-   await tabs.getByRole('tab', { name: 'Git' }).click();
+   await views.getByRole('button', { name: 'Git' }).click();
    await expect(page.getByTestId('git-head')).toContainText('[ahead 1]');
    await page.getByRole('list', { name: 'Changes' }).getByRole('button', { name: 'Stage' }).click();
    await expect.poll(() => ops.length).toBe(1);
@@ -456,4 +469,120 @@ test('The usage chip shows CPU, memory and the busiest plan windows', async ({ p
    await expect(details).toContainText('40.0 GB');
    await expect(details).toContainText('Claude, 7 days');
    await expect(details).not.toContainText('Codex, weekly window');
+});
+
+test('The start page, side panel and status bar follow termi', async ({ page }) => {
+   const home = '/home/node';
+   const repo = `${home}/work/DTD-7-flowie`;
+   type Row = {
+      name: string;
+      dir: string;
+      agent: string;
+      state: string;
+      preview: string;
+      branch: string | null;
+      changes: number | null;
+   };
+   let sessions: Row[] = [
+      {
+         name: 'DTD-7',
+         dir: repo,
+         agent: 'claude',
+         state: 'waiting',
+         preview: '',
+         branch: 'flowie/DTD-7',
+         changes: 3,
+      },
+   ];
+   const created: unknown[] = [];
+   await page.route('**/api/v1/sandbox', (route) =>
+      route.fulfill({ json: { data: { state: 'running' } } })
+   );
+   await page.route('**/api/v1/sandbox/dirs', (route) =>
+      route.fulfill({ json: { data: { home, recent: [home, repo, `${home}/repos/flowie`] } } })
+   );
+   await page.route('**/api/v1/sandbox/conversations*', (route) =>
+      route.fulfill({
+         json: {
+            data: [
+               {
+                  agent: 'codex',
+                  id: '0f8fad5b-d9cb-469f-a165-70867728950e',
+                  cwd: repo,
+                  title: 'Fix login',
+                  mtime: 1,
+               },
+            ],
+         },
+      })
+   );
+   await page.route('**/api/v1/sandbox/sessions', (route) => {
+      if (route.request().method() === 'POST') {
+         const body = route.request().postDataJSON() as {
+            name: string;
+            dir: string;
+            agent: string;
+         };
+         created.push(body);
+         sessions = [
+            ...sessions,
+            { ...body, state: 'working', preview: '', branch: null, changes: null },
+         ];
+         return route.fulfill({ status: 201, json: { data: { name: body.name } } });
+      }
+      return route.fulfill({ json: { data: sessions } });
+   });
+   await page.route('**/api/v1/sandbox/usage', (route) =>
+      route.fulfill({
+         json: {
+            data: {
+               cpu: 3,
+               memory: { used: 1, limit: 2 },
+               disk: { free: 1, total: 2 },
+               claude: null,
+               codex: null,
+            },
+         },
+      })
+   );
+   await page.route(/\/api\/v1\/sandbox\/ui\/\?arg=/, (route) =>
+      route.fulfill({ contentType: 'text/html', body: '<p>terminal is here</p>' })
+   );
+   await signIn(page);
+   await page.goto(`/${fixture.slug}/sandbox`);
+
+   const start = page.getByTestId('sandbox-home');
+   await expect(start.getByRole('button', { name: /^DTD-7 / })).toBeVisible(); // Continue
+   const projects = start.getByRole('list', { name: 'Recent projects' });
+   await expect(projects.getByRole('listitem')).toHaveCount(2); // the home itself is not a project
+   await projects.getByRole('button', { name: 'New Codex session in flowie' }).click();
+   await expect.poll(() => created.length).toBe(1);
+   expect(created[0]).toEqual({
+      name: 'flowie-codex',
+      dir: `${home}/repos/flowie`,
+      agent: 'codex',
+   });
+   await expect(page.locator('iframe[title="Sandbox terminal"]')).toHaveAttribute(
+      'src',
+      /\?arg=flowie-codex(&|$)/
+   );
+
+   const views = page.getByRole('navigation', { name: 'Sandbox views' });
+   await expect(views.getByRole('button', { name: 'Sessions' })).toContainText('1'); // one waiting
+   const panel = page.getByRole('complementary', { name: 'Side panel' });
+   await expect(panel).toBeVisible();
+   await views.getByRole('button', { name: 'Sessions' }).click(); // the active view collapses
+   await expect(panel).toBeHidden();
+   await page.keyboard.press('ControlOrMeta+b');
+   await expect(panel).toBeVisible();
+
+   await page
+      .getByRole('list', { name: 'Terminal sessions' })
+      .getByRole('button', { name: /^DTD-7/ })
+      .click();
+   const status = page.getByRole('contentinfo', { name: 'Status bar' });
+   await expect(status).toContainText('~/work/DTD-7-flowie');
+   await expect(status).toContainText('flowie/DTD-7');
+   await expect(status).toContainText('3 uncommitted');
+   await expect(views.getByRole('button', { name: 'Git' })).toContainText('3');
 });

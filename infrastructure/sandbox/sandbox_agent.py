@@ -171,7 +171,40 @@ def list_sessions() -> list[dict[str, Any]]:
         screen = tmux('capture-pane', '-p', '-J', '-t', f"={session['name']}:").stdout
         session['state'] = agent_state(screen) if session['agent'] else 'shell'
         session['preview'] = screen_preview(screen)
+        session.update(git_summary(session['dir']))
     return sorted(sessions.values(), key=lambda s: max(s['activity'], s['output']), reverse=True)
+
+
+GIT_SUMMARY_SECONDS = 15
+_git_summaries: dict[str, tuple[float, dict[str, Any]]] = {}
+
+
+def git_summary(directory: str) -> dict[str, Any]:
+    """The branch and number of uncommitted files of a session's folder, for the status bar and
+    the Git badge; cached for 15 seconds per folder, as termi does. None outside a repository.
+    VI: Nhánh và số file chưa commit của thư mục phiên, cho status bar và badge Git; cache 15 giây
+    VI: cho mỗi thư mục như termi. None khi không nằm trong repository."""
+    cached = _git_summaries.get(directory)
+    if cached and time.monotonic() - cached[0] < GIT_SUMMARY_SECONDS:
+        return cached[1]
+    summary: dict[str, Any] = {'branch': None, 'changes': None}
+    try:
+        result = subprocess.run(
+            ['git', '-C', directory, 'status', '--porcelain=v1', '-b', '-z', '--untracked-files=normal'],
+            capture_output=True, text=True, timeout=5, check=False,
+            env={**os.environ, 'GIT_OPTIONAL_LOCKS': '0'},
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        result = None
+    if result is not None and result.returncode == 0:
+        head, _, rest = result.stdout.partition('\0')
+        branch = head.removeprefix('## ').split('...')[0]
+        summary = {
+            'branch': branch.removeprefix('No commits yet on ') or None,
+            'changes': len(_status_entries(rest)),
+        }
+    _git_summaries[directory] = (time.monotonic(), summary)
+    return summary
 
 
 def inside_home(directory: str) -> str:

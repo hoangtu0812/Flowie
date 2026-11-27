@@ -109,4 +109,26 @@ export const messages = {
    'resets {time}': 'đặt lại {time}',
    'Plan limits appear after Claude Code or Codex has answered once.':
       'Giới hạn gói hiện sau khi Claude Code hoặc Codex trả lời lần đầu.',
+   'Sessions': 'Phiên',
+   'Side panel': 'Panel bên',
+   'Session': 'Phiên',
+   'Status bar': 'Thanh trạng thái',
+   'Resize the side panel': 'Đổi độ rộng panel bên',
+   'Close the file': 'Đóng file',
+   '{count} uncommitted': '{count} file chưa commit',
+   'Good morning': 'Chào buổi sáng',
+   'Good noon': 'Chào buổi trưa',
+   'Good afternoon': 'Chào buổi chiều',
+   'Good evening': 'Chào buổi tối',
+   'Pick a session on the left, or start working in a recent project.':
+      'Chọn một phiên bên trái, hoặc bắt đầu làm việc ở một dự án gần đây.',
+   'Pick a project and an agent to begin. Sessions run in tmux in your sandbox and survive closing this page.':
+      'Chọn dự án và agent để bắt đầu. Phiên chạy trong tmux của sandbox, đóng trang này vẫn còn nguyên.',
+   'Continue': 'Tiếp tục',
+   'Recent projects': 'Dự án gần đây',
+   'No project yet; press Other folder… to pick one.':
+      'Chưa có dự án nào, bấm "Thư mục khác…" để chọn.',
+   'Resume {title}': 'Mở lại {title}',
+   'New {agent} session in {folder}': 'Phiên {agent} mới trong {folder}',
+   'Other folder…': 'Thư mục khác…',
 } as const;

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ArrowLeft, ArrowUp, File, Folder, Home, TextCursorInput } from 'lucide-react';
+import { ArrowUp, File, Folder, Home, TextCursorInput, X } from 'lucide-react';
 import { Text } from '@astryxdesign/core/Text';
 import { MarkdownPreview } from '@/components/common/markdown/markdown-preview';
 import { useMessages } from '@/features/shared/use-messages';
@@ -36,11 +36,12 @@ const MARK_STYLE: Record<string, string> = {
 export function FilesPanel({
    start,
    home,
-   onInsert,
+   onOpen,
 }: {
    start: string;
    home: string;
-   onInsert: (path: string) => void;
+   /** Opens a file in the main area, as termi's desktop layout does. */
+   onOpen: (file: SandboxFile) => void;
 }) {
    const tx = useMessages(messages);
    const [dir, setDir] = useState(start);
@@ -49,7 +50,6 @@ export function FilesPanel({
       parent: string | null;
       entries: SandboxEntry[];
    } | null>(null);
-   const [open, setOpen] = useState<SandboxFile | null>(null);
    const [error, setError] = useState('');
 
    useEffect(() => setDir(start), [start]);
@@ -59,50 +59,7 @@ export function FilesPanel({
    }, [dir]);
 
    const openFile = (path: string) =>
-      void loadSandboxFile(path).then(setOpen, (failure: Error) => setError(failure.message));
-
-   if (open) {
-      const markdown = /\.(md|markdown)$/i.test(open.path);
-      return (
-         <div className="flex min-h-0 flex-1 flex-col">
-            <div className="flex shrink-0 items-center gap-2 border-b px-3 py-1.5 text-sm">
-               <button
-                  type="button"
-                  aria-label={tx('Back to the folder')}
-                  onClick={() => setOpen(null)}
-                  className="rounded p-1 hover:bg-accent"
-               >
-                  <ArrowLeft className="size-4" />
-               </button>
-               <span className="min-w-0 flex-1 truncate font-mono text-xs">
-                  {shortDir(open.path, home)}
-               </span>
-               <button
-                  type="button"
-                  onClick={() => onInsert(open.path)}
-                  className="flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs hover:bg-accent"
-               >
-                  <TextCursorInput className="size-3.5" /> {tx('Add to message')}
-               </button>
-            </div>
-            <div className="min-h-0 flex-1 overflow-auto p-3" data-testid="file-view">
-               {open.image && (
-                  // eslint-disable-next-line @next/next/no-img-element -- served by the API from the sandbox
-                  <img src={sandboxImageUrl(open.path)} alt={open.path} className="max-w-full" />
-               )}
-               {open.binary && <Text type="supporting">{tx('This file is binary.')}</Text>}
-               {open.text !== undefined &&
-                  (markdown ? (
-                     <MarkdownPreview content={open.text} />
-                  ) : (
-                     <pre className="whitespace-pre-wrap break-all font-mono text-xs">
-                        {open.text}
-                     </pre>
-                  ))}
-            </div>
-         </div>
-      );
-   }
+      void loadSandboxFile(path).then(onOpen, (failure: Error) => setError(failure.message));
 
    return (
       <div className="flex min-h-0 flex-1 flex-col">
@@ -158,6 +115,60 @@ export function FilesPanel({
                </li>
             ))}
          </ul>
+      </div>
+   );
+}
+
+/** A file of the sandbox in the main area: text, Markdown (Flowie's preview) or an image. */
+/** VI: Một file của sandbox ở vùng chính: chữ, Markdown (bộ hiển thị của Flowie) hoặc ảnh. */
+export function FileViewer({
+   file,
+   home,
+   onClose,
+   onInsert,
+}: {
+   file: SandboxFile;
+   home: string;
+   onClose: () => void;
+   onInsert: (path: string) => void;
+}) {
+   const tx = useMessages(messages);
+   const markdown = /\.(md|markdown)$/i.test(file.path);
+   return (
+      <div className="flex min-h-0 flex-1 flex-col">
+         <div className="flex shrink-0 items-center gap-2 border-b px-3 py-1.5 text-sm">
+            <button
+               type="button"
+               aria-label={tx('Close the file')}
+               onClick={onClose}
+               className="rounded p-1 hover:bg-accent"
+            >
+               <X className="size-4" />
+            </button>
+            <span className="min-w-0 flex-1 truncate font-mono text-xs">
+               {shortDir(file.path, home)}
+            </span>
+            <button
+               type="button"
+               onClick={() => onInsert(file.path)}
+               className="flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs hover:bg-accent"
+            >
+               <TextCursorInput className="size-3.5" /> {tx('Add to message')}
+            </button>
+         </div>
+         <div className="min-h-0 flex-1 overflow-auto p-3" data-testid="file-view">
+            {file.image && (
+               // eslint-disable-next-line @next/next/no-img-element -- served by the API from the sandbox
+               <img src={sandboxImageUrl(file.path)} alt={file.path} className="max-w-full" />
+            )}
+            {file.binary && <Text type="supporting">{tx('This file is binary.')}</Text>}
+            {file.text !== undefined &&
+               (markdown ? (
+                  <MarkdownPreview content={file.text} />
+               ) : (
+                  <pre className="whitespace-pre-wrap break-all font-mono text-xs">{file.text}</pre>
+               ))}
+         </div>
       </div>
    );
 }

@@ -280,7 +280,8 @@ def test_sessions_pass_agent_state_through_and_are_empty_while_stopped(monkeypat
 
     client = agent_client(ME, monkeypatch, agent)
     assert client.get('/api/v1/sandbox/sessions').json() == {'data': [
-        {'name': 'DTD-7', 'dir': '/home/node/work/x', 'agent': 'claude', 'state': 'waiting', 'preview': 'Edit?'}
+        {'name': 'DTD-7', 'dir': '/home/node/work/x', 'agent': 'claude', 'state': 'waiting', 'preview': 'Edit?',
+         'branch': None, 'changes': None}
     ]}
     running[0] = False
     assert client.get('/api/v1/sandbox/sessions').json() == {'data': []}

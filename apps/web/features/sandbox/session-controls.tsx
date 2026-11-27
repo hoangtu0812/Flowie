@@ -114,17 +114,21 @@ export function KeyRow({ session, onFont }: { session: string; onFont: (delta: n
          aria-label={tx('Terminal keys')}
          className="flex shrink-0 gap-1 overflow-x-auto border-t px-2 py-1"
       >
-         {KEYS.map(([label, key]) => (
-            <button
-               key={key}
-               type="button"
-               aria-label={key}
-               onClick={() => press(key)}
-               className="shrink-0 rounded border px-2 py-0.5 font-mono text-xs hover:bg-accent"
-            >
-               {label}
-            </button>
-         ))}
+         {/* The key row is for on-screen keyboards, as termi shows it on touch devices only. */}
+         {/* VI: Hàng phím dành cho bàn phím ảo, như termi chỉ hiện trên thiết bị cảm ứng. */}
+         <span className="flex gap-1 lg:hidden">
+            {KEYS.map(([label, key]) => (
+               <button
+                  key={key}
+                  type="button"
+                  aria-label={key}
+                  onClick={() => press(key)}
+                  className="shrink-0 rounded border px-2 py-0.5 font-mono text-xs hover:bg-accent"
+               >
+                  {label}
+               </button>
+            ))}
+         </span>
          <button
             type="button"
             aria-label={tx('Smaller text')}

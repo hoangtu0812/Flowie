@@ -396,3 +396,13 @@ def test_statusline_records_claude_limits_and_prints_model_and_folder(tmp_path):
     saved = json.loads((tmp_path / '.flowie' / 'claude-usage.json').read_text())
     assert saved['rate_limits'] == status['rate_limits'] and saved['at'] > 0
     assert statusline.main('not json', tmp_path) == ''
+
+
+def test_sessions_carry_their_branch_and_uncommitted_count(repo, monkeypatch):
+    monkeypatch.setattr(agent, '_git_summaries', {})
+    assert agent.git_summary(str(repo)) == {'branch': 'main', 'changes': 4}
+    (repo / 'another.txt').write_text('x')
+    assert agent.git_summary(str(repo))['changes'] == 4  # cached for 15 seconds
+    monkeypatch.setattr(agent, '_git_summaries', {})
+    assert agent.git_summary(str(repo))['changes'] == 5
+    assert agent.git_summary(str(repo.parent)) == {'branch': None, 'changes': None}
