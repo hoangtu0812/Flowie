@@ -44,6 +44,7 @@ import {
    type ProjectTreeDocument,
 } from './project-docs-api';
 import { DocStatusBadge, DocTypeBadge } from './document-badges';
+import { DocumentComments } from './document-comments';
 import { DocumentReviewPanel, useDocumentReview } from './doc-review';
 import type { DocumentReview } from './project-docs-api';
 import { activeHeadingIndex, markdownHeadings } from '@/lib/markdown-headings';
@@ -319,7 +320,10 @@ export function DocumentPreview({
                      failed={failed}
                      onRetry={retry}
                   />
-                  <MarkdownPreview content={content} documentMedia />
+                  {/* Comments belong to the current text, not to an older release. VI: Comment thuộc nội dung hiện tại, không thuộc bản phát hành cũ. */}
+                  <DocumentComments documentId={shown ? undefined : document.id}>
+                     <MarkdownPreview content={content} documentMedia />
+                  </DocumentComments>
                </VStack>
             </div>
          </div>

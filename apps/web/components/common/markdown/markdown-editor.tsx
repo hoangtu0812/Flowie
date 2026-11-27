@@ -43,9 +43,12 @@ function Separator() {
 export function MarkdownEditor({
    value,
    onChange,
+   wrapPreview = (preview) => preview,
 }: {
    value: string;
    onChange: (value: string) => void;
+   /** Wraps the rendered preview, e.g. with the document comment layer. VI: Bọc phần xem trước, ví dụ bằng lớp comment tài liệu. */
+   wrapPreview?: (preview: ReactNode) => ReactNode;
 }) {
    const tx = useMessages(messages);
    const [mode, setMode] = useState<Mode>('split');
@@ -214,7 +217,7 @@ export function MarkdownEditor({
             )}
             {mode !== 'edit' && (
                <article aria-label={tx('Preview')} className={cn(pane, 'p-4')}>
-                  <MarkdownPreview content={value} documentMedia />
+                  {wrapPreview(<MarkdownPreview content={value} documentMedia />)}
                </article>
             )}
          </div>

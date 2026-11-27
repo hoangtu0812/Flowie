@@ -14,6 +14,10 @@ from .contracts import (
     CreateDocumentInput,
     UpdateDocumentInput,
 )
+from .document_comments import (
+    CreateDocumentCommentInput,
+    UpdateDocumentCommentInput,
+)
 from .document_repository import (
     _document_by_id,
     _documents,
@@ -320,3 +324,58 @@ async def restore_document(document_id: str, payload: RestoreDocumentInput, work
     revision = await revision_row(db, document_id, payload.revisionVersion)
     return await commit_mutation(db, lambda: operation(document_id, UpdateDocumentInput(
         title=revision['title'], content=revision['content'], expectedVersion=payload.expectedVersion), workspaceId, user, db))
+
+
+# Comments pinned to the document's blocks (DTD-1070). Each write tells the workspace's open
+# sockets which document changed, so readers reload its comments without refreshing the page.
+# VI: Comment gắn vào các đoạn của tài liệu (DTD-1070). Mỗi lần ghi báo cho các socket đang mở của
+# VI: workspace biết tài liệu nào đổi, để người đang đọc tải lại comment mà không cần tải lại trang.
+async def _comments_changed(workspace_id: str, document_id: str) -> None:
+    from ...services.notification_events import notification_hub
+
+    await notification_hub.broadcast(workspace_id, {'type': 'document.comment.changed', 'documentId': document_id})
+
+
+@router.get('/{document_id}/comments')
+async def read_document_comments(document_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
+    from .document_comments import list_comments, readable_document
+
+    await readable_document(db, workspaceId, document_id, user['id'])
+    return {'data': await list_comments(db, document_id, user['id'])}
+
+
+@router.get('/{document_id}/comments/mentions')
+async def document_comment_mentions(document_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
+    from .document_comments import mention_options, readable_document
+
+    return {'data': await mention_options(db, await readable_document(db, workspaceId, document_id, user['id']))}
+
+
+@router.post('/{document_id}/comments')
+async def create_document_comment(document_id: str, payload: CreateDocumentCommentInput, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
+    from ...db.mutations import commit_mutation
+    from .document_comments import create_comment
+
+    data = await commit_mutation(db, lambda: create_comment(db, workspaceId, document_id, payload, user))
+    await _comments_changed(workspaceId, document_id)
+    return {'data': data}
+
+
+@router.patch('/{document_id}/comments/{comment_id}')
+async def update_document_comment(document_id: str, comment_id: str, payload: UpdateDocumentCommentInput, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
+    from ...db.mutations import commit_mutation
+    from .document_comments import update_comment
+
+    data = await commit_mutation(db, lambda: update_comment(db, workspaceId, document_id, comment_id, payload, user))
+    await _comments_changed(workspaceId, document_id)
+    return {'data': data}
+
+
+@router.delete('/{document_id}/comments/{comment_id}')
+async def delete_document_comment(document_id: str, comment_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
+    from ...db.mutations import commit_mutation
+    from .document_comments import delete_comment
+
+    data = await commit_mutation(db, lambda: delete_comment(db, workspaceId, document_id, comment_id, user))
+    await _comments_changed(workspaceId, document_id)
+    return {'data': data}
