@@ -64,6 +64,7 @@ For a signed-in user whose email is in `SANDBOX_USERS` (everyone else gets 403):
 | `GET /api/v1/sandbox/git?dir=` | `{data: {dir, head, files, commits, graph, branches}}`: status, the last 200 commits of all branches with termi's graph lanes |
 | `GET /api/v1/sandbox/git/diff?dir=&rev=&file=&staged=` | A file's diff (staged or not), a commit's, or all uncommitted changes, with numstat |
 | `POST /api/v1/sandbox/git` | `{dir, op, paths?, message?, branch?}`: `stage`, `unstage`, `commit`, `fetch`, `pull` (fast-forward only), `push` (sets the upstream the first time), `switch` |
+| `GET /api/v1/sandbox/usage` | `{data: {cpu, memory: {used, limit}, disk: {free, total}, claude, codex}}`, null while stopped |
 | `GET /api/v1/sandbox/dirs` | `{data: {home, recent}}`: open sessions' folders, `~/work/*`, `~/repos/*`, folders of past conversations |
 | `GET /api/v1/sandbox/conversations?dir=` | `{data: [{agent, id, cwd, title, mtime}]}`: past Claude Code and Codex conversations, newest first |
 | `/api/v1/sandbox/ui/?arg=<name>` | ttyd attached to that session (created if new), for the caller's own container only |
@@ -140,6 +141,26 @@ The agent's state comes from its screen, with the rules termi uses: "Do you
 want to", "Allow command", a `❯ 1.` menu and similar in the last lines mean
 waiting, "esc to interrupt" means working, anything else idle. The agent of a
 session is found by walking the process tree from the pane's shell.
+
+## Notifications and usage
+
+Every 15 seconds the API reads the sessions of each running sandbox (job
+`sandbox-notify`, on whenever `SANDBOX_USERS` and `SANDBOX_MANAGER_TOKEN` are
+set). When an agent session goes from working to idle, or to waiting (a
+command to approve, a menu to answer), its owner gets a Flowie notification
+whose Open link goes to `/sandbox?session=<name>`. It lands in the workspace of
+the issue the session is named after (`DTD-7-flowie` → DTD-7) when the person
+is a member there, otherwise in the first workspace they joined. A session's
+first appearance is only recorded, so restarting the API sends nothing.
+
+The usage chip in the Sandbox header shows the container's CPU (cgroup
+`cpu.stat` against `cpu.max`) and memory (`memory.current` against
+`memory.max`), free disk, and the plan windows of both agents: Codex's from
+its newest session log (`token_count.rate_limits`), Claude Code's from
+`~/.flowie/claude-usage.json`, which Flowie's status line script writes after
+each reply. The image sets that status line for every Claude Code session in
+`/etc/claude-code/managed-settings.json` (as termi installs its own), so a
+person cannot replace it inside the sandbox.
 
 ## Stopping idle sandboxes
 

@@ -371,6 +371,23 @@ async def sandbox_git_op(payload: GitInput, request: Request, user: Any = Depend
     return {'data': done}
 
 
+@router.get('/usage')
+async def sandbox_usage(request: Request, user: Any = Depends(current_user)):
+    """The sandbox's CPU, memory and free disk, and the Claude and Codex plan windows it last saw;
+    null while stopped.
+    VI: CPU, bộ nhớ và ổ còn trống của sandbox, cùng các khung giới hạn gói Claude và Codex lần cuối
+    VI: thấy; null khi đang dừng."""
+    settings = _settings(request)
+    user_id = _sandbox_user(settings, user)
+    try:
+        _, found = await _agent(settings, user_id, 'GET', 'usage')
+    except ApiError as error:
+        if error.status_code != 409:
+            raise
+        found = None
+    return {'data': found}
+
+
 @router.get('/dirs')
 async def sandbox_dirs(request: Request, user: Any = Depends(current_user)):
     """Folders to start a session in: the home, open sessions' folders, issue worktrees and clones.

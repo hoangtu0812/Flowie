@@ -294,3 +294,19 @@ export async function runSandboxGit(dir: string, op: SandboxGitOp): Promise<stri
    });
    return (await responseData<{ output: string }>(response, 'The git operation failed.')).output;
 }
+
+type PlanWindow = { pct: number; resetsAt: number; minutes?: number } | null;
+
+export type SandboxUsage = {
+   cpu: number | null;
+   memory: { used: number | null; limit: number | null };
+   disk: { free: number; total: number };
+   claude: { fiveHour: PlanWindow; sevenDay: PlanWindow; at?: number } | null;
+   codex: { plan?: string | null; primary: PlanWindow; secondary: PlanWindow } | null;
+};
+
+/** CPU, memory, disk and plan limits of the sandbox; null while it is stopped. */
+/** VI: CPU, bộ nhớ, ổ đĩa và giới hạn gói của sandbox; null khi đang dừng. */
+export async function loadSandboxUsage(): Promise<SandboxUsage | null> {
+   return responseData(await authenticatedFetch(`${api}/sandbox/usage`), 'Could not read usage.');
+}
