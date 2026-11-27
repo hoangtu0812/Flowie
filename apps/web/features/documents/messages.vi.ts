@@ -227,3 +227,33 @@ export const messages = {
    'Not linked to any task.': 'Chưa liên kết với task nào.',
    'Could not load linked tasks.': 'Không tải được task liên kết.',
 } as const;
+
+/** Document comments (DTD-1070). VI: Comment tài liệu (DTD-1070). */
+export const commentMessages = {
+   'Comments': 'Comment',
+   '{count} open': '{count} đang mở',
+   'Show resolved': 'Hiện comment đã resolve',
+   'No comments yet. Select text, or use + beside a line, to comment.':
+      'Chưa có comment. Bôi đen chữ, hoặc bấm + cạnh một dòng, để comment.',
+   'Could not load comments.': 'Không tải được comment.',
+   'Comment on this line': 'Comment dòng này',
+   'Comment': 'Comment',
+   'Comment thread': 'Thread comment',
+   'Close': 'Đóng',
+   'Reply': 'Trả lời',
+   'Resolve': 'Resolve',
+   'Reopen': 'Mở lại',
+   'Resolved by {name}': 'Đã resolve bởi {name}',
+   'Edit': 'Sửa',
+   'Delete': 'Xoá',
+   'Delete this comment? Its replies are removed too.': 'Xoá comment này? Các trả lời cũng bị xoá.',
+   'Save': 'Lưu',
+   'Cancel': 'Huỷ',
+   'Send': 'Gửi',
+   'Write a comment… Type @ to mention someone.': 'Viết comment… Gõ @ để nhắc tên ai đó.',
+   'Write a reply…': 'Viết trả lời…',
+   'Content changed': 'Nội dung đã thay đổi',
+   'The text this comment pointed at is no longer in the document.':
+      'Đoạn chữ mà comment này trỏ tới không còn trong tài liệu.',
+   'edited': 'đã sửa',
+} as const;

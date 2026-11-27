@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { VStack } from '@astryxdesign/core/Layout';
 import { Text } from '@astryxdesign/core/Text';
 import { cn } from '@/lib/utils';
@@ -22,6 +22,7 @@ type Member = { id: string; name: string; avatarUrl?: string | null };
 export function CommentMentions({
    workspaceId,
    issueId,
+   loadMembers,
    selected,
    onChange,
    draft,
@@ -29,7 +30,10 @@ export function CommentMentions({
    children,
 }: {
    workspaceId: string;
-   issueId: string;
+   /** Issue whose team can be mentioned; a document comment passes `loadMembers` instead. */
+   /** VI: Issue có team được mention; comment tài liệu truyền `loadMembers` thay thế. */
+   issueId?: string;
+   loadMembers?: () => Promise<Member[]>;
    selected: string[];
    onChange: (ids: string[]) => void;
    draft: string;
@@ -47,10 +51,12 @@ export function CommentMentions({
    // VI: Danh sách thành viên tải khi gõ `@`, và tải lại ở lần sau để thành viên mới vào nhóm
    // VI: xuất hiện mà không cần tải lại trang.
    const wanted = query !== null;
+   const loader = useRef(loadMembers);
+   loader.current = loadMembers;
    useEffect(() => {
       if (!wanted) return;
       let current = true;
-      mentionOptions(workspaceId, issueId)
+      (loader.current ? loader.current() : mentionOptions(workspaceId, issueId ?? ''))
          .then((result) => {
             if (current) setMembers(result);
          })

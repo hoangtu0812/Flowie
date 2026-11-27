@@ -10,6 +10,7 @@ import { Text } from '@astryxdesign/core/Text';
 import { TextInput } from '@astryxdesign/core/TextInput';
 import { DesignSurface } from '@/components/common/design-surface';
 import { MarkdownPreview } from '@/components/common/markdown/markdown-preview';
+import { DocumentComments } from '@/features/documents/document-comments';
 import { MarkdownEditor } from '@/components/common/markdown/markdown-editor';
 import { useDocumentDraft, type DocumentDraft } from '@/features/documents/use-document-draft';
 import type { LiveDocument } from './use-live-team';
@@ -297,7 +298,9 @@ export function MarkdownDocumentEditor({
                         {mode === 'view' ? (
                            <VStack as="article" className="w-full min-w-0" gap={4}>
                               <TableOfContents content={content} label={tx('Contents')} />
-                              <MarkdownPreview content={content} documentMedia />
+                              <DocumentComments documentId={document?.id}>
+                                 <MarkdownPreview content={content} documentMedia />
+                              </DocumentComments>
                            </VStack>
                         ) : (
                            <VStack gap={3}>
@@ -310,6 +313,11 @@ export function MarkdownDocumentEditor({
                               <MarkdownEditor
                                  value={content}
                                  onChange={(value) => state.update({ title, content: value })}
+                                 wrapPreview={(preview) => (
+                                    <DocumentComments documentId={document?.id}>
+                                       {preview}
+                                    </DocumentComments>
+                                 )}
                               />
                            </VStack>
                         )}

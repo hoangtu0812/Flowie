@@ -21,6 +21,8 @@ export function openNotificationStream(
    handlers: {
       onNotification: (notification?: StreamNotification) => void;
       onReconnect: () => void;
+      /** A document's comments changed (DTD-1070). VI: Comment của một tài liệu đã thay đổi. */
+      onDocumentComments?: (documentId: string) => void;
    }
 ) {
    let closed = false;
@@ -49,9 +51,12 @@ export function openNotificationStream(
             const payload = JSON.parse(event.data) as {
                type?: string;
                notification?: StreamNotification;
+               documentId?: string;
             };
             if (payload.type === 'notification.created')
                handlers.onNotification(payload.notification);
+            else if (payload.type === 'document.comment.changed' && payload.documentId)
+               handlers.onDocumentComments?.(payload.documentId);
          } catch {
             // Ignore malformed data; the durable REST list remains the source of truth.
             // VI: Bỏ qua dữ liệu lỗi; danh sách REST vẫn là nguồn dữ liệu chính.
