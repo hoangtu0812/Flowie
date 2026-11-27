@@ -397,6 +397,289 @@ def recent_dirs() -> dict[str, Any]:
     return {'home': str(home()), 'recent': recent[:50]}
 
 
+# ---- Files and git, ported from termi (src/routes/files.mjs, src/routes/git.mjs, src/git/*) ----
+# VI: ---- File và git, chuyển từ termi (src/routes/files.mjs, src/routes/git.mjs, src/git/*) ----
+
+MAX_OUTPUT_CHARS = 200_000
+TRUNCATED = '\n… (cut)'
+HIDDEN = {'.git', '.DS_Store'}
+IMAGE_TYPES = {
+    '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif',
+    '.webp': 'image/webp', '.svg': 'image/svg+xml', '.bmp': 'image/bmp', '.ico': 'image/x-icon',
+}
+MAX_IMAGE = 10 * 1024 * 1024
+LOG_LIMIT = '200'
+LOG_FORMAT = '%x1f'.join(['%H', '%P', '%D', '%s', '%an', '%at'])
+COMMIT_FORMAT = '%H%x1f%an%x1f%at%x1f%s%x1f%b'
+REVISION = re.compile(r'^[0-9a-f]{4,40}$')
+BRANCH = re.compile(r'^[A-Za-z0-9._/-]{1,200}$')
+MAX_COMMIT_MESSAGE = 5000
+MAX_OP_OUTPUT = 2000
+SUBDIR_MARK = '•'
+
+
+class Raw:
+    """A non-JSON answer (an image). VI: Câu trả lời không phải JSON (một ảnh)."""
+
+    def __init__(self, data: bytes, content_type: str):
+        self.data = data
+        self.content_type = content_type
+
+
+def clip(text: str) -> str:
+    return text[:MAX_OUTPUT_CHARS] + TRUNCATED if len(text) > MAX_OUTPUT_CHARS else text
+
+
+def inside_home_file(file: str) -> Path:
+    path = Path(file or '').expanduser().resolve()
+    if home() not in path.parents:
+        raise Refused(400, 'The file must be inside the home folder.')
+    if not path.is_file():
+        raise Refused(404, 'No such file.')
+    return path
+
+
+def git(directory: str, *args: str, timeout: float = 90) -> str:
+    """git with an argument list, never asking for a password (a missing credential
+    fails instead of hanging) and without colour; a failure becomes a 400 with git's words.
+    VI: git bằng danh sách tham số, không bao giờ hỏi mật khẩu (thiếu thông tin đăng nhập thì
+    VI: báo lỗi thay vì treo) và không màu; lỗi thành 400 kèm thông báo của git."""
+    env = {**os.environ, 'GIT_TERMINAL_PROMPT': '0', 'GIT_OPTIONAL_LOCKS': '0'}
+    result = subprocess.run(
+        ['git', '-C', directory, '-c', 'color.ui=never', *args],
+        capture_output=True, text=True, timeout=timeout, env=env, check=False,
+    )
+    if result.returncode != 0:
+        raise Refused(400, (result.stderr or result.stdout or 'git failed').strip()[:800])
+    return result.stdout
+
+
+def _status_entries(raw: str) -> list[dict[str, str]]:
+    parts = raw.split('\0')
+    files, index = [], 0
+    while index < len(parts):
+        entry = parts[index]
+        index += 1
+        if not entry:
+            continue
+        files.append({'x': entry[0], 'y': entry[1], 'path': entry[3:]})
+        if entry[0] in ('R', 'C'):
+            index += 1  # the rename's source path follows
+    return files
+
+
+def git_marks(directory: str) -> dict[str, str]:
+    """Change letter per entry of a folder (U untracked, else the staged or worktree
+    letter, • for a folder with changes below).
+    VI: Chữ cái thay đổi cho từng mục của thư mục (U chưa theo dõi, còn lại là chữ của stage
+    VI: hay worktree, • cho thư mục có thay đổi bên dưới)."""
+    try:
+        top = git(directory, 'rev-parse', '--show-toplevel').strip()
+        raw = git(top, 'status', '--porcelain=v1', '-z', '--untracked-files=normal')
+    except Refused:
+        return {}
+    rel = os.path.relpath(directory, top)
+    prefix = '' if rel == '.' else f'{rel}/'
+    marks: dict[str, str] = {}
+    for file in _status_entries(raw):
+        if not file['path'].startswith(prefix):
+            continue
+        rest = file['path'][len(prefix):].rstrip('/')
+        name, _, below = rest.partition('/')
+        code = 'U' if file['x'] == '?' else (file['x'] if file['x'] != ' ' else file['y'])
+        marks[name] = SUBDIR_MARK if below else code
+    return marks
+
+
+def list_folder(directory: str) -> dict[str, Any]:
+    folder = inside_home(directory)
+    marks = git_marks(folder)
+    entries: list[dict[str, Any]] = []
+    for child in Path(folder).iterdir():
+        if child.name in HIDDEN or child.name.startswith('._'):
+            continue
+        try:
+            stat = child.stat()
+        except OSError:
+            continue
+        entry: dict[str, Any] = {'name': child.name, 'path': str(child), 'dir': child.is_dir(), 'size': stat.st_size,
+                 'mtime': int(stat.st_mtime)}
+        if child.name in marks:
+            entry['git'] = marks[child.name]
+        entries.append(entry)
+    entries.sort(key=lambda e: (not e['dir'], str(e['name']).lower()))
+    parent = str(Path(folder).parent) if Path(folder) != home() else None
+    return {'dir': folder, 'parent': parent, 'entries': entries}
+
+
+def read_file(file: str) -> dict[str, Any]:
+    path = inside_home_file(file)
+    if path.suffix.lower() in IMAGE_TYPES:
+        return {'path': str(path), 'image': True}
+    with path.open('rb') as handle:
+        data = handle.read(MAX_OUTPUT_CHARS * 4 + 1)
+    if b'\0' in data:
+        return {'path': str(path), 'binary': True}
+    return {'path': str(path), 'text': clip(data.decode('utf-8', 'replace'))}
+
+
+def raw_image(file: str) -> Raw:
+    path = inside_home_file(file)
+    content_type = IMAGE_TYPES.get(path.suffix.lower())
+    if not content_type:
+        raise Refused(415, 'Only images can be shown directly.')
+    if path.stat().st_size > MAX_IMAGE:
+        raise Refused(413, 'The image is too large.')
+    return Raw(path.read_bytes(), content_type)
+
+
+def graph_layout(commits: list[dict[str, Any]]) -> dict[str, Any]:
+    """termi's commit graph lanes (src/git/graph.mjs): per row the commit's column and
+    segments [from lane, from position, to lane, to position], positions 0 top, 1 dot, 2 bottom.
+    VI: Làn đồ thị commit của termi (src/git/graph.mjs): mỗi hàng có cột của commit và các đoạn
+    VI: [làn đầu, vị trí đầu, làn cuối, vị trí cuối], vị trí 0 trên, 1 chấm, 2 dưới."""
+    lanes: list[str | None] = []
+    width = 1
+    rows = []
+    for commit in commits:
+        column = lanes.index(commit['h']) if commit['h'] in lanes else (
+            lanes.index(None) if None in lanes else len(lanes))
+        segments = [[lane, 0, column, 1] for lane, hash_ in enumerate(lanes) if hash_ == commit['h']]
+        after: list[str | None] = [None if hash_ == commit['h'] else hash_ for hash_ in lanes]
+        for index, parent in enumerate(commit['p']):
+            if parent in after:
+                lane = after.index(parent)
+            else:
+                lane = column if index == 0 else (after.index(None) if None in after else len(after))
+                if lane >= len(after):
+                    after.extend([None] * (lane + 1 - len(after)))
+                after[lane] = parent
+            segments.append([column, 1, lane, 2])
+        for lane, hash_ in enumerate(lanes):
+            if hash_ is not None and hash_ != commit['h']:
+                segments.append([lane, 0, after.index(hash_), 2])
+        while after and after[-1] is None:
+            after.pop()
+        width = max(width, len(lanes), len(after), column + 1)
+        lanes = after
+        rows.append({'col': column, 'seg': segments})
+    return {'width': width, 'rows': rows}
+
+
+def repository(directory: str) -> str:
+    folder = inside_home(directory)
+    try:
+        return git(folder, 'rev-parse', '--show-toplevel').strip()
+    except Refused as error:
+        raise Refused(400, 'This folder is not in a git repository.') from error
+
+
+def git_overview(directory: str) -> dict[str, Any]:
+    top = repository(directory)
+    status = git(top, 'status', '--porcelain=v1', '-b', '-z')
+    head, _, rest = status.partition('\0')
+    try:
+        log = git(top, 'log', '--all', '--date-order', '-n', LOG_LIMIT, f'--format={LOG_FORMAT}')
+    except Refused:
+        log = ''  # a repository without commits
+    commits = []
+    for line in log.splitlines():
+        fields = line.split('\x1f')
+        if len(fields) != 6:
+            continue
+        h, parents, refs, subject, author, at = fields
+        commits.append({'h': h, 'p': parents.split() if parents else [], 'refs': refs.split(', ') if refs else [],
+                        's': subject, 'a': author, 't': int(at or 0) * 1000})
+    try:
+        branches = git(top, 'branch', '-a', '--format=%(refname:short)').splitlines()
+    except Refused:
+        branches = []
+    return {
+        'dir': top, 'head': head.removeprefix('## '), 'files': _status_entries(rest), 'commits': commits,
+        'graph': graph_layout(commits),
+        'branches': [b for b in branches if b and not b.endswith('/HEAD') and b != 'origin'],
+    }
+
+
+def _numstat(raw: str) -> list[dict[str, Any]]:
+    files = []
+    for line in raw.splitlines():
+        added, deleted, *rest = line.split('\t')
+        if rest:
+            files.append({'path': '\t'.join(rest), 'add': None if added == '-' else int(added),
+                          'del': None if deleted == '-' else int(deleted)})
+    return files
+
+
+def git_show(directory: str, rev: str, file: str, staged: bool) -> dict[str, Any]:
+    top = repository(directory)
+    if rev and not REVISION.match(rev):
+        raise Refused(400, 'Invalid commit.')
+    if file:
+        if '\0' in file or len(file) > 4096:
+            raise Refused(400, 'Invalid file.')
+        text = git(top, 'diff', *(['--cached'] if staged else []), '--', file)
+        return {'text': clip(text) or '(no changes)'}
+    scope = ['show', '--format=', rev] if rev else ['diff', 'HEAD']
+    try:
+        patch, numstat = git(top, *scope, '--patch'), git(top, *scope, '--numstat')
+    except Refused:
+        patch, numstat = git(top, 'diff', '--patch'), git(top, 'diff', '--numstat')
+    commit = None
+    if rev:
+        hash_, author, at, subject, body = (git(top, 'log', '-1', f'--format={COMMIT_FORMAT}', rev).split('\x1f') + [''] * 5)[:5]
+        commit = {'hash': hash_, 'author': author, 't': int(at or 0) * 1000, 'subject': subject, 'body': body.strip()}
+    return {'text': clip(patch) or '(no changes)', 'files': _numstat(numstat), 'commit': commit}
+
+
+def _paths(body: dict[str, Any]) -> list[str]:
+    paths = body.get('paths')
+    if not isinstance(paths, list) or not paths or not all(
+        isinstance(p, str) and p and '\0' not in p and len(p) < 4096 for p in paths
+    ):
+        raise Refused(400, 'Invalid file list.')
+    return paths
+
+
+def git_op(body: dict[str, Any]) -> dict[str, Any]:
+    top = repository(body.get('dir') or '')
+    op = body.get('op')
+    if op == 'stage':
+        out = git(top, 'add', '--', *_paths(body))
+    elif op == 'unstage':
+        paths = _paths(body)
+        try:
+            out = git(top, 'restore', '--staged', '--', *paths)
+        except Refused as error:
+            if "resolve 'HEAD'" not in str(error):
+                raise
+            out = git(top, 'rm', '--cached', '-r', '-q', '--', *paths)
+    elif op == 'commit':
+        message = body.get('message')
+        if not isinstance(message, str) or not message.strip() or len(message) > MAX_COMMIT_MESSAGE:
+            raise Refused(400, 'A commit message is needed.')
+        out = git(top, 'commit', '-m', message)
+    elif op == 'push':
+        try:
+            out = git(top, 'push')
+        except Refused as error:
+            if 'no upstream' not in str(error).lower():
+                raise
+            out = git(top, 'push', '-u', 'origin', 'HEAD')
+    elif op == 'pull':
+        out = git(top, 'pull', '--ff-only')
+    elif op == 'fetch':
+        out = git(top, 'fetch', '--all', '--prune')
+    elif op == 'switch':
+        branch = body.get('branch')
+        if not isinstance(branch, str) or not BRANCH.match(branch) or branch.startswith('-') or '..' in branch:
+            raise Refused(400, 'Invalid branch.')
+        out = git(top, 'switch', branch.removeprefix('origin/'))
+    else:
+        raise Refused(400, 'Unsupported git operation.')
+    return {'ok': True, 'output': out.strip()[:MAX_OP_OUTPUT]}
+
+
 def route(token: str, method: str, raw_path: str, body: bytes, filename: str = '') -> tuple[int, Any]:
     parts = urlsplit(raw_path)
     segments = parts.path.strip('/').split('/')
@@ -429,6 +712,21 @@ def route(token: str, method: str, raw_path: str, body: bytes, filename: str = '
             return 200, send(path[1], request)
         if method == 'GET' and len(path) == 3 and path[0] == 'sessions' and path[2] == 'text':
             return 200, session_text(path[1])
+        if method == 'GET' and path == ['ls']:
+            return 200, list_folder(query.get('dir', [''])[0])
+        if method == 'GET' and path == ['file']:
+            return 200, read_file(query.get('path', [''])[0])
+        if method == 'GET' and path == ['raw']:
+            return 200, raw_image(query.get('path', [''])[0])
+        if method == 'GET' and path == ['git']:
+            return 200, git_overview(query.get('dir', [''])[0])
+        if method == 'GET' and path == ['git', 'show']:
+            return 200, git_show(
+                query.get('dir', [''])[0], query.get('rev', [''])[0], query.get('file', [''])[0],
+                query.get('staged', [''])[0] == '1',
+            )
+        if method == 'POST' and path == ['git', 'op']:
+            return 200, git_op(request)
         if method == 'GET' and path == ['dirs']:
             return 200, recent_dirs()
         if method == 'GET' and path == ['conversations']:
@@ -453,9 +751,12 @@ def serve(token: str, port: int = PORT) -> None:
             else:
                 body = self.rfile.read(length) if length else b''
                 status, answer = route(token, self.command, self.path, body, self.headers.get('X-Filename', ''))
-            payload = b'' if answer is None else json.dumps(answer).encode()
+            if isinstance(answer, Raw):
+                payload, content_type = answer.data, answer.content_type
+            else:
+                payload, content_type = b'' if answer is None else json.dumps(answer).encode(), 'application/json'
             self.send_response(status)
-            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Type', content_type)
             self.send_header('Content-Length', str(len(payload)))
             self.end_headers()
             self.wfile.write(payload)

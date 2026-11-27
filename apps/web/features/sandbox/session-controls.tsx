@@ -213,9 +213,19 @@ function CopyText({ session }: { session: string }) {
  * VI: Shift+Enter xuống dòng, file đính kèm được đưa vào sandbox trước và đường dẫn được thêm
  * VI: vào tin, còn thao tác nhanh gửi một yêu cầu soạn sẵn.
  */
-export function Composer({ session, agent }: { session: string; agent: SandboxAgent | null }) {
+export function Composer({
+   session,
+   agent,
+   text,
+   setText,
+}: {
+   session: string;
+   agent: SandboxAgent | null;
+   /** Held by the page, so the file browser can add paths to it. */
+   text: string;
+   setText: (text: string) => void;
+}) {
    const tx = useMessages(messages);
-   const [text, setText] = useState('');
    const [files, setFiles] = useState<File[]>([]);
    const [busy, setBusy] = useState(false);
    const picker = useRef<HTMLInputElement>(null);
