@@ -127,10 +127,10 @@ services:
          SANDBOX_IDLE_MINUTES: ${SANDBOX_IDLE_MINUTES:-60}
       ports:
          - '${API_PORT:-4000}:4000'
-      # The API reaches each sandbox's termi by container name on the sandbox
+      # The API reaches each sandbox's ttyd by container name on the sandbox
       # network. Its fixed address sits below the range handed to sandboxes, so
       # no sandbox can ever hold the one address the firewall lets through.
-      # VI: API gọi termi của từng sandbox theo tên container trên mạng sandbox. Địa chỉ
+      # VI: API gọi ttyd của từng sandbox theo tên container trên mạng sandbox. Địa chỉ
       # VI: cố định của nó nằm dưới dải cấp cho sandbox, nên không sandbox nào có được
       # VI: địa chỉ duy nhất mà firewall cho qua.
       networks:

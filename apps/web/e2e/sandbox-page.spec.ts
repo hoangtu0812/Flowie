@@ -29,16 +29,17 @@ test('The Sandbox page starts the sandbox, shows its terminal and stops it', asy
       state = 'exited';
       return route.fulfill({ json: { data: { state } } });
    });
-   await page.route('**/api/v1/sandbox/ui/', (route) =>
-      route.fulfill({ contentType: 'text/html', body: '<p>termi is here</p>' })
+   await page.route(/\/api\/v1\/sandbox\/ui\/\?arg=/, (route) =>
+      route.fulfill({ contentType: 'text/html', body: '<p>terminal is here</p>' })
    );
+   await page.route('**/api/v1/sandbox/sessions', (route) => route.fulfill({ json: { data: [] } }));
    await signIn(page);
 
    await page.getByRole('link', { name: 'Sandbox' }).click();
    await page.getByRole('button', { name: 'Start sandbox' }).click();
    await expect(page.getByTestId('sandbox-state')).toHaveText('Running');
    await expect(
-      page.frameLocator('iframe[title="Sandbox terminal"]').getByText('termi is here')
+      page.frameLocator('iframe[title="Sandbox terminal"]').getByText('terminal is here')
    ).toBeVisible();
 
    await page.getByRole('button', { name: 'Stop' }).click();
@@ -73,9 +74,10 @@ test('Open with Codex on an issue opens the Sandbox page on the issue session', 
       opened = route.request().postDataJSON();
       return route.fulfill({ json: { data: { session: `${issue.identifier}-flowie` } } });
    });
-   await page.route('**/api/v1/sandbox/ui/', (route) =>
-      route.fulfill({ contentType: 'text/html', body: '<p>termi is here</p>' })
+   await page.route(/\/api\/v1\/sandbox\/ui\/\?arg=/, (route) =>
+      route.fulfill({ contentType: 'text/html', body: '<p>terminal is here</p>' })
    );
+   await page.route('**/api/v1/sandbox/sessions', (route) => route.fulfill({ json: { data: [] } }));
    await signIn(page);
    await page.goto(`/${fixture.slug}/issue/${issue.identifier}`);
 
@@ -85,6 +87,46 @@ test('Open with Codex on an issue opens the Sandbox page on the issue session', 
    expect(opened).toEqual({ issueId: issue.id, repositoryId: 'repo-1', agent: 'codex' });
    await expect(page.locator('iframe[title="Sandbox terminal"]')).toHaveAttribute(
       'src',
-      new RegExp(`/sandbox/ui/#s=${issue.identifier}-flowie&t=term$`)
+      new RegExp(`/sandbox/ui/\\?arg=${issue.identifier}-flowie$`)
    );
+});
+
+test('The Sandbox page switches, adds and closes terminal sessions', async ({ page }) => {
+   let sessions = [{ name: 'DTD-7-flowie' }, { name: 'main' }];
+   const closed: string[] = [];
+   await page.route('**/api/v1/sandbox', (route) =>
+      route.fulfill({ json: { data: { state: 'running' } } })
+   );
+   await page.route('**/api/v1/sandbox/sessions', (route) =>
+      route.fulfill({ json: { data: sessions } })
+   );
+   await page.route('**/api/v1/sandbox/sessions/*', (route) => {
+      const name = decodeURIComponent(route.request().url().split('/').pop() ?? '');
+      closed.push(name);
+      sessions = sessions.filter((session) => session.name !== name);
+      return route.fulfill({ status: 204 });
+   });
+   await page.route(/\/api\/v1\/sandbox\/ui\/\?arg=/, (route) =>
+      route.fulfill({ contentType: 'text/html', body: '<p>terminal is here</p>' })
+   );
+   await signIn(page);
+   await page.goto(`/${fixture.slug}/sandbox`);
+
+   const terminal = page.locator('iframe[title="Sandbox terminal"]');
+   const tabs = page.getByRole('tablist', { name: 'Terminal sessions' });
+   await expect(tabs.getByRole('tab')).toHaveText(['DTD-7-flowie', 'main']);
+   await expect(terminal).toHaveAttribute('src', /\?arg=DTD-7-flowie$/);
+
+   await tabs.getByRole('tab', { name: 'main' }).click();
+   await expect(terminal).toHaveAttribute('src', /\?arg=main$/);
+
+   await page.getByRole('button', { name: 'New terminal' }).click();
+   await expect(tabs.getByRole('tab', { selected: true })).toHaveText(/^term-/);
+   await expect(terminal).toHaveAttribute('src', /\?arg=term-/);
+
+   await tabs.getByRole('tab', { name: 'DTD-7-flowie' }).click();
+   await page.getByRole('button', { name: 'Close this session' }).click();
+   await expect(tabs.getByRole('tab')).toHaveText(['main']);
+   expect(closed).toEqual(['DTD-7-flowie']);
+   await expect(terminal).toHaveAttribute('src', /\?arg=main$/);
 });

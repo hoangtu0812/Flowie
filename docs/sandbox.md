@@ -2,21 +2,23 @@
 
 Each Flowie user listed in `SANDBOX_USERS` gets one container on the Flowie
 server in which they sign in to their own Claude Code or Codex account and work
-on a project's repository, through a browser terminal served by
-[termi](https://github.com/hoangtu0812/termi). Phase 1 (DTD-1056) added the
-image, the manager and the host firewall; phase 2 (DTD-1057) runs termi in the
-container and proxies it through the API; phase 3 adds the Sandbox page
-(`/<workspace>/sandbox`, in the sidebar only for people in `SANDBOX_USERS`),
-which starts and stops the sandbox and embeds termi; phase 4 adds "Open
-with…" on an issue (below); DTD-1062 stops sandboxes left idle.
+on a project's repository, through a browser terminal: ttyd attached to tmux
+sessions that Flowie manages itself. Phase 1 (DTD-1056) added the image, the
+manager and the host firewall; phase 2 (DTD-1057) proxies the terminal through
+the API; phase 3 adds the Sandbox page (`/<workspace>/sandbox`, in the sidebar
+only for people in `SANDBOX_USERS`), which starts and stops the sandbox and
+shows its terminal sessions; phase 4 adds "Open with…" on an issue (below);
+DTD-1062 stops sandboxes left idle; DTD-1063 replaced the termi UI the first
+phases used with plain ttyd and tmux, so nothing outside this repository is
+needed.
 
 ## Pieces
 
 | Piece | Where | Role |
 | --- | --- | --- |
-| `flowie-sandbox` image | `infrastructure/sandbox/Dockerfile`, `sandbox-start.sh` | Debian, Node 24, git, `gh`, tmux, ttyd, Claude Code, Codex, termi (pinned commit). Runs as `node` (uid 1000); starts ttyd on loopback and termi on port 7680. |
-| `sandbox-manager` | `apps/api-python/app/sandbox_manager.py`, Compose profile `sandbox` | The only service with the Docker socket. Internal HTTP API behind a bearer token. |
-| API module | `apps/api-python/app/modules/sandbox/api.py` | `/api/v1/sandbox` (state, start, stop) and `/api/v1/sandbox/ui/...`, the reverse proxy to the caller's termi (HTTP and the terminal WebSocket). |
+| `flowie-sandbox` image | `infrastructure/sandbox/Dockerfile`, `sandbox-start.sh`, `sandbox-session.sh` | Debian, Node 24, git, `gh`, tmux, ttyd, Claude Code, Codex. Runs as `node` (uid 1000); ttyd listens on port 7680 of the sandbox network under the user's secret base path, and each connection attaches to the tmux session named by `?arg=<name>` (created in `/home/node` if new). |
+| `sandbox-manager` | `apps/api-python/app/sandbox_manager.py`, Compose profile `sandbox` | The only service with the Docker socket. Internal HTTP API behind a bearer token; lists, creates and closes tmux sessions with `docker exec`. |
+| API module | `apps/api-python/app/modules/sandbox/api.py` | `/api/v1/sandbox` (state, start, stop) and `/api/v1/sandbox/sessions`, and `/api/v1/sandbox/ui/...`, the reverse proxy to the caller's ttyd (HTTP and the terminal WebSocket). |
 | Sandbox network | `flowie-sandbox`, bridge `flowie-sbx0`, `172.31.250.0/24` | Created by Compose with the `api` service. The API has the fixed address `172.31.250.2`; sandboxes get addresses from `172.31.250.128/25`. |
 | Firewall | `infrastructure/sandbox/sandbox-firewall.sh`, `flowie-sandbox-firewall.service` | Sandboxes reach the internet only. |
 
@@ -24,11 +26,11 @@ Per user `<id>` (a Flowie user id):
 
 - container `flowie-sandbox-<id>`, labelled `vn.bsr.flowie.sandbox.user=<id>`;
 - volume `flowie-sandbox-home-<id>` at `/home/node`, holding the user's Claude,
-  Codex, GitHub and git credentials, their clones and termi's data. Removing
-  the container keeps the volume;
-- termi token `HMAC-SHA256(SANDBOX_MANAGER_TOKEN, "termi:<id>")`, set as
-  `TERMI_TOKEN` in the container and added by the API proxy. It never reaches
-  a browser. Changing `SANDBOX_MANAGER_TOKEN` changes every token: remove the
+  Codex, GitHub and git credentials and their clones. Removing the container
+  keeps the volume;
+- terminal token `HMAC-SHA256(SANDBOX_MANAGER_TOKEN, "terminal:<id>")`, set as
+  `TERMINAL_TOKEN` in the container. ttyd answers only under `/<token>/`; the
+  API proxy adds that prefix, so the token never reaches a browser. Changing `SANDBOX_MANAGER_TOKEN` changes every token: remove the
   containers (`DELETE /sandboxes/<id>`) so they are recreated with the new one.
 
 Every container gets the same configuration: unprivileged user, all
@@ -48,7 +50,9 @@ For a signed-in user whose email is in `SANDBOX_USERS` (everyone else gets 403):
 | `POST /api/v1/sandbox/stop` | Stop it |
 | `GET /api/v1/sandbox/repositories?issueId=` | `{data: [{id, name}]}`: repositories of the issue's project the caller can read |
 | `POST /api/v1/sandbox/open` | `{issueId, repositoryId, agent}` with `agent` `claude` or `codex`: start the sandbox and open the issue's session; `{data: {session}}` |
-| `/api/v1/sandbox/ui/` | termi, for the caller's own container only |
+| `GET /api/v1/sandbox/sessions` | `{data: [{name}]}`: tmux sessions, most recently used first; empty while stopped |
+| `DELETE /api/v1/sandbox/sessions/<name>` | Close that session (`204`) |
+| `/api/v1/sandbox/ui/?arg=<name>` | ttyd attached to that session (created if new), for the caller's own container only |
 
 ## Open with Claude/Codex
 
@@ -59,8 +63,8 @@ calls `POST /api/v1/sandbox/open`, which:
 1. checks that the caller can read the issue and that the repository belongs
    to its project;
 2. starts the sandbox;
-3. creates the termi session `<issue identifier>-<repository name>` in
-   `/home/node` and types one shell line into it: clone the repository into
+3. asks the manager for the tmux session `<issue identifier>-<repository
+   name>` in `/home/node` with one shell line typed into it: clone the repository into
    `~/repos/<name>` if it is not there, fetch, add the worktree
    `~/work/<session>` on branch `flowie/<session>` from `origin/<base branch>`
    (or reuse it), then run `claude` or `codex` there with the issue's title,
@@ -74,9 +78,10 @@ is cloned (`gh auth login` for GitHub, a personal access token for Azure
 DevOps).
 
 The proxy picks the container from the authenticated user id, never from the
-request. It forwards only `accept`, `content-type`, `x-termi`, `range`,
-`if-none-match` and `last-event-id`; the Flowie cookie and `Authorization`
-stay in the API. The terminal WebSocket (`ui/term/...`) is accepted only from
+request, serves only GET and HEAD, refuses `.` and `..` path segments, and
+forwards only `accept`, `range`, `if-none-match` and `if-modified-since`; the
+Flowie cookie and `Authorization` stay in the API. The terminal WebSocket
+(`ui/ws`) is accepted only from
 Flowie's own origin (`API_CORS_ORIGIN` or the origin of `APP_URL`), and an
 open terminal is re-checked every minute against the session behind its
 handshake cookie (not that cookie's 15-minute expiry), so signing out or
@@ -84,23 +89,22 @@ disabling the account closes it.
 
 The Flowie access cookie lasts 15 minutes and is renewed by the Flowie web
 app. The Sandbox page asks for the sandbox state every minute, which renews
-it. termi opened in a tab of its own needs a Flowie page (the Sandbox page or
-any other) open alongside it.
+it. A terminal opened in a tab of its own needs a Flowie page (the Sandbox
+page or any other) open alongside it.
 
-termi refuses to be framed by another origin (`frame-ancestors 'self'`), so
-the embedded terminal works only when the web app and the API share an origin,
-as on the server (`/flowie` and `/flowie/api/v1`). In local development (web
-on port 3000, API on port 4000) use "Open in a new tab".
+The Sandbox page shows the sandbox's sessions as tabs. "New terminal" opens a
+fresh `term-…` session (tmux creates it when ttyd attaches), and "Close this
+session" ends the selected one with everything running in it.
 
 ## Stopping idle sandboxes
 
 Every 5 minutes the API lists the running sandboxes (`GET /sandboxes` on the
-manager) and asks each one's termi for its sessions. A sandbox is idle since
+manager) and asks the manager for each one's tmux sessions. A sandbox is idle since
 the latest of its start and the last input or output in any of its tmux
 sessions; past `SANDBOX_IDLE_MINUTES` (default 60) the API stops it. An agent
 that is still working prints to its screen, so it keeps the sandbox running;
-an open tab with nothing happening does not. When termi does not answer, only
-the start time counts. The home volume stays, so Start or "Open with…" brings
+an open tab with nothing happening does not. When the sessions cannot be
+read, only the start time counts. The home volume stays, so Start or "Open with…" brings
 everything back. `SANDBOX_IDLE_MINUTES=0` turns this off. The check runs only
 when `SANDBOX_USERS` and `SANDBOX_MANAGER_TOKEN` are set; it shows as
 `sandbox-idle` among the background jobs.
@@ -117,6 +121,9 @@ listens on port 4100 of the default Compose network.
 | `PUT /sandboxes/<id>` | Create if missing, start if stopped; `200 {userId, state, address}` |
 | `POST /sandboxes/<id>/stop` | `200` with the new state, `404` if none |
 | `DELETE /sandboxes/<id>` | Remove the container, keep the volume; `204` |
+| `GET /sandboxes/<id>/sessions` | `200 [{name, activity, output}]` (last input and output, epoch seconds); `409` when stopped |
+| `POST /sandboxes/<id>/sessions` | `{name, command?}`: create the tmux session and type `command` plus Enter into it; `201`, `409` if it exists |
+| `DELETE /sandboxes/<id>/sessions/<name>` | Close the session; `204`, `404` if none |
 
 A container with a sandbox's name but without the manager's label is never
 touched (`409`).
@@ -156,11 +163,9 @@ first sandbox starts: a sandbox started without it can reach the whole LAN.
    infrastructure/sandbox/sandbox-firewall.sh status
    ```
 
-2. Image (the termi repository must be public, because the build downloads
-   the pinned commit from `codeload.github.com`; rebuild with new
-   `CLAUDE_CODE_VERSION`, `CODEX_VERSION` or `TERMI_COMMIT`/`TERMI_SHA256`
-   build args to upgrade; running containers keep the old image until they are
-   removed and created again):
+2. Image (rebuild with new `CLAUDE_CODE_VERSION`, `CODEX_VERSION` or
+   `TTYD_VERSION` and its checksums to upgrade; running containers keep the old
+   image until they are removed and created again):
 
    ```bash
    docker build -t flowie-sandbox:latest infrastructure/sandbox
@@ -183,15 +188,10 @@ first sandbox starts: a sandbox started without it can reach the whole LAN.
 
 ## Checking it
 
-1. Signed in to Flowie as a user listed in `SANDBOX_USERS`, start the sandbox
-   from the browser console of a Flowie page:
+1. Signed in to Flowie as a user listed in `SANDBOX_USERS`, open Sandbox in
+   the sidebar and start the sandbox.
 
-   ```js
-   await fetch('/flowie/api/v1/sandbox', { method: 'PUT', credentials: 'include' }).then(r => r.json())
-   ```
-
-2. Open `https://<flowie host>/flowie/api/v1/sandbox/ui/`, create a session,
-   and sign in once in its terminal: `claude` then `/login`,
+2. In its terminal, sign in once: `claude` then `/login`,
    `codex login --device-auth`, `gh auth login`. For Azure DevOps,
    `git clone https://dev.azure.com/...` asks for a user name and a personal
    access token; git keeps it in `~/.git-credentials`.
@@ -205,8 +205,9 @@ first sandbox starts: a sandbox started without it can reach the whole LAN.
 
 - The manager holds the Docker socket, which is root on the host. It is on the
   default network only, publishes nothing, and requires the token.
-- termi inside a sandbox listens on the sandbox network and refuses any
-  request without the user's termi token; only the API has it.
+- ttyd inside a sandbox listens on the sandbox network, which only the API
+  can reach, and answers only under the user's secret base path, which only
+  the API knows.
 - Credentials in the home volumes are readable by anyone with root on the
   server. Tell users before they sign in.
 - Using a personal Claude or Codex subscription on a shared server may be

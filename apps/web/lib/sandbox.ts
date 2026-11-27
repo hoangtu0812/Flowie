@@ -8,8 +8,8 @@ const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 export type SandboxState =
    'none' | 'created' | 'running' | 'paused' | 'restarting' | 'exited' | 'dead' | string;
 
-/** termi inside the caller's own sandbox, proxied by the API. */
-/** VI: termi trong sandbox của chính người gọi, đi qua proxy của API. */
+/** The terminal (ttyd) inside the caller's own sandbox, proxied by the API. */
+/** VI: Terminal (ttyd) trong sandbox của chính người gọi, đi qua proxy của API. */
 export const sandboxUiUrl = `${api}/sandbox/ui/`;
 
 async function call(method: string, path = ''): Promise<SandboxState> {
@@ -69,10 +69,27 @@ export async function openInSandbox(
       .session;
 }
 
-/** termi's page, opened on one session's terminal when `session` is given. */
-/** VI: Trang termi, mở thẳng terminal của một phiên khi có `session`. */
-export function sandboxSessionUrl(session?: string | null): string {
-   return session
-      ? `${sandboxUiUrl}#${new URLSearchParams({ s: session, t: 'term' })}`
-      : sandboxUiUrl;
+/** The terminal (ttyd) attached to one tmux session; ttyd creates the session if it is new. */
+/** VI: Terminal (ttyd) gắn vào một phiên tmux; ttyd tạo phiên nếu chưa có. */
+export function sandboxSessionUrl(session: string): string {
+   return `${sandboxUiUrl}?${new URLSearchParams({ arg: session })}`;
+}
+
+/** The sandbox's tmux sessions, most recently used first; none while it is stopped. */
+/** VI: Các phiên tmux của sandbox, phiên dùng gần nhất trước; rỗng khi sandbox đang dừng. */
+export async function loadSandboxSessions(): Promise<string[]> {
+   const response = await authenticatedFetch(`${api}/sandbox/sessions`);
+   const sessions = await responseData<{ name: string }[]>(
+      response,
+      'Could not load the sessions.'
+   );
+   return sessions.map((session) => session.name);
+}
+
+export async function closeSandboxSession(name: string): Promise<void> {
+   const response = await authenticatedFetch(
+      `${api}/sandbox/sessions/${encodeURIComponent(name)}`,
+      { method: 'DELETE' }
+   );
+   if (!response.ok) await responseData(response, 'Could not close the session.');
 }
