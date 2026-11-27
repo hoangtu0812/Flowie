@@ -480,3 +480,106 @@ def test_codex_chat_reads_messages_commands_and_patches(sandbox):
     assert steps[1]['verb'] == 'Edit' and steps[1]['files'] == [
         {'file': f'{folder}/app/login.py', 'change': 'edit'}, {'file': f'{folder}/docs/login.md', 'change': 'create'},
     ]
+
+
+def test_remotes_are_recognised_like_termi():
+    assert agent.parse_remote('https://github.com/hoangtu0812/Flowie.git') == {'provider': 'github', 'owner': 'hoangtu0812', 'repo': 'Flowie'}
+    assert agent.parse_remote('git@github.com:o/r.git')['repo'] == 'r'
+    assert agent.parse_remote('https://bsr@dev.azure.com/bsr/Digital%20Ops/_git/flowie') == {
+        'provider': 'azure', 'org': 'bsr', 'project': 'Digital Ops', 'repo': 'flowie'}
+    assert agent.parse_remote('https://bsr.visualstudio.com/DefaultCollection/P/_git/r')['org'] == 'bsr'
+    assert agent.parse_remote('https://gitlab.com/o/r.git') is None
+    assert agent.parse_remote('https://github.com/o/r;rm.git') is None
+
+
+def test_runs_are_normalised_and_grouped():
+    github = agent.github_run({'id': 7, 'run_number': 12, 'display_title': 'Fix login', 'name': 'CI', 'workflow_id': 3,
+                               'status': 'completed', 'conclusion': 'timed_out', 'event': 'pull_request',
+                               'head_branch': 'flowie/DTD-7', 'head_sha': 'abcdef0123456789', 'actor': {'login': 'tu'},
+                               'created_at': '2026-11-27T01:00:00Z', 'updated_at': '2026-11-27T01:05:00Z', 'html_url': 'https://x'})
+    assert github['result'] == 'failure' and github['trigger'] == 'pr' and github['sha'] == 'abcdef01'
+    assert github['finishedAt'] - github['queuedAt'] == 300_000
+    azure = agent.azure_run({'id': 9, 'buildNumber': '20261127.1', 'status': 'inProgress', 'reason': 'individualCI',
+                             'definition': {'id': 4, 'name': 'Build'}, 'sourceBranch': 'refs/heads/main',
+                             'sourceVersion': 'f' * 40, 'queueTime': '2026-11-27T01:00:00.1234567Z'},
+                            {'org': 'bsr', 'project': 'P', 'repo': 'r'})
+    assert azure['status'] == 'running' and azure['result'] is None and azure['branch'] == 'main'
+    assert azure['queuedAt'] == github['queuedAt'] + 123 and azure['url'].endswith('buildId=9')
+    assert agent.pipelines_of([github, azure, {**github, 'id': '8'}]) == [
+        {'id': '4', 'name': 'Build', 'recent': ['running']}, {'id': '3', 'name': 'CI', 'recent': ['failure', 'failure']}]
+
+
+def test_github_pipelines_use_gh(repo, monkeypatch):
+    subprocess.run(['git', '-C', str(repo), 'remote', 'add', 'origin', 'https://github.com/o/r.git'], check=True)
+    calls = []
+    runs = [{'id': 1, 'run_number': 1, 'name': 'CI', 'workflow_id': 3, 'status': 'completed', 'conclusion': 'failure',
+             'event': 'push', 'head_branch': 'main', 'head_sha': 'a', 'created_at': '2026-11-27T01:00:00Z'},
+            {'id': 2, 'run_number': 2, 'name': 'CI', 'workflow_id': 3, 'status': 'in_progress', 'event': 'push',
+             'head_branch': 'main', 'head_sha': 'b', 'created_at': '2026-11-27T02:00:00Z'}]
+
+    def fake_run(*args, **kwargs):
+        calls.append(args)
+        if args[:2] == ('gh', 'api'):
+            return done(json.dumps({'workflow_runs': runs}))
+        if args[:3] == ('gh', 'run', 'view'):
+            return done('\x1b[31merror\x1b[0m: tests failed\n')
+        return done()
+
+    monkeypatch.setattr(agent, 'run', fake_run)
+    monkeypatch.setattr(agent, '_ci_cache', {})
+    status, overview = call('GET', f'ci?dir={repo}')
+    assert status == 200 and overview['provider'] == 'github' and overview['branch'] == 'main'
+    assert [r['id'] for r in overview['runs']] == ['2', '1'] and overview['page'] == 'https://github.com/o/r/actions'
+    assert call('GET', f'ci/log?dir={repo}&id=1') == (200, {'text': 'error: tests failed'})
+    assert call('POST', 'ci/action', {'dir': str(repo), 'id': '1', 'action': 'rerun'})[0] == 200
+    assert calls[-1] == ('gh', 'run', 'rerun', '1', '--failed', '-R', 'o/r')
+    assert call('POST', 'ci/action', {'dir': str(repo), 'id': '2', 'action': 'cancel'})[0] == 200
+    assert calls[-1] == ('gh', 'run', 'cancel', '2', '-R', 'o/r')
+    assert call('POST', 'ci/action', {'dir': str(repo), 'id': '2', 'action': 'delete'})[0] == 400
+    assert call('POST', 'ci/action', {'dir': str(repo), 'id': '99', 'action': 'cancel'})[0] == 404
+    assert call('GET', f'ci/log?dir={repo}&id=1;rm')[0] == 400
+
+    signed_out = subprocess.CompletedProcess([], 1, '', 'To get started with GitHub CLI, please run:  gh auth login')
+    monkeypatch.setattr(agent, 'run', lambda *args, **kwargs: signed_out)
+    monkeypatch.setattr(agent, '_ci_cache', {})
+    status, error = call('GET', f'ci?dir={repo}')
+    assert status == 400 and 'gh auth login' in error['error']
+
+
+def test_azure_pipelines_use_the_stored_token_and_rest(repo, monkeypatch):
+    home = repo.parent.parent
+    subprocess.run(['git', '-C', str(repo), 'remote', 'add', 'origin', 'https://bsr@dev.azure.com/bsr/P/_git/flowie'], check=True)
+    subprocess.run(['git', '-C', str(repo), 'config', 'credential.helper', 'store'], check=True)
+    with pytest.raises(agent.Refused) as missing:  # nothing stored yet, and git must not prompt
+        agent.azure_token(str(repo), {'org': 'bsr', 'project': 'P', 'repo': 'flowie'})
+    assert missing.value.status == 400
+    (home / '.git-credentials').write_text('https://bsr:secret-pat@dev.azure.com\n')
+    assert agent.azure_token(str(repo), {'org': 'bsr', 'project': 'P', 'repo': 'flowie'}) == 'secret-pat'
+
+    requests = []
+
+    def fake_api(top, remote, method, path, body=None, raw=False):
+        requests.append((method, path, body))
+        if path.startswith('build/builds?'):
+            return {'value': [
+                {'id': 5, 'buildNumber': '1', 'status': 'completed', 'result': 'failed', 'definition': {'id': 4, 'name': 'Build'},
+                 'sourceBranch': 'refs/heads/main', 'repository': {'name': 'flowie'}, 'queueTime': '2026-11-27T01:00:00Z'},
+                {'id': 6, 'status': 'completed', 'definition': {'id': 8, 'name': 'Other'}, 'repository': {'name': 'other-repo'}},
+            ]}
+        if path.endswith('/timeline'):
+            return {'records': [{'type': 'Task', 'result': 'failed', 'name': 'Run tests', 'log': {'id': 12}},
+                                {'type': 'Task', 'result': 'succeeded', 'name': 'Build', 'log': {'id': 11}}]}
+        if path.endswith('/logs/12'):
+            return 'FAILED test_login\n'
+        return {}
+
+    monkeypatch.setattr(agent, 'azure_api', fake_api)
+    monkeypatch.setattr(agent, '_ci_cache', {})
+    overview = call('GET', f'ci?dir={repo}')[1]
+    assert overview['provider'] == 'azure' and [r['id'] for r in overview['runs']] == ['5']
+    assert overview['page'] == 'https://dev.azure.com/bsr/P/_build'
+    assert call('GET', f'ci/log?dir={repo}&id=5')[1] == {'text': '== Run tests ==\nFAILED test_login'}
+    call('POST', 'ci/action', {'dir': str(repo), 'id': '5', 'action': 'rerun'})
+    assert requests[-1] == ('POST', 'pipelines/4/runs', {'resources': {'repositories': {'self': {'refName': 'refs/heads/main'}}}})
+    call('POST', 'ci/action', {'dir': str(repo), 'id': '5', 'action': 'cancel'})
+    assert requests[-1] == ('PATCH', 'build/builds/5', {'status': 'cancelling'})

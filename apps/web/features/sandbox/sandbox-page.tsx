@@ -24,7 +24,9 @@ import {
    sandboxSessionUrl,
    startSandbox,
    stopSandbox,
+   ciBadge,
    createSandboxSession,
+   loadSandboxCi,
    type SandboxAgent,
    type SandboxFile,
    type SandboxSession,
@@ -37,6 +39,7 @@ import { HomePage } from './home-page';
 import { ConversationViewer, SessionChat } from './chat-view';
 import { ActivityBar, ResizeHandle, StatusBar, useSidePanel, type SidePanel } from './workbench';
 import { GitPanel } from './git-panel';
+import { PipelinesPanel } from './pipelines-panel';
 import { UsageChip } from './usage-chip';
 import { cn } from '@/lib/utils';
 import { SessionList } from './session-list';
@@ -98,6 +101,9 @@ export function SandboxPage() {
       dir: string;
    } | null>(null);
    const [draft, setDraft] = useState('');
+   // termi checks the branch's latest pipeline run every minute for the badge and status bar.
+   // VI: termi kiểm tra lần chạy pipeline mới nhất của nhánh mỗi phút cho badge và status bar.
+   const [ciState, setCiState] = useState<'failure' | 'running' | 'ok' | null>(null);
 
    const openSession = (name: string | null) => {
       setSelected(name);
@@ -129,9 +135,13 @@ export function SandboxPage() {
          if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'b') {
             event.preventDefault();
             side.toggle();
-         } else if (event.altKey && ['Digit1', 'Digit2', 'Digit3'].includes(event.code)) {
+         } else if (event.altKey && ['Digit1', 'Digit2', 'Digit3', 'Digit4'].includes(event.code)) {
             event.preventDefault();
-            choosePanel((['sessions', 'files', 'git'] as const)[Number(event.code.slice(-1)) - 1]);
+            choosePanel(
+               (['sessions', 'files', 'git', 'pipelines'] as const)[
+                  Number(event.code.slice(-1)) - 1
+               ]
+            );
          }
       },
       [choosePanel, side]
@@ -204,6 +214,20 @@ export function SandboxPage() {
       const timer = setInterval(() => void refreshSessions(), SESSIONS_MS);
       return () => clearInterval(timer);
    }, [running, refreshSessions]);
+
+   const ciDir = currentSession?.branch ? currentSession.dir : '';
+   useEffect(() => {
+      setCiState(null);
+      if (!running || !ciDir) return;
+      const check = () =>
+         loadSandboxCi(ciDir).then(
+            (found) => setCiState(ciBadge(found)),
+            () => setCiState(null)
+         );
+      void check();
+      const timer = setInterval(() => void check(), 60_000);
+      return () => clearInterval(timer);
+   }, [running, ciDir]);
 
    const closeSession = async (name: string) => {
       try {
@@ -307,6 +331,9 @@ export function SandboxPage() {
                   badges={{
                      sessions: sessions.filter((session) => session.state === 'waiting').length,
                      git: currentSession?.changes ?? 0,
+                     ...(ciState === 'failure' || ciState === 'running'
+                        ? { pipelines: ciState }
+                        : {}),
                   }}
                />
                <aside
@@ -358,6 +385,7 @@ export function SandboxPage() {
                      />
                   )}
                   {panel === 'git' && <GitPanel dir={currentSession?.dir || home} />}
+                  {panel === 'pipelines' && <PipelinesPanel dir={currentSession?.dir || home} />}
                </aside>
                {!side.collapsed && <ResizeHandle panel={sideRef} onResize={side.resize} />}
                <main
@@ -481,7 +509,13 @@ export function SandboxPage() {
             </div>
          )}
          {running && (
-            <StatusBar session={currentSession} home={home} onGit={() => choosePanel('git')} />
+            <StatusBar
+               session={currentSession}
+               home={home}
+               onGit={() => choosePanel('git')}
+               ci={ciState}
+               onPipelines={() => choosePanel('pipelines')}
+            />
          )}
          {creating && (
             <NewSessionDialog

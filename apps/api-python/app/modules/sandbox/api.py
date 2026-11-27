@@ -445,6 +445,51 @@ async def sandbox_conversation(
     return {'data': chat}
 
 
+@router.get('/ci')
+async def sandbox_ci(
+    request: Request,
+    dir: str = Query(min_length=1, max_length=4096),
+    fresh: bool = False,
+    user: Any = Depends(current_user),
+):
+    """The CI runs of a folder's repository (GitHub Actions or Azure Pipelines), as termi's Pipelines.
+    VI: Các lần chạy CI của repository chứa thư mục (GitHub Actions hoặc Azure Pipelines), như Pipelines của termi."""
+    settings = _settings(request)
+    user_id = _sandbox_user(settings, user)
+    params = {'dir': dir, **({'fresh': '1'} if fresh else {})}
+    _, overview = await _agent(settings, user_id, 'GET', 'ci', params=params)
+    return {'data': overview}
+
+
+@router.get('/ci/log')
+async def sandbox_ci_log(
+    request: Request,
+    dir: str = Query(min_length=1, max_length=4096),
+    id: str = Query(pattern=r'^\d{1,20}$'),
+    user: Any = Depends(current_user),
+):
+    """The log of a run's failed steps, last 400 lines. VI: Log các bước lỗi của một lần chạy, 400 dòng cuối."""
+    settings = _settings(request)
+    user_id = _sandbox_user(settings, user)
+    _, log = await _agent(settings, user_id, 'GET', 'ci/log', params={'dir': dir, 'id': id})
+    return {'data': log}
+
+
+class CiActionInput(StrictInput):
+    dir: str = Field(min_length=1, max_length=4096)
+    id: str = Field(pattern=r'^\d{1,20}$')
+    action: Literal['rerun', 'cancel']
+
+
+@router.post('/ci')
+async def sandbox_ci_action(payload: CiActionInput, request: Request, user: Any = Depends(current_user)):
+    """Reruns a run (only its failed jobs on GitHub) or cancels one. VI: Chạy lại (GitHub chỉ job lỗi) hoặc huỷ."""
+    settings = _settings(request)
+    user_id = _sandbox_user(settings, user)
+    _, done = await _agent(settings, user_id, 'POST', 'ci/action', payload.model_dump())
+    return {'data': done}
+
+
 @router.get('/dirs')
 async def sandbox_dirs(request: Request, user: Any = Depends(current_user)):
     """Folders to start a session in: the home, open sessions' folders, issue worktrees and clones.

@@ -44,7 +44,9 @@ export function OpenInSandbox({ issueId }: { issueId: string }) {
    useEffect(() => {
       void sandboxEnabled().then(setEnabled);
    }, []);
-   useEffect(() => setRepositories(null), [issueId]);
+   useEffect(() => {
+      setRepositories(null);
+   }, [issueId]);
 
    if (!enabled) return null;
 
