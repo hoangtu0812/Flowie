@@ -38,10 +38,10 @@ from urllib.parse import quote
 USER_ID = re.compile(r'^[a-z0-9]{20,40}$')
 USER_LABEL = 'vn.bsr.flowie.sandbox.user'
 TERMINAL_PORT = 7680
-# tmux session names: what ttyd's sandbox-session accepts, safe as a tmux target.
-# VI: Tên phiên tmux: đúng những gì sandbox-session của ttyd nhận, an toàn làm target tmux.
+# tmux session names: what ttyd's sandbox-session and the sandbox agent accept.
+# VI: Tên phiên tmux: đúng những gì sandbox-session của ttyd và sandbox agent nhận.
 SESSION_NAME = re.compile(r'^[A-Za-z0-9_-]{1,40}$')
-MAX_COMMAND = 20_000
+AGENT_PORT = 7681
 HOME = '/home/node'
 MIN_TOKEN_LENGTH = 32
 
@@ -117,7 +117,7 @@ class Docker:
         finally:
             connection.close()
         is_json = (response.getheader('Content-Type') or '').startswith('application/json')
-        return response.status, json.loads(raw) if raw and is_json else (raw or None)
+        return response.status, json.loads(raw) if raw and is_json else None
 
 
 class SandboxError(Exception):
@@ -189,20 +189,6 @@ def container_spec(config: Config, user_id: str) -> dict[str, Any]:
             # VI: host); thêm StorageOpt hoặc giới hạn volume nếu ổ đầy.
         },
     }
-
-
-def stdout_of(stream: bytes) -> str:
-    """stdout from Docker's multiplexed exec stream: frames of an 8-byte header
-    (stream type, 3 zero bytes, big-endian length) followed by the payload.
-    VI: stdout từ luồng exec ghép kênh của Docker: các khung gồm header 8 byte (loại
-    VI: luồng, 3 byte 0, độ dài big-endian) rồi tới dữ liệu."""
-    out, position = bytearray(), 0
-    while position + 8 <= len(stream):
-        kind, size = stream[position], int.from_bytes(stream[position + 4:position + 8], 'big')
-        if kind == 1:
-            out += stream[position + 8:position + 8 + size]
-        position += 8 + size
-    return out.decode('utf-8', 'replace')
 
 
 class Manager:
@@ -282,113 +268,36 @@ class Manager:
             raise SandboxError(502, f'Could not remove sandbox: {body}')
 
 
-    def _exec(self, user_id: str, *command: str) -> tuple[int, str]:
-        """Runs a command as the sandbox user inside a running sandbox; returns its
-        exit code and stdout. Only the fixed tmux commands below ever reach it.
-        VI: Chạy một lệnh với user của sandbox bên trong sandbox đang chạy; trả mã thoát và
-        VI: stdout. Chỉ các lệnh tmux cố định bên dưới mới tới được đây."""
-        found = self.describe(user_id)
-        if found is None:
-            raise SandboxError(404, 'No sandbox for this user.')
-        if found['state'] != 'running':
-            raise SandboxError(409, 'The sandbox is not running.')
-        name = container_name(user_id)
-        spec = {'Cmd': list(command), 'User': 'node', 'WorkingDir': HOME, 'AttachStdout': True, 'AttachStderr': True}
-        status, created = self.docker.request('POST', f'/containers/{name}/exec', spec)
-        if status != 201:
-            raise SandboxError(502, f'Could not run a command in the sandbox: {created}')
-        status, raw = self.docker.request('POST', f"/exec/{created['Id']}/start", {'Detach': False, 'Tty': False})
-        if status != 200:
-            raise SandboxError(502, f'Could not run a command in the sandbox: {raw}')
-        status, result = self.docker.request('GET', f"/exec/{created['Id']}/json")
-        if status != 200:
-            raise SandboxError(502, 'Could not read the command result.')
-        return int(result.get('ExitCode') or 0), stdout_of(raw if isinstance(raw, bytes) else b'')
 
-    def sessions(self, user_id: str) -> list[dict[str, Any]]:
-        """The sandbox's tmux sessions with their last input (`activity`) and output
-        (`output`) as epoch seconds; none when tmux has no server yet.
-        VI: Các phiên tmux của sandbox cùng lần nhập (`activity`) và output (`output`) cuối,
-        VI: tính bằng giây epoch; rỗng khi tmux chưa có server."""
-        code, out = self._exec(
-            user_id, 'tmux', 'list-sessions', '-F', '#{session_name}\t#{session_activity}\t#{window_activity}'
-        )
-        if code != 0:
-            return []
-        rows = [line.split('\t') for line in out.splitlines() if line.count('\t') == 2]
-        return [{'name': name, 'activity': int(activity or 0), 'output': int(output or 0)} for name, activity, output in rows]
-
-    def create_session(self, user_id: str, name: str, command: str = '') -> None:
-        """Creates a detached tmux session in the home directory and types `command`
-        into it followed by Enter. The command is sent as literal keys, never run by
-        the manager. 409 when the session exists.
-        VI: Tạo một phiên tmux chạy nền ở thư mục home và gõ `command` vào đó rồi Enter.
-        VI: Lệnh được gửi như phím gõ, manager không bao giờ tự chạy nó. 409 khi phiên đã có."""
-        if not SESSION_NAME.match(name) or len(command) > MAX_COMMAND:
-            raise SandboxError(400, 'Invalid session.')
-        if any(session['name'] == name for session in self.sessions(user_id)):
-            raise SandboxError(409, 'The session exists.')
-        if self._exec(user_id, 'tmux', 'new-session', '-d', '-s', name, '-c', HOME)[0] != 0:
-            raise SandboxError(502, 'Could not create the session.')
-        if command:
-            self._exec(user_id, 'tmux', 'send-keys', '-t', f'={name}:', '-l', '--', command)
-            self._exec(user_id, 'tmux', 'send-keys', '-t', f'={name}:', 'Enter')
-
-    def close_session(self, user_id: str, name: str) -> None:
-        if not SESSION_NAME.match(name):
-            raise SandboxError(400, 'Invalid session.')
-        if self._exec(user_id, 'tmux', 'kill-session', '-t', f'={name}')[0] != 0:
-            raise SandboxError(404, 'No such session.')
-
-
-def handle(manager: Manager, method: str, path: str, authorization: str, body: bytes = b'') -> tuple[int, Any]:
+def handle(manager: Manager, method: str, path: str, authorization: str) -> tuple[int, Any]:
     """Routes one request. Authentication is checked first with a constant-time
-    comparison. Routes: `GET /sandboxes`; `GET|PUT|DELETE /sandboxes/<userId>`;
-    `POST /sandboxes/<userId>/stop`; `GET|POST /sandboxes/<userId>/sessions`;
-    `DELETE /sandboxes/<userId>/sessions/<name>`.
+    comparison. Routes: `GET /sandboxes`, `GET|PUT|DELETE /sandboxes/<userId>`
+    and `POST /sandboxes/<userId>/stop`.
     VI: Định tuyến một request. Xác thực được kiểm trước bằng phép so sánh thời gian
-    VI: không đổi. Các route: `GET /sandboxes`; `GET|PUT|DELETE /sandboxes/<userId>`;
-    VI: `POST /sandboxes/<userId>/stop`; `GET|POST /sandboxes/<userId>/sessions`;
-    VI: `DELETE /sandboxes/<userId>/sessions/<tên>`."""
+    VI: không đổi. Các route: `GET /sandboxes`, `GET|PUT|DELETE /sandboxes/<userId>`
+    VI: và `POST /sandboxes/<userId>/stop`."""
     if not secrets.compare_digest(authorization.encode(), f'Bearer {manager.config.token}'.encode()):
         return 401, {'error': 'Unauthorized'}
     parts = path.split('?', 1)[0].strip('/').split('/')
-    if parts[0] != 'sandboxes' or len(parts) > 4:
+    if parts[0] != 'sandboxes' or len(parts) > 3 or (len(parts) == 3 and parts[2] != 'stop'):
         return 404, {'error': 'Not found'}
     if len(parts) > 1 and not USER_ID.match(parts[1]):
         return 400, {'error': 'Invalid user id'}
-    route = (method, len(parts), parts[2] if len(parts) > 2 else None)
+    route = (method, len(parts))
     try:
-        if route == ('GET', 1, None):
+        if route == ('GET', 1):
             return 200, manager.running()
         user_id = parts[1] if len(parts) > 1 else ''
-        if route == ('GET', 2, None):
+        if route == ('GET', 2):
             found = manager.describe(user_id)
             return (200, found) if found else (404, {'error': 'No sandbox for this user.'})
-        if route == ('PUT', 2, None):
+        if route == ('PUT', 2):
             return 200, manager.ensure(user_id)
-        if route == ('DELETE', 2, None):
+        if route == ('DELETE', 2):
             manager.remove(user_id)
             return 204, None
-        if route == ('POST', 3, 'stop'):
+        if route == ('POST', 3):
             return 200, manager.stop(user_id)
-        if route == ('GET', 3, 'sessions'):
-            return 200, manager.sessions(user_id)
-        if route == ('POST', 3, 'sessions'):
-            try:
-                request = json.loads(body or b'{}')
-            except ValueError:
-                return 400, {'error': 'Invalid JSON'}
-            if not isinstance(request, dict) or not isinstance(request.get('name'), str):
-                return 400, {'error': 'Invalid session.'}
-            command = request.get('command') or ''
-            if not isinstance(command, str):
-                return 400, {'error': 'Invalid session.'}
-            manager.create_session(user_id, request['name'], command)
-            return 201, {'name': request['name']}
-        if route == ('DELETE', 4, 'sessions'):
-            manager.close_session(user_id, parts[3])
-            return 204, None
     except SandboxError as error:
         return error.status, {'error': error.message}
     return 405, {'error': 'Method not allowed'}
@@ -399,9 +308,7 @@ def serve(manager: Manager) -> None:
         server_version = 'flowie-sandbox-manager'
 
         def _respond(self) -> None:
-            length = min(int(self.headers.get('Content-Length') or 0), MAX_COMMAND * 2)
-            request = self.rfile.read(length) if length > 0 else b''
-            status, body = handle(manager, self.command, self.path, self.headers.get('Authorization', ''), request)
+            status, body = handle(manager, self.command, self.path, self.headers.get('Authorization', ''))
             payload = b'' if body is None else json.dumps(body).encode()
             self.send_response(status)
             self.send_header('Content-Type', 'application/json')

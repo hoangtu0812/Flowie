@@ -63,4 +63,5 @@ USER node
 WORKDIR /home/node
 COPY --chmod=0755 sandbox-start.sh /usr/local/bin/sandbox-start
 COPY --chmod=0755 sandbox-session.sh /usr/local/bin/sandbox-session
+COPY --chmod=0755 sandbox_agent.py /usr/local/lib/flowie/sandbox_agent.py
 CMD ["sandbox-start"]

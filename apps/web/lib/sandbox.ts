@@ -75,15 +75,70 @@ export function sandboxSessionUrl(session: string): string {
    return `${sandboxUiUrl}?${new URLSearchParams({ arg: session })}`;
 }
 
+/** A tmux session and the agent running in it (`state` is `shell` when there is none). */
+/** VI: Một phiên tmux và agent chạy trong đó (`state` là `shell` khi không có agent). */
+export type SandboxSession = {
+   name: string;
+   dir: string;
+   agent: SandboxAgent | null;
+   state: 'working' | 'waiting' | 'idle' | 'shell';
+   preview: string;
+};
+
+export type SandboxConversation = {
+   agent: SandboxAgent;
+   id: string;
+   cwd: string;
+   title: string;
+   mtime: number;
+};
+
 /** The sandbox's tmux sessions, most recently used first; none while it is stopped. */
 /** VI: Các phiên tmux của sandbox, phiên dùng gần nhất trước; rỗng khi sandbox đang dừng. */
-export async function loadSandboxSessions(): Promise<string[]> {
-   const response = await authenticatedFetch(`${api}/sandbox/sessions`);
-   const sessions = await responseData<{ name: string }[]>(
-      response,
+export async function loadSandboxSessions(): Promise<SandboxSession[]> {
+   return responseData<SandboxSession[]>(
+      await authenticatedFetch(`${api}/sandbox/sessions`),
       'Could not load the sessions.'
    );
-   return sessions.map((session) => session.name);
+}
+
+export async function createSandboxSession(input: {
+   name: string;
+   dir: string;
+   agent: SandboxAgent | null;
+   resume?: string;
+}): Promise<string> {
+   const response = await authenticatedFetch(`${api}/sandbox/sessions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+   });
+   return (await responseData<{ name: string }>(response, 'Could not create the session.')).name;
+}
+
+export async function renameSandboxSession(name: string, to: string): Promise<string> {
+   const response = await authenticatedFetch(
+      `${api}/sandbox/sessions/${encodeURIComponent(name)}/rename`,
+      {
+         method: 'POST',
+         headers: { 'content-type': 'application/json' },
+         body: JSON.stringify({ to }),
+      }
+   );
+   return (await responseData<{ name: string }>(response, 'Could not rename the session.')).name;
+}
+
+/** Folders to start a session in: the home first, then recent ones. */
+/** VI: Thư mục để mở phiên: home trước, rồi các thư mục gần đây. */
+export async function loadSandboxDirs(): Promise<{ home: string; recent: string[] }> {
+   return responseData(await authenticatedFetch(`${api}/sandbox/dirs`), 'Could not load folders.');
+}
+
+export async function loadSandboxConversations(dir: string): Promise<SandboxConversation[]> {
+   return responseData(
+      await authenticatedFetch(`${api}/sandbox/conversations?${new URLSearchParams({ dir })}`),
+      'Could not load conversations.'
+   );
 }
 
 export async function closeSandboxSession(name: string): Promise<void> {

@@ -5,6 +5,7 @@ import httpx
 
 from app.core.config import Settings
 from app.modules.sandbox import idle
+from app.sandbox_manager import terminal_token
 
 TOKEN = 'm' * 64
 NOW = 1_800_000_000.0  # 2027-01-15T08:00:00Z
@@ -44,17 +45,20 @@ def test_only_sandboxes_idle_past_the_limit_are_stopped(monkeypatch):
     stopped = []
 
     def handler(request):
+        if request.url.port == 7681:
+            user_id = request.url.host.removeprefix('flowie-sandbox-')
+            assert request.url.path == f'/{terminal_token(TOKEN, user_id)}/sessions'
+            if user_id == BROKEN:
+                raise httpx.ConnectError('down')
+            return httpx.Response(200, json=sessions[user_id])
         assert request.url.port == 4100
         assert request.headers['authorization'] == f'Bearer {TOKEN}'
         parts = request.url.path.strip('/').split('/')
         if parts == ['sandboxes']:
             return httpx.Response(200, json=running)
-        if parts[2] == 'stop':
-            stopped.append(parts[1])
-            return httpx.Response(200, json={'state': 'exited'})
-        if parts[1] == BROKEN:
-            return httpx.Response(502, json={'error': 'Docker returned 500'})
-        return httpx.Response(200, json=sessions[parts[1]])
+        assert parts[2] == 'stop'
+        stopped.append(parts[1])
+        return httpx.Response(200, json={'state': 'exited'})
 
     real = httpx.AsyncClient
     monkeypatch.setattr(httpx, 'AsyncClient', lambda **kw: real(transport=httpx.MockTransport(handler), **kw))

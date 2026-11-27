@@ -1,4 +1,3 @@
-import json
 from typing import Any
 
 import pytest
@@ -9,7 +8,6 @@ from app.sandbox_manager import (
     Manager,
     container_spec,
     handle,
-    stdout_of,
     terminal_token,
 )
 
@@ -25,46 +23,10 @@ class FakeDocker:
     def __init__(self, containers: dict[str, tuple[str, str]] | None = None):
         self.containers = dict(containers or {})
         self.calls: list[tuple[str, str, Any]] = []
-        self.tmux: dict[str, int] = {}  # session name -> last activity
-        self.typed: list[tuple[str, ...]] = []
-        self.execs: dict[str, dict[str, Any]] = {}
-
-    def run_tmux(self, args: list[str]) -> tuple[int, bytes, bytes]:
-        """A tiny tmux: just the commands the manager sends."""
-        verb = args[1]
-        if verb == 'list-sessions':
-            if not self.tmux:
-                return 1, b'', b'no server running\n'
-            return 0, ''.join(f'{n}\t{a}\t{a + 5}\n' for n, a in self.tmux.items()).encode(), b''
-        if verb == 'new-session':
-            name = args[args.index('-s') + 1]
-            if name in self.tmux:
-                return 1, b'', b'duplicate session\n'
-            self.tmux[name] = 1_800_000_000
-            return 0, b'', b''
-        if verb == 'send-keys':
-            self.typed.append(tuple(args[2:]))
-            return 0, b'', b''
-        if verb == 'kill-session':
-            name = args[3].removeprefix('=')
-            return (0, b'', b'') if self.tmux.pop(name, None) else (1, b'', b"can't find session\n")
-        return 1, b'', b''
 
     def request(self, method: str, path: str, body: Any = None) -> tuple[int, Any]:
         self.calls.append((method, path, body))
         name = path.split('/')[2].split('?')[0] if path.startswith('/containers/') else ''
-        if method == 'POST' and path.endswith('/exec'):
-            exec_id = f'e{len(self.execs)}'
-            self.execs[exec_id] = {'spec': body}
-            return 201, {'Id': exec_id}
-        if path.startswith('/exec/') and path.endswith('/start'):
-            run = self.execs[path.split('/')[2]]
-            code, out, err = self.run_tmux(run['spec']['Cmd'])
-            run['code'] = code
-            frame = lambda kind, data: bytes([kind, 0, 0, 0]) + len(data).to_bytes(4, 'big') + data  # noqa: E731
-            return 200, (frame(2, err) if err else b'') + (frame(1, out) if out else b'')
-        if path.startswith('/exec/') and path.endswith('/json'):
-            return 200, {'ExitCode': self.execs[path.split('/')[2]]['code']}
         if method == 'GET' and path.startswith('/containers/json?filters='):
             return 200, [{'Labels': {USER_LABEL: owner}} for state, owner in self.containers.values() if state == 'running']
         if method == 'GET' and path.endswith('/json'):
@@ -177,38 +139,11 @@ def test_list_returns_only_running_labelled_sandboxes():
     assert handle(manager(docker), 'GET', '/sandboxes', 'Bearer wrong')[0] == 401
 
 
-def test_stdout_of_keeps_only_stdout_frames():
-    frame = lambda kind, data: bytes([kind, 0, 0, 0]) + len(data).to_bytes(4, 'big') + data  # noqa: E731
-    assert stdout_of(frame(2, b'warn\n') + frame(1, b'a\t1\t2\n') + frame(1, 'é'.encode())) == 'a\t1\t2\né'
-    assert stdout_of(b'') == ''
 
 
-def test_sessions_are_listed_created_with_a_typed_command_and_closed():
+
+@pytest.mark.parametrize('path', [f'/sandboxes/{USER}/sessions', f'/sandboxes/{USER}/exec', '/other'])
+def test_only_lifecycle_routes_exist(path):
     docker = FakeDocker({f'flowie-sandbox-{USER}': ('running', USER)})
-    sessions = f'/sandboxes/{USER}/sessions'
-    assert handle(manager(docker), 'GET', sessions, AUTH) == (200, [])
-    body = json.dumps({'name': 'DTD-1-flowie', 'command': "echo 'hi'; rm -rf $HOME"}).encode()
-    assert handle(manager(docker), 'POST', sessions, AUTH, body) == (201, {'name': 'DTD-1-flowie'})
-    assert docker.typed == [('-t', '=DTD-1-flowie:', '-l', '--', "echo 'hi'; rm -rf $HOME"), ('-t', '=DTD-1-flowie:', 'Enter')]
-    specs = [run['spec'] for run in docker.execs.values()]
-    assert all(spec['User'] == 'node' and spec['Cmd'][0] == 'tmux' for spec in specs)
-    assert handle(manager(docker), 'GET', sessions, AUTH) == (
-        200, [{'name': 'DTD-1-flowie', 'activity': 1_800_000_000, 'output': 1_800_000_005}]
-    )
-    assert handle(manager(docker), 'POST', sessions, AUTH, body)[0] == 409
-    assert handle(manager(docker), 'DELETE', f'{sessions}/DTD-1-flowie', AUTH)[0] == 204
-    assert handle(manager(docker), 'DELETE', f'{sessions}/DTD-1-flowie', AUTH)[0] == 404
-
-
-@pytest.mark.parametrize('body', [b'{"name": "a b"}', b'{"name": "x", "command": 5}', b'not json', b'[]'])
-def test_session_requests_are_validated(body):
-    docker = FakeDocker({f'flowie-sandbox-{USER}': ('running', USER)})
-    assert handle(manager(docker), 'POST', f'/sandboxes/{USER}/sessions', AUTH, body)[0] == 400
-    assert handle(manager(docker), 'DELETE', f'/sandboxes/{USER}/sessions/a.b', AUTH)[0] == 400
-    assert docker.typed == []
-
-
-def test_sessions_need_a_running_sandbox():
-    docker = FakeDocker({f'flowie-sandbox-{USER}': ('exited', USER)})
-    assert handle(manager(docker), 'GET', f'/sandboxes/{USER}/sessions', AUTH)[0] == 409
-    assert handle(manager(FakeDocker()), 'GET', f'/sandboxes/{USER}/sessions', AUTH)[0] == 404
+    assert handle(manager(docker), 'GET', path, AUTH)[0] == 404
+    assert docker.calls == []
