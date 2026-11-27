@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+import hashlib
 import json
 import os
 import subprocess
@@ -475,3 +476,85 @@ def test_quick_actions_reach_the_agent(monkeypatch):
                 {'scope': 'shared', 'actions': [{'label': 'x', 'text': 'x'}] * 31}):
         assert client.put('/api/v1/sandbox/quick', json=bad).status_code == 422
     assert len(seen) == 3
+
+
+class FakeDb:
+    """Answers the sandbox's two MCP statements: whether the held token is good, and revoking."""
+
+    def __init__(self, held_is_good):
+        self.held_is_good, self.statements = held_is_good, []
+
+    async def scalar(self, statement, params):
+        self.statements.append(('held', params))
+        return 'cconn' if self.held_is_good else None
+
+    async def execute(self, statement, params):
+        self.statements.append((str(statement).split()[0], params))
+        return SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: ['cold']))
+
+
+def mcp_open(monkeypatch, held, mcp_answer, held_is_good=False):
+    """An "Open with" call with MCP on; returns the agent requests, the db and the created grants."""
+    requests, created = [], []
+
+    def agent(request):
+        requests.append((request.method, request.url.path.rsplit('/', 1)[-1], json.loads(request.content or b'null')))
+        if request.url.path.endswith('/mcp'):
+            return mcp_answer if request.method == 'GET' else httpx.Response(200, json={'claude': True, 'codex': True})
+        return httpx.Response(201, json={'name': 'DTD-7-flowie-web'})
+
+    async def create(db, workspace, user, payload):
+        created.append((workspace, user['id'], payload))
+        return {'id': 'cnew', 'token': 'flowie_mcp_' + 'n' * 43}
+
+    client = open_client(ME, monkeypatch, agent)
+    db = FakeDb(held_is_good)
+    client.app.state.settings = replace(client.app.state.settings, mcp_enabled=True)
+    client.app.dependency_overrides[sandbox.get_session] = lambda: db
+    policy = SimpleNamespace(principal=SimpleNamespace(workspace_id='cwork'))
+
+    async def readable(db, caller, issue_id):
+        return policy, ISSUE
+
+    monkeypatch.setattr(sandbox, '_readable_issue', readable)
+    monkeypatch.setattr(sandbox.connections, 'create', create)
+    body = {'issueId': ISSUE['id'], 'repositoryId': REPOSITORY['id'], 'agent': 'claude'}
+    assert client.post('/api/v1/sandbox/open', json=body).json() == {'data': {'session': 'DTD-7-flowie-web'}}
+    return requests, db, created
+
+
+def test_open_gives_the_sandbox_a_scoped_mcp_token_before_the_session_starts(monkeypatch, caplog):
+    caplog.set_level('DEBUG')
+    requests, db, created = mcp_open(monkeypatch, None, httpx.Response(200, json={'hash': None}))
+    assert [(method, path) for method, path, _ in requests] == [('GET', 'mcp'), ('PUT', 'mcp'), ('POST', 'sessions')]
+    assert requests[1][2] == {'url': 'http://circle-api:4000/mcp/', 'token': 'flowie_mcp_' + 'n' * 43}
+    (workspace, user_id, grant), = created
+    assert (workspace, user_id, grant.name, grant.expiresInDays) == ('cwork', ME['id'], 'Flowie sandbox', 90)
+    assert 'repositories:write' not in grant.scopes and {'issues:write', 'comments:write'} <= set(grant.scopes)
+    assert [kind for kind, _ in db.statements] == ['UPDATE', 'INSERT']  # the old sandbox token revoked, audited
+    assert db.statements[0][1]['name'] == 'Flowie sandbox' and db.statements[0][1]['user'] == ME['id']
+    assert 'flowie_mcp_' not in caplog.text
+
+
+def test_open_keeps_a_token_that_is_still_good(monkeypatch):
+    held = hashlib.sha256(b'flowie_mcp_x').hexdigest()
+    requests, db, created = mcp_open(monkeypatch, held, httpx.Response(200, json={'hash': held}), held_is_good=True)
+    assert [(method, path) for method, path, _ in requests] == [('GET', 'mcp'), ('POST', 'sessions')]
+    assert db.statements[0][1]['hash'] == held and db.statements[0][1]['workspace'] == 'cwork' and created == []
+
+
+def test_open_still_works_with_a_sandbox_image_without_mcp(monkeypatch):
+    requests, _, created = mcp_open(monkeypatch, None, httpx.Response(404, json={'error': 'Not found'}))
+    assert [(method, path) for method, path, _ in requests] == [('GET', 'mcp'), ('POST', 'sessions')] and created == []
+
+
+def test_mcp_accepts_the_sandbox_host_only_while_sandboxes_are_on():
+    from app.modules.mcp.transport import build_server
+
+    def hosts(users):
+        settings = replace(Settings.from_environment(), sandbox_users=users)
+        server, _ = build_server(SimpleNamespace(state=SimpleNamespace(settings=settings)))
+        return server.session_manager.security_settings.allowed_hosts
+
+    assert 'circle-api:4000' in hosts(('me@bsr.com.vn',))
+    assert 'circle-api:4000' not in hosts(())

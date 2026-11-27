@@ -16,3 +16,11 @@ NOTIFY_FIRST_WORKSPACE_SELECT_WORKSPACE_MEMBERS = text(
     """SELECT workspace_id FROM workspace_members WHERE user_id = :user AND status = 'ACTIVE'
        ORDER BY created_at, workspace_id LIMIT 1"""
 )
+
+# The token a sandbox holds is still good for this person and workspace for a while longer.
+# VI: Token sandbox đang giữ vẫn còn hiệu lực một thời gian nữa cho người và workspace này.
+MCP_HELD_SELECT_MCP_CONNECTIONS = text(
+    """SELECT id FROM mcp_connections
+       WHERE token_hash = :hash AND user_id = :user AND workspace_id = :workspace
+         AND revoked_at IS NULL AND expires_at > :until"""
+)

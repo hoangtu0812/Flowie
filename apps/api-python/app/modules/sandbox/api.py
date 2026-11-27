@@ -30,6 +30,7 @@ import contextlib
 import logging
 import re
 import shlex
+from datetime import timedelta
 from typing import Any, Literal
 from urllib.parse import quote, unquote, urlsplit
 
@@ -41,8 +42,10 @@ from pydantic import Field
 from starlette.background import BackgroundTask
 from websockets.asyncio.client import connect
 
+from ...core.clock import utcnow
 from ...core.config import Settings
 from ...core.errors import ApiError
+from ...core.identifiers import cuid
 from ...db.session import get_session
 from ...sandbox_manager import (
     AGENT_PORT,
@@ -56,10 +59,13 @@ from ..access.membership import workspace_role
 from ..agent_runs.queries import list_repositories_select_project_repositories_sql
 from ..identity.auth import current_user
 from ..identity.security.sessions import active_identity, decode_access, expired
-from ..mcp.contracts import StrictInput
-from ..mcp.domain import Principal
+from ..mcp import connections
+from ..mcp.commands import REVOKE_INSERT_AUDIT_LOGS
+from ..mcp.contracts import ConnectionInput, StrictInput
+from ..mcp.domain import READ_SCOPES, Principal
 from ..mcp.policy import AccessPolicy
-from .queries import ISSUE_WORKSPACE_SELECT_ISSUES
+from .commands import MCP_REVOKE_UPDATE_MCP_CONNECTIONS
+from .queries import ISSUE_WORKSPACE_SELECT_ISSUES, MCP_HELD_SELECT_MCP_CONNECTIONS
 
 router = APIRouter(prefix='/api/v1/sandbox', tags=['sandbox'])
 
@@ -85,6 +91,7 @@ class _RedactTerminalToken(logging.Filter):
 
 
 logging.getLogger('httpx').addFilter(_RedactTerminalToken())
+logger = logging.getLogger(__name__)
 
 REQUEST_HEADERS = ('accept', 'range', 'if-none-match', 'if-modified-since')
 RESPONSE_HEADERS = ('content-type', 'cache-control', 'content-range', 'accept-ranges', 'etag', 'last-modified')
@@ -620,6 +627,53 @@ def open_command(issue: dict[str, Any], repository: dict[str, Any], agent: str, 
     )
 
 
+# The MCP connection a sandbox's agents use: the person's own, revocable in Settings like any
+# other, renewed a week before it expires. It may plan, comment, move and document issues.
+# VI: Kết nối MCP mà agent trong sandbox dùng: của chính người đó, thu hồi được trong Cài đặt như
+# VI: mọi kết nối khác, làm mới một tuần trước khi hết hạn. Nó được lập kế hoạch, comment, chuyển
+# VI: trạng thái và viết tài liệu cho task.
+SANDBOX_CONNECTION = 'Flowie sandbox'
+SANDBOX_SCOPES = sorted(READ_SCOPES | {'issues:write', 'issues:transition', 'comments:write', 'documents:write'})
+SANDBOX_CONNECTION_DAYS = 90
+SANDBOX_CONNECTION_RENEW_DAYS = 7
+
+
+async def _provide_mcp(settings: Settings, db: Any, user: dict[str, Any], user_id: str, workspace: str) -> None:
+    """Gives the caller's sandbox a Flowie MCP token for the workspace, unless the one it holds is
+    still good. The token goes only into the sandbox (~/.flowie/mcp-token); Flowie keeps its hash.
+    A sandbox from an older image without this route, or any failure, leaves "Open with" working.
+    VI: Đưa cho sandbox của người gọi một token MCP Flowie của workspace, trừ khi token nó đang giữ
+    VI: vẫn dùng được. Token chỉ nằm trong sandbox (~/.flowie/mcp-token); Flowie giữ hash của nó.
+    VI: Sandbox từ image cũ chưa có route này, hay mọi lỗi khác, không làm hỏng "Mở bằng"."""
+    try:
+        status, held = await _agent(settings, user_id, 'GET', 'mcp', accept=(404,), wait=True)
+        if status == 404:
+            return
+        now = utcnow()
+        if isinstance(held, dict) and held.get('hash') and await db.scalar(
+            MCP_HELD_SELECT_MCP_CONNECTIONS,
+            {'hash': held['hash'], 'user': user['id'], 'workspace': workspace,
+             'until': now + timedelta(days=SANDBOX_CONNECTION_RENEW_DAYS)},
+        ):
+            return
+        revoked = await db.execute(
+            MCP_REVOKE_UPDATE_MCP_CONNECTIONS,
+            {'user': user['id'], 'workspace': workspace, 'name': SANDBOX_CONNECTION, 'now': now},
+        )
+        for connection in revoked.scalars().all():
+            await db.execute(
+                REVOKE_INSERT_AUDIT_LOGS,
+                {'id': cuid(), 'workspace': workspace, 'user': user['id'], 'connection': connection, 'now': now},
+            )
+        created = await connections.create(
+            db, workspace, user,
+            ConnectionInput(name=SANDBOX_CONNECTION, scopes=SANDBOX_SCOPES, expiresInDays=SANDBOX_CONNECTION_DAYS),
+        )
+        await _agent(settings, user_id, 'PUT', 'mcp', {'url': settings.sandbox_mcp_url, 'token': created['token']})
+    except ApiError as error:
+        logger.warning('Sandbox MCP token not provided: %s', error.message)
+
+
 @router.post('/open')
 async def open_in_sandbox(
     payload: OpenInput, request: Request, user: Any = Depends(current_user), db: Any = Depends(get_session)
@@ -638,6 +692,10 @@ async def open_in_sandbox(
         raise ApiError(404, 'Repository not found for this issue.', 'Not Found')
     session = f"{issue['identifier']}-{_slug(repository['name'])}"[:40].rstrip('-')
     await _manager(settings, 'PUT', f'/sandboxes/{user_id}')
+    # Before the session, so its shell starts with the token (docs/sandbox.md).
+    # VI: Trước khi tạo phiên, để shell của phiên khởi động đã có token (docs/sandbox.md).
+    if settings.mcp_enabled:
+        await _provide_mcp(settings, db, user, user_id, policy.principal.workspace_id)
     command = open_command(issue, repository, payload.agent, session)
     # 409: the issue's session exists already, so opening again goes back to it untouched.
     # VI: 409: phiên của task đã có, nên mở lại là quay về nó, không gõ gì thêm.

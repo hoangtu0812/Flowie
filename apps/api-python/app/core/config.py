@@ -124,6 +124,11 @@ class Settings:
     # A running sandbox with no terminal input or output for this long is stopped; 0 never stops.
     # VI: Sandbox đang chạy không có nhập hay output terminal trong ngần này phút thì bị dừng; 0 là không bao giờ.
     sandbox_idle_minutes: int = 60
+    # Flowie's MCP server as a sandbox reaches it: the API's name on the sandbox network,
+    # through the one port the host firewall opens (docs/sandbox.md).
+    # VI: MCP server của Flowie theo cách sandbox gọi tới: tên của API trên mạng sandbox,
+    # VI: qua đúng một cổng mà firewall của host mở (docs/sandbox.md).
+    sandbox_mcp_url: str = 'http://circle-api:4000/mcp/'
 
     @classmethod
     def from_environment(cls) -> Settings:
@@ -190,6 +195,7 @@ class Settings:
             sandbox_manager_url=getenv('SANDBOX_MANAGER_URL', 'http://circle-sandbox-manager:4100').rstrip('/'),
             sandbox_manager_token=getenv('SANDBOX_MANAGER_TOKEN', ''),
             sandbox_idle_minutes=int(getenv('SANDBOX_IDLE_MINUTES', '60')),
+            sandbox_mcp_url=getenv('SANDBOX_MCP_URL', 'http://circle-api:4000/mcp/'),
         )
 
 

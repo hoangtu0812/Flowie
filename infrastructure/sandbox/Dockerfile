@@ -63,6 +63,12 @@ ENV DISABLE_AUTOUPDATER=1 \
 RUN mkdir -p /etc/claude-code \
  && printf '%s\n' '{"statusLine": {"type": "command", "command": "python3 /usr/local/lib/flowie/claude_statusline.py"}}' \
       > /etc/claude-code/managed-settings.json
+# Flowie's MCP token (docs/sandbox.md), put in ~/.flowie/mcp-token by "Open with", reaches
+# Claude Code and Codex through the environment of every new shell; neither config holds it.
+# VI: Token MCP của Flowie (docs/sandbox.md), do "Mở bằng" đặt vào ~/.flowie/mcp-token, tới
+# VI: Claude Code và Codex qua môi trường của mỗi shell mới; cấu hình của chúng không chứa nó.
+RUN printf '%s\n' '[ -r "$HOME/.flowie/mcp-token" ] && export FLOWIE_MCP_TOKEN="$(cat "$HOME/.flowie/mcp-token")"' \
+      >> /etc/bash.bashrc
 RUN git config --system credential.helper store \
  && git config --system init.defaultBranch main
 

@@ -604,3 +604,32 @@ def test_quick_actions_are_saved_shared_and_per_repository(repo):
                 {'scope': 'shared', 'actions': [{'label': 'x', 'text': 'x'}] * 31},
                 {'scope': 'project', 'dir': '/etc', 'actions': []}):
         assert call('PUT', 'quick', bad)[0] == 400
+
+
+def test_mcp_token_is_kept_private_and_both_agents_read_it_from_the_environment(sandbox, monkeypatch):
+    home = sandbox[0]
+    ran = []
+    monkeypatch.setattr(agent, 'run', lambda *args, **kw: ran.append(args) or done())
+    token = 'flowie_mcp_' + 'A1-_' * 10
+    url = 'http://circle-api:4000/mcp/'
+    assert call('GET', 'mcp') == (200, {'hash': None})
+    assert call('PUT', 'mcp', {'url': url, 'token': token}) == (200, {'claude': True, 'codex': True})
+    stored = home / '.flowie' / 'mcp-token'
+    assert stored.read_text() == token and stored.stat().st_mode & 0o777 == 0o600
+    assert call('GET', 'mcp') == (200, {'hash': __import__('hashlib').sha256(token.encode()).hexdigest()})
+    assert ran[0] == ('claude', 'mcp', 'remove', '-s', 'user', 'flowie')
+    assert ran[1][:6] == ('claude', 'mcp', 'add-json', '-s', 'user', 'flowie')
+    assert json.loads(ran[1][6]) == {'type': 'http', 'url': url, 'headers': {'Authorization': 'Bearer ${FLOWIE_MCP_TOKEN}'}}
+    assert ran[2] == ('codex', 'mcp', 'add', 'flowie', '--url', url, '--bearer-token-env-var', 'FLOWIE_MCP_TOKEN')
+    assert not any(token in part for command in ran for part in command)
+    for bad in ({'url': url, 'token': 'ghp_' + 'x' * 30}, {'url': 'http://x/mcp/;rm -rf /', 'token': token}, {'url': url}):
+        assert call('PUT', 'mcp', bad)[0] == 400
+
+
+def test_mcp_registration_failures_are_reported_not_raised(sandbox, monkeypatch):
+    def missing(*args, **kw):
+        raise FileNotFoundError(args[0])
+
+    monkeypatch.setattr(agent, 'run', missing)
+    body = {'url': 'http://circle-api:4000/mcp/', 'token': 'flowie_mcp_' + 'b' * 40}
+    assert call('PUT', 'mcp', body) == (200, {'claude': False, 'codex': False})
