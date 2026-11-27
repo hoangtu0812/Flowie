@@ -5,8 +5,10 @@ server in which they sign in to their own Claude Code or Codex account and work
 on a project's repository, through a browser terminal served by
 [termi](https://github.com/hoangtu0812/termi). Phase 1 (DTD-1056) added the
 image, the manager and the host firewall; phase 2 (DTD-1057) runs termi in the
-container and proxies it through the API. The Sandbox page and the
-"Open with Claude/Codex" action on a task come in later phases of DTD-1055.
+container and proxies it through the API; phase 3 adds the Sandbox page
+(`/<workspace>/sandbox`, in the sidebar only for people in `SANDBOX_USERS`),
+which starts and stops the sandbox and embeds termi. The "Open with
+Claude/Codex" action on a task comes in a later phase of DTD-1055.
 
 ## Pieces
 
@@ -51,13 +53,19 @@ request. It forwards only `accept`, `content-type`, `x-termi`, `range`,
 `if-none-match` and `last-event-id`; the Flowie cookie and `Authorization`
 stay in the API. The terminal WebSocket (`ui/term/...`) is accepted only from
 Flowie's own origin (`API_CORS_ORIGIN` or the origin of `APP_URL`), and an
-open terminal is re-checked every minute, so signing out or disabling the
-account closes it.
+open terminal is re-checked every minute against the session behind its
+handshake cookie (not that cookie's 15-minute expiry), so signing out or
+disabling the account closes it.
 
-Known limit: the Flowie access cookie lasts 15 minutes and is renewed by the
-Flowie web app. termi opened in a tab of its own stops working after that
-until a Flowie page refreshes the session; the Sandbox page (phase 3) keeps
-it alive.
+The Flowie access cookie lasts 15 minutes and is renewed by the Flowie web
+app. The Sandbox page asks for the sandbox state every minute, which renews
+it. termi opened in a tab of its own needs a Flowie page (the Sandbox page or
+any other) open alongside it.
+
+termi refuses to be framed by another origin (`frame-ancestors 'self'`), so
+the embedded terminal works only when the web app and the API share an origin,
+as on the server (`/flowie` and `/flowie/api/v1`). In local development (web
+on port 3000, API on port 4000) use "Open in a new tab".
 
 ## Manager API
 
