@@ -8,6 +8,7 @@ from typing import Any
 
 from ...core.errors import ApiError
 from ..attachments.tables import MAX_COLUMNS, MAX_ROWS, xlsx_sheets
+from ..scm.providers.azure_devops import azure_pull_request_web_url
 from ..teams.insights_api import hcm_today
 from .pagination import CursorCodec, literal_search
 from .policy import AccessPolicy
@@ -465,7 +466,7 @@ class QueryService:
 
     async def reviews(self, payload) -> dict:
         issue = await self.policy.issue(payload.issueId)
-        return await self.page(
+        result = await self.page(
             "list_issue_reviews",
             payload,
             f"""SELECT r.id,r.title,r.state,r.remote_url AS url,
@@ -475,6 +476,11 @@ class QueryService:
             AND repo.team_id=:team AND {self.policy.team_clause("repo.team_id")}""",
             {"issue": issue["id"], "team": issue["team_id"]},
         )
+        # Azure reviews synced before the web URL fix stored the REST address.
+        # VI: Review Azure đồng bộ trước khi sửa URL web đã lưu địa chỉ REST.
+        for item in result["items"]:
+            item["url"] = azure_pull_request_web_url(item["url"] or "")
+        return result
 
     async def project(self, payload) -> dict:
         row = await self.policy.project(payload.projectId)

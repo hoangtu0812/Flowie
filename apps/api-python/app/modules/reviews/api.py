@@ -16,6 +16,7 @@ from ...db.session import get_session
 from ..access.projects import workspace_access
 from ..identity.auth import current_user
 from ..scm.contracts import read_only_capabilities
+from ..scm.providers.azure_devops import azure_pull_request_web_url
 from .commands import (
     AUDIT_LINK_INSERT_AUDIT_LOGS,
     LINK_ISSUE_INSERT_CODE_REVIEW_ISSUE_LINKS,
@@ -150,7 +151,9 @@ def _review_view(
         'targetRef': row['target_ref'],
         'headRevision': row['head_revision'],
         'latestRevisionKey': row['latest_revision_key'],
-        'remoteUrl': row['remote_url'],
+        # Azure reviews synced before the web URL fix stored the REST address.
+        # VI: Review Azure đồng bộ trước khi sửa URL web đã lưu địa chỉ REST.
+        'remoteUrl': azure_pull_request_web_url(row['remote_url'] or ''),
         'additions': row['additions'],
         'deletions': row['deletions'],
         'changedFiles': row['changed_files'],

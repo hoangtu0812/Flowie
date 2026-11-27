@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import quote
@@ -27,6 +28,38 @@ AZURE_VOTE_DECISIONS: dict[int, ReviewDecision] = {
 # Pull request status -> review state; any other or missing status is CLOSED.
 # VI: Trạng thái pull request -> trạng thái review; trạng thái khác hoặc thiếu là CLOSED.
 AZURE_REVIEW_STATES: dict[str | None, ReviewState] = {'active': 'OPEN', 'completed': 'MERGED', 'abandoned': 'ABANDONED'}
+# REST address of one pull request, as Azure returns it in the payload's `url` field.
+# VI: Địa chỉ REST của một pull request, như Azure trả về trong trường `url` của payload.
+AZURE_PULL_REQUEST_API_URL = re.compile(
+    r'^(?P<base>https://[^?#]+?)/_apis/git/repositories/(?P<repo>[^/?#]+)/pullRequests/(?P<number>\d+)/?$',
+    re.IGNORECASE,
+)
+
+
+def azure_pull_request_web_url(url: str) -> str:
+    """Turn a pull request's REST address into the page a browser can open.
+
+    Azure DevOps pull request payloads carry `url`, which points at
+    `.../_apis/git/repositories/{repo}/pullRequests/{n}` and renders raw JSON in
+    a browser. The web page for the same pull request is
+    `.../_git/{repo}/pullrequest/{n}`; Azure accepts the project and repository
+    GUIDs in that path as well as their names. Any other URL, including one that
+    is already a web URL or comes from another provider, is returned unchanged,
+    so the function is safe to apply to every stored review URL.
+
+    VI: Đổi địa chỉ REST của pull request thành trang mà trình duyệt mở được.
+    Payload pull request của Azure DevOps có `url` trỏ tới
+    `.../_apis/git/repositories/{repo}/pullRequests/{n}`, mở trong trình duyệt
+    chỉ thấy JSON thô. Trang web của cùng pull request là
+    `.../_git/{repo}/pullrequest/{n}`; Azure chấp nhận GUID của project và
+    repository trong đường dẫn này cũng như tên của chúng. Mọi URL khác, kể cả
+    URL đã là trang web hoặc của nhà cung cấp khác, được trả lại nguyên vẹn,
+    nên có thể áp dụng hàm cho mọi URL review đã lưu.
+    """
+    match = AZURE_PULL_REQUEST_API_URL.match(url)
+    if not match:
+        return url
+    return f"{match['base']}/_git/{match['repo']}/pullrequest/{match['number']}"
 
 
 class AzureDevOpsProvider:
@@ -196,7 +229,18 @@ class AzureDevOpsProvider:
             )
             for value in iteration_values
         ] or [ProviderRevision(externalRevisionId=head, baseRevision=base, headRevision=head)]
-        remote_url = ((item.get('_links') or {}).get('web') or {}).get('href') or item.get('url') or ''
+        # Pull request payloads usually have no `_links.web`; the repository's
+        # `webUrl` gives the browser page, and the REST `url` is only a fallback
+        # that is rewritten to its web form.
+        # VI: Payload pull request thường không có `_links.web`; `webUrl` của
+        # repository cho trang trình duyệt, còn `url` REST chỉ là phương án cuối
+        # và được đổi sang dạng trang web.
+        repository_web_url = str((item.get('repository') or {}).get('webUrl') or '').rstrip('/')
+        remote_url = (
+            ((item.get('_links') or {}).get('web') or {}).get('href')
+            or (f"{repository_web_url}/pullrequest/{item['pullRequestId']}" if repository_web_url else '')
+            or azure_pull_request_web_url(item.get('url') or '')
+        )
         return ProviderReview(
             externalReviewId=str(item['pullRequestId']),
             number=int(item['pullRequestId']),
