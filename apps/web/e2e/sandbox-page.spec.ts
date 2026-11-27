@@ -282,3 +282,131 @@ test('The message box, quick actions, keys, attachments, copy and font size reac
    await page.getByRole('button', { name: 'Larger text' }).click();
    await expect(terminal).toHaveAttribute('src', /arg=cl&fontSize=15$/);
 });
+
+test('The Files and Git tabs browse the session folder and run git actions', async ({ page }) => {
+   const repo = '/home/node/work/DTD-7-flowie';
+   const ops: unknown[] = [];
+   await page.route('**/api/v1/sandbox', (route) =>
+      route.fulfill({ json: { data: { state: 'running' } } })
+   );
+   await page.route('**/api/v1/sandbox/dirs', (route) =>
+      route.fulfill({ json: { data: { home: '/home/node', recent: [repo] } } })
+   );
+   await page.route('**/api/v1/sandbox/sessions', (route) =>
+      route.fulfill({
+         json: {
+            data: [{ name: 'DTD-7', dir: repo, agent: 'claude', state: 'idle', preview: '' }],
+         },
+      })
+   );
+   await page.route('**/api/v1/sandbox/files?*', (route) =>
+      route.fulfill({
+         json: {
+            data: {
+               dir: repo,
+               parent: '/home/node/work',
+               entries: [
+                  { name: 'src', path: `${repo}/src`, dir: true, size: 0, mtime: 1, git: '•' },
+                  {
+                     name: 'README.md',
+                     path: `${repo}/README.md`,
+                     dir: false,
+                     size: 9,
+                     mtime: 1,
+                     git: 'M',
+                  },
+               ],
+            },
+         },
+      })
+   );
+   await page.route('**/api/v1/sandbox/file?*', (route) =>
+      route.fulfill({ json: { data: { path: `${repo}/README.md`, text: '# Hello flowie\n' } } })
+   );
+   await page.route('**/api/v1/sandbox/git?*', (route) =>
+      route.fulfill({
+         json: {
+            data: {
+               dir: repo,
+               head: 'flowie/DTD-7...origin/flowie/DTD-7 [ahead 1]',
+               files: [
+                  { x: 'M', y: ' ', path: 'src/app.py' },
+                  { x: ' ', y: 'M', path: 'README.md' },
+               ],
+               commits: [
+                  {
+                     h: 'b'.repeat(40),
+                     p: ['a'.repeat(40)],
+                     refs: ['HEAD -> flowie/DTD-7'],
+                     s: 'Fix login',
+                     a: 'me',
+                     t: 1,
+                  },
+                  { h: 'a'.repeat(40), p: [], refs: [], s: 'first', a: 'me', t: 1 },
+               ],
+               graph: {
+                  width: 1,
+                  rows: [
+                     { col: 0, seg: [[0, 1, 0, 2]] },
+                     { col: 0, seg: [[0, 0, 0, 1]] },
+                  ],
+               },
+               branches: ['flowie/DTD-7', 'main'],
+            },
+         },
+      })
+   );
+   await page.route('**/api/v1/sandbox/git/diff?*', (route) =>
+      route.fulfill({
+         json: {
+            data: {
+               text: '@@ -1 +1 @@\n-old\n+new',
+               files: [{ path: 'src/app.py', add: 1, del: 1 }],
+               commit: { hash: 'b'.repeat(40), author: 'me', t: 1, subject: 'Fix login', body: '' },
+            },
+         },
+      })
+   );
+   await page.route('**/api/v1/sandbox/git', (route) => {
+      ops.push(route.request().postDataJSON());
+      return route.fulfill({ json: { data: { ok: true, output: 'done' } } });
+   });
+   await page.route(/\/api\/v1\/sandbox\/ui\/\?arg=/, (route) =>
+      route.fulfill({ contentType: 'text/html', body: '<p>terminal is here</p>' })
+   );
+   await signIn(page);
+   await page.goto(`/${fixture.slug}/sandbox`);
+
+   const tabs = page.getByRole('tablist', { name: 'Sandbox views' });
+   await tabs.getByRole('tab', { name: 'Files' }).click();
+   await expect(page.getByTestId('folder-path')).toHaveText('~/work/DTD-7-flowie');
+   const files = page.getByRole('list', { name: 'Files' });
+   await expect(files.getByRole('button', { name: /README\.md\s*M/ })).toBeVisible();
+   await files.getByRole('button', { name: /README\.md/ }).click();
+   await expect(
+      page.getByTestId('file-view').getByRole('heading', { name: 'Hello flowie' })
+   ).toBeVisible();
+   await page.getByRole('button', { name: 'Add to message' }).click();
+   await expect(page.getByLabel('Message to the session')).toHaveValue(`${repo}/README.md`);
+
+   await tabs.getByRole('tab', { name: 'Git' }).click();
+   await expect(page.getByTestId('git-head')).toContainText('[ahead 1]');
+   await page.getByRole('list', { name: 'Changes' }).getByRole('button', { name: 'Stage' }).click();
+   await expect.poll(() => ops.length).toBe(1);
+   expect(ops[0]).toEqual({ dir: repo, op: 'stage', paths: ['README.md'] });
+   await page.getByLabel('Commit message').fill('Sửa README');
+   await page.getByRole('button', { name: 'Commit', exact: true }).click();
+   await expect.poll(() => ops.length).toBe(2);
+   expect(ops[1]).toEqual({ dir: repo, op: 'commit', message: 'Sửa README' });
+   await page.getByRole('button', { name: 'Push' }).click();
+   await expect.poll(() => ops.length).toBe(3);
+   expect(ops[2]).toEqual({ dir: repo, op: 'push' });
+
+   await page
+      .getByRole('list', { name: 'Commits' })
+      .getByRole('button', { name: /Fix login/ })
+      .click();
+   const diff = page.getByRole('dialog', { name: 'Fix login' });
+   await expect(diff.getByTestId('diff-text')).toContainText('+new');
+   await expect(diff).toContainText('src/app.py');
+});

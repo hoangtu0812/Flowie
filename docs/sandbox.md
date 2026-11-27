@@ -58,6 +58,12 @@ For a signed-in user whose email is in `SANDBOX_USERS` (everyone else gets 403):
 | `POST /api/v1/sandbox/sessions/<name>/send` | `{text?, key?, enter?}`: a key (Escape, C-c, C-d, Tab, BTab, arrows, Enter, PageUp/Down, 1–9), then text as one bracketed paste (≤ 20 000 characters), then Enter |
 | `GET /api/v1/sandbox/sessions/<name>/text` | `{data: {text}}`: the screen and the last 2 000 lines of history |
 | `POST /api/v1/sandbox/uploads` | Raw body (≤ 25 MB), name in `X-Filename` (URL-encoded): stored in `~/.flowie/uploads/<time>-<safe name>`; `{data: {path}}` |
+| `GET /api/v1/sandbox/files?dir=` | `{data: {dir, parent, entries: [{name, path, dir, size, mtime, git?}]}}`: a folder of the home, folders first, `git` = M/A/D/U/R or `•` for changes below |
+| `GET /api/v1/sandbox/file?path=` | `{data: {path, text? \| image? \| binary?}}`; text cut at 200 000 characters |
+| `GET /api/v1/sandbox/file/raw?path=` | An image (≤ 10 MB) with `nosniff` and `Content-Security-Policy: sandbox` |
+| `GET /api/v1/sandbox/git?dir=` | `{data: {dir, head, files, commits, graph, branches}}`: status, the last 200 commits of all branches with termi's graph lanes |
+| `GET /api/v1/sandbox/git/diff?dir=&rev=&file=&staged=` | A file's diff (staged or not), a commit's, or all uncommitted changes, with numstat |
+| `POST /api/v1/sandbox/git` | `{dir, op, paths?, message?, branch?}`: `stage`, `unstage`, `commit`, `fetch`, `pull` (fast-forward only), `push` (sets the upstream the first time), `switch` |
 | `GET /api/v1/sandbox/dirs` | `{data: {home, recent}}`: open sessions' folders, `~/work/*`, `~/repos/*`, folders of past conversations |
 | `GET /api/v1/sandbox/conversations?dir=` | `{data: [{agent, id, cwd, title, mtime}]}`: past Claude Code and Codex conversations, newest first |
 | `/api/v1/sandbox/ui/?arg=<name>` | ttyd attached to that session (created if new), for the caller's own container only |
@@ -119,6 +125,16 @@ the message. Quick actions send termi's prepared requests (status, commit,
 push, create PR, merge PR, review, run tests, `/compact`); push and both PR
 actions ask first. Large uploads also need the reverse proxy in front of Flowie
 to accept 25 MB bodies.
+
+Beside the terminal, Files and Git tabs work on the current session's folder
+(DTD-1068). Files browses the home with git change letters, shows text,
+Markdown (Flowie's own renderer) and images, and "Add to message" puts a file's
+path into the message box. Git shows the branch (switchable), Fetch, Pull and
+Push, staged and unstaged changes with Stage/Unstage and their diffs, a commit
+box, and the commit graph; a commit opens its diff. git runs with
+`GIT_TERMINAL_PROMPT=0`, so a push without stored credentials fails with git's
+message instead of waiting: sign in once in the terminal (`gh auth login`, or a
+first `git push` there for Azure DevOps).
 
 The agent's state comes from its screen, with the rules termi uses: "Do you
 want to", "Allow command", a `❯ 1.` menu and similar in the last lines mean

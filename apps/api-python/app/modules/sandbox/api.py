@@ -35,7 +35,7 @@ from urllib.parse import quote, unquote, urlsplit
 import httpx
 import websockets
 from fastapi import APIRouter, Depends, Query, Request, WebSocket
-from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi.responses import RedirectResponse, Response, StreamingResponse
 from pydantic import Field
 from starlette.background import BackgroundTask
 from websockets.asyncio.client import connect
@@ -279,6 +279,96 @@ async def upload_to_sandbox(request: Request, user: Any = Depends(current_user))
     filename = quote(unquote(request.headers.get('x-filename', 'file'))[:200], safe='')
     _, saved = await _agent(settings, user_id, 'POST', 'uploads', content=data, headers={'x-filename': filename})
     return {'data': saved}
+
+
+@router.get('/files')
+async def sandbox_folder(request: Request, dir: str = Query(default='', max_length=4096), user: Any = Depends(current_user)):
+    """A folder of the sandbox's home, folders first, with each entry's git change letter.
+    VI: Một thư mục trong home của sandbox, thư mục trước, kèm chữ cái thay đổi git của từng mục."""
+    settings = _settings(request)
+    user_id = _sandbox_user(settings, user)
+    _, listed = await _agent(settings, user_id, 'GET', 'ls', params={'dir': dir} if dir else None)
+    return {'data': listed}
+
+
+@router.get('/file')
+async def sandbox_file(request: Request, path: str = Query(min_length=1, max_length=4096), user: Any = Depends(current_user)):
+    """A file of the sandbox as text, or whether it is an image or binary.
+    VI: Một file của sandbox dạng chữ, hoặc cho biết đó là ảnh hay file nhị phân."""
+    settings = _settings(request)
+    user_id = _sandbox_user(settings, user)
+    _, read = await _agent(settings, user_id, 'GET', 'file', params={'path': path})
+    return {'data': read}
+
+
+@router.get('/file/raw')
+async def sandbox_image(request: Request, path: str = Query(min_length=1, max_length=4096), user: Any = Depends(current_user)):
+    """An image of the sandbox, served so it can never run as a page.
+    VI: Một ảnh trong sandbox, trả về sao cho không bao giờ chạy được như một trang."""
+    settings = _settings(request)
+    user_id = _sandbox_user(settings, user)
+    token = terminal_token(settings.sandbox_manager_token, user_id)
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.get(
+                f'http://{container_name(user_id)}:{AGENT_PORT}/{token}/raw', params={'path': path}
+            )
+    except httpx.TransportError as error:
+        raise ApiError(409, 'The sandbox is not running.', 'Conflict') from error
+    content_type = response.headers.get('content-type', '')
+    if response.status_code != 200 or not content_type.startswith('image/'):
+        raise ApiError(404 if response.status_code < 500 else 502, 'Not an image in the sandbox.', 'Not Found')
+    return Response(
+        response.content,
+        media_type=content_type,
+        headers={'x-content-type-options': 'nosniff', 'content-security-policy': 'sandbox', 'cache-control': 'no-store'},
+    )
+
+
+@router.get('/git')
+async def sandbox_git(request: Request, dir: str = Query(min_length=1, max_length=4096), user: Any = Depends(current_user)):
+    """The repository of a folder: branch, changes, the last 200 commits with graph lanes, branches.
+    VI: Repository của một thư mục: nhánh, thay đổi, 200 commit cuối kèm làn đồ thị, các nhánh."""
+    settings = _settings(request)
+    user_id = _sandbox_user(settings, user)
+    _, overview = await _agent(settings, user_id, 'GET', 'git', params={'dir': dir})
+    return {'data': overview}
+
+
+@router.get('/git/diff')
+async def sandbox_git_diff(
+    request: Request,
+    dir: str = Query(min_length=1, max_length=4096),
+    rev: str = Query(default='', pattern=r'^([0-9a-f]{4,40})?$'),
+    file: str = Query(default='', max_length=4096),
+    staged: bool = False,
+    user: Any = Depends(current_user),
+):
+    """A diff: of one file (staged or not), of a commit, or of all uncommitted changes.
+    VI: Một diff: của một file (đã stage hay chưa), của một commit, hoặc mọi thay đổi chưa commit."""
+    settings = _settings(request)
+    user_id = _sandbox_user(settings, user)
+    params = {'dir': dir, 'rev': rev, 'file': file, 'staged': '1' if staged else ''}
+    _, shown = await _agent(settings, user_id, 'GET', 'git/show', params=params)
+    return {'data': shown}
+
+
+class GitInput(StrictInput):
+    dir: str = Field(min_length=1, max_length=4096)
+    op: Literal['stage', 'unstage', 'commit', 'push', 'pull', 'fetch', 'switch']
+    paths: list[str] | None = Field(default=None, max_length=500)
+    message: str | None = Field(default=None, max_length=5000)
+    branch: str | None = Field(default=None, pattern=r'^[A-Za-z0-9._/-]{1,200}$')
+
+
+@router.post('/git')
+async def sandbox_git_op(payload: GitInput, request: Request, user: Any = Depends(current_user)):
+    """stage, unstage, commit, push, pull (fast-forward only), fetch or switch branch in a repository.
+    VI: stage, unstage, commit, push, pull (chỉ fast-forward), fetch hoặc đổi nhánh trong repository."""
+    settings = _settings(request)
+    user_id = _sandbox_user(settings, user)
+    _, done = await _agent(settings, user_id, 'POST', 'git/op', payload.model_dump(exclude_none=True))
+    return {'data': done}
 
 
 @router.get('/dirs')

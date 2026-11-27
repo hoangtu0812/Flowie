@@ -265,3 +265,80 @@ def test_uploads_land_in_the_home_with_a_safe_name(sandbox):
     third = agent.route(TOKEN, 'POST', f'/{TOKEN}/uploads', b'y', 'a.txt')[1]['path']
     assert second != third
     assert agent.route(TOKEN, 'POST', f'/{TOKEN}/uploads', b'', 'a.txt')[0] == 400
+
+
+def test_graph_lanes_follow_termi_for_a_merge():
+    commits = [{'h': 'M', 'p': ['A', 'B']}, {'h': 'B', 'p': ['A']}, {'h': 'A', 'p': []}]
+    assert agent.graph_layout(commits) == {'width': 2, 'rows': [
+        {'col': 0, 'seg': [[0, 1, 0, 2], [0, 1, 1, 2]]},
+        {'col': 1, 'seg': [[1, 0, 1, 1], [1, 1, 0, 2], [0, 0, 0, 2]]},
+        {'col': 0, 'seg': [[0, 0, 0, 1]]},
+    ]}
+
+
+@pytest.fixture
+def repo(sandbox):
+    home, _, _ = sandbox
+    folder = home / 'work' / 'repo'
+    folder.mkdir(parents=True)
+    run_git = lambda *args: subprocess.run(['git', '-C', str(folder), *args], check=True, capture_output=True)  # noqa: E731
+    run_git('init', '-q', '-b', 'main')
+    run_git('config', 'user.email', 't@t')
+    run_git('config', 'user.name', 'Tester')
+    (folder / 'README.md').write_text('# Hello\n')
+    (folder / 'src').mkdir()
+    (folder / 'src' / 'app.py').write_text('print(1)\n')
+    run_git('add', '.')
+    run_git('commit', '-q', '-m', 'first')
+    (folder / 'README.md').write_text('# Hello\n\nMore.\n')
+    (folder / 'src' / 'new.py').write_text('x = 1\n')
+    (folder / 'logo.png').write_bytes(b'\x89PNG\r\n')
+    (folder / 'blob.bin').write_bytes(b'a\0b')
+    return folder
+
+
+def test_folders_list_with_git_marks_and_files_read(repo, monkeypatch):
+    monkeypatch.setattr(agent, 'run', subprocess.run)
+    status, listed = call('GET', f'ls?dir={repo}')
+    assert status == 200 and listed['parent'] == str(repo.parent)
+    entries = {e['name']: e for e in listed['entries']}
+    assert [e['name'] for e in listed['entries']][0] == 'src'  # folders first
+    assert entries['README.md']['git'] == 'M' and entries['src']['git'] == '•' and entries['logo.png']['git'] == 'U'
+    assert '.git' not in entries
+    assert call('GET', f'file?path={repo}/README.md') == (200, {'path': str(repo / 'README.md'), 'text': '# Hello\n\nMore.\n'})
+    assert call('GET', f'file?path={repo}/blob.bin')[1]['binary'] is True
+    assert call('GET', f'file?path={repo}/logo.png')[1]['image'] is True
+    raw = agent.route(TOKEN, 'GET', f'/{TOKEN}/raw?path={repo}/logo.png', b'')[1]
+    assert raw.content_type == 'image/png' and raw.data == b'\x89PNG\r\n'
+    assert call('GET', f'raw?path={repo}/README.md')[0] == 415
+    assert call('GET', 'file?path=/etc/passwd')[0] == 400
+    assert call('GET', f'file?path={repo}/../../../../etc/passwd')[0] == 400
+    assert call('GET', 'ls?dir=/etc')[0] == 400
+
+
+def test_git_overview_ops_and_diffs(repo):
+    status, overview = call('GET', f'git?dir={repo}/src')
+    assert status == 200 and overview['dir'] == str(repo.resolve())
+    assert overview['head'].startswith('main')
+    assert {(f['x'], f['y'], f['path']) for f in overview['files']} == {
+        (' ', 'M', 'README.md'), ('?', '?', 'blob.bin'), ('?', '?', 'logo.png'), ('?', '?', 'src/new.py'),
+    }
+    assert [c['s'] for c in overview['commits']] == ['first'] and overview['branches'] == ['main']
+    assert 'More.' in call('GET', f'git/show?dir={repo}&file=README.md')[1]['text']
+
+    assert call('POST', 'git/op', {'dir': str(repo), 'op': 'stage', 'paths': ['README.md', 'src/new.py']})[0] == 200
+    assert call('GET', f'git/show?dir={repo}&file=README.md&staged=1')[1]['text'].count('+More.') == 1
+    assert call('POST', 'git/op', {'dir': str(repo), 'op': 'unstage', 'paths': ['src/new.py']})[0] == 200
+    assert call('POST', 'git/op', {'dir': str(repo), 'op': 'commit', 'message': 'Sửa README'})[0] == 200
+    overview = call('GET', f'git?dir={repo}')[1]
+    assert [c['s'] for c in overview['commits']] == ['Sửa README', 'first']
+    shown = call('GET', f"git/show?dir={repo}&rev={overview['commits'][0]['h']}")[1]
+    assert shown['commit']['subject'] == 'Sửa README' and shown['files'] == [{'path': 'README.md', 'add': 2, 'del': 0}]
+
+    for body in ({'op': 'commit', 'message': ' '}, {'op': 'switch', 'branch': '--force'}, {'op': 'switch', 'branch': 'a..b'},
+                 {'op': 'stage', 'paths': []}, {'op': 'rm'}):
+        assert call('POST', 'git/op', {'dir': str(repo), **body})[0] == 400
+    assert call('GET', f'git/show?dir={repo}&rev=HEAD;rm')[0] == 400
+    failed = call('POST', 'git/op', {'dir': str(repo), 'op': 'push'})
+    assert failed[0] == 400 and failed[1]['error']  # no remote: git's own words come back
+    assert call('GET', f'git?dir={repo.parent}')[0] == 400  # not a repository

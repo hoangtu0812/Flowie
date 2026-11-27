@@ -201,3 +201,96 @@ export async function uploadToSandbox(file: File): Promise<string> {
    });
    return (await responseData<{ path: string }>(response, 'Could not upload the file.')).path;
 }
+
+export type SandboxEntry = {
+   name: string;
+   path: string;
+   dir: boolean;
+   size: number;
+   mtime: number;
+   git?: string;
+};
+
+export type SandboxFile = { path: string; text?: string; image?: boolean; binary?: boolean };
+
+export type SandboxCommit = {
+   h: string;
+   p: string[];
+   refs: string[];
+   s: string;
+   a: string;
+   t: number;
+};
+
+export type SandboxGit = {
+   dir: string;
+   head: string;
+   files: { x: string; y: string; path: string }[];
+   commits: SandboxCommit[];
+   graph: { width: number; rows: { col: number; seg: [number, number, number, number][] }[] };
+   branches: string[];
+};
+
+export type SandboxDiff = {
+   text: string;
+   files?: { path: string; add: number | null; del: number | null }[];
+   commit?: { hash: string; author: string; t: number; subject: string; body: string } | null;
+};
+
+const query = (values: Record<string, string>) => new URLSearchParams(values).toString();
+
+/** A folder of the sandbox's home (the home itself when `dir` is empty). */
+/** VI: Một thư mục trong home của sandbox (chính home khi `dir` rỗng). */
+export async function loadSandboxFolder(
+   dir: string
+): Promise<{ dir: string; parent: string | null; entries: SandboxEntry[] }> {
+   return responseData(
+      await authenticatedFetch(`${api}/sandbox/files${dir ? `?${query({ dir })}` : ''}`),
+      'Could not open the folder.'
+   );
+}
+
+export async function loadSandboxFile(path: string): Promise<SandboxFile> {
+   return responseData(
+      await authenticatedFetch(`${api}/sandbox/file?${query({ path })}`),
+      'Could not open the file.'
+   );
+}
+
+export const sandboxImageUrl = (path: string) => `${api}/sandbox/file/raw?${query({ path })}`;
+
+export async function loadSandboxGit(dir: string): Promise<SandboxGit> {
+   return responseData(
+      await authenticatedFetch(`${api}/sandbox/git?${query({ dir })}`),
+      'Could not read the repository.'
+   );
+}
+
+export async function loadSandboxDiff(
+   dir: string,
+   options: { rev?: string; file?: string; staged?: boolean }
+): Promise<SandboxDiff> {
+   const values = { dir, rev: options.rev ?? '', file: options.file ?? '' };
+   const staged = options.staged ? '&staged=true' : '';
+   return responseData(
+      await authenticatedFetch(`${api}/sandbox/git/diff?${query(values)}${staged}`),
+      'Could not read the diff.'
+   );
+}
+
+export type SandboxGitOp =
+   | { op: 'stage' | 'unstage'; paths: string[] }
+   | { op: 'commit'; message: string }
+   | { op: 'switch'; branch: string }
+   | { op: 'push' | 'pull' | 'fetch' };
+
+/** One git operation in a repository of the sandbox; returns git's output. */
+/** VI: Một thao tác git trong một repository của sandbox; trả output của git. */
+export async function runSandboxGit(dir: string, op: SandboxGitOp): Promise<string> {
+   const response = await authenticatedFetch(`${api}/sandbox/git`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ dir, ...op }),
+   });
+   return (await responseData<{ output: string }>(response, 'The git operation failed.')).output;
+}

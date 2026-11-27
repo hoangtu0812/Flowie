@@ -28,6 +28,9 @@ import {
 } from '@/lib/sandbox';
 import { NewSessionDialog } from './new-session-dialog';
 import { Composer, KeyRow } from './session-controls';
+import { FilesPanel } from './files-panel';
+import { GitPanel } from './git-panel';
+import { cn } from '@/lib/utils';
 import { SessionList } from './session-list';
 import { messages } from './messages.vi';
 
@@ -67,7 +70,10 @@ export function SandboxPage() {
    // VI: Bắt đầu ở phiên mà "Mở bằng Claude/Codex" trên task yêu cầu, nếu có.
    const [selected, setSelected] = useState<string | null>(useSearchParams().get('session'));
    const current = selected ?? sessions[0]?.name ?? 'main';
-   const currentAgent = sessions.find((session) => session.name === current)?.agent ?? null;
+   const currentSession = sessions.find((session) => session.name === current);
+   const currentAgent = currentSession?.agent ?? null;
+   const [pane, setPane] = useState<'terminal' | 'files' | 'git'>('terminal');
+   const [draft, setDraft] = useState('');
    // A per-browser convenience, so it lives in localStorage.
    // VI: Tiện ích theo từng trình duyệt nên lưu trong localStorage.
    const [fontSize, setFontSize] = useState(FONT_DEFAULT);
@@ -243,15 +249,61 @@ export function SandboxPage() {
                   </div>
                </aside>
                <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                  <div
+                     role="tablist"
+                     aria-label={tx('Sandbox views')}
+                     className="flex shrink-0 gap-1 border-b px-2 py-1"
+                  >
+                     {(
+                        [
+                           ['terminal', 'Terminal'],
+                           ['files', 'Files'],
+                           ['git', 'Git'],
+                        ] as const
+                     ).map(([key, label]) => (
+                        <button
+                           key={key}
+                           type="button"
+                           role="tab"
+                           aria-selected={pane === key}
+                           onClick={() => setPane(key)}
+                           className={cn(
+                              'rounded px-2 py-0.5 text-xs text-muted-foreground hover:bg-accent',
+                              pane === key && 'bg-accent text-foreground'
+                           )}
+                        >
+                           {tx(label)}
+                        </button>
+                     ))}
+                  </div>
+                  {pane === 'files' && (
+                     <FilesPanel
+                        start={currentSession?.dir || home}
+                        home={home}
+                        onInsert={(path) => {
+                           setDraft((text) => (text ? `${text} ${path}` : path));
+                           setPane('terminal');
+                        }}
+                     />
+                  )}
+                  {pane === 'git' && <GitPanel dir={currentSession?.dir || home} />}
                   <iframe
                      key={`${current}-${fontSize}`}
                      title={tx('Sandbox terminal')}
                      src={sandboxSessionUrl(current, fontSize)}
                      allow="clipboard-read; clipboard-write"
-                     className="min-h-0 w-full flex-1 border-0"
+                     className={cn(
+                        'min-h-0 w-full flex-1 border-0',
+                        pane !== 'terminal' && 'hidden'
+                     )}
                   />
-                  <KeyRow session={current} onFont={changeFont} />
-                  <Composer session={current} agent={currentAgent} />
+                  {pane === 'terminal' && <KeyRow session={current} onFont={changeFont} />}
+                  <Composer
+                     session={current}
+                     agent={currentAgent}
+                     text={draft}
+                     setText={setDraft}
+                  />
                </div>
             </div>
          )}
