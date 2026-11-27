@@ -407,3 +407,13 @@ def test_usage_passes_through_and_is_null_while_stopped(monkeypatch):
     assert client.get('/api/v1/sandbox/usage').json() == {'data': {'cpu': 5}}
     up[0] = False
     assert client.get('/api/v1/sandbox/usage').json() == {'data': None}
+
+
+def test_the_terminal_token_never_reaches_the_logs(monkeypatch, caplog):
+    client = agent_client(ME, monkeypatch, lambda request, path: httpx.Response(200, json=[]))
+    with caplog.at_level('INFO', logger='httpx'):
+        assert client.get('/api/v1/sandbox/sessions').status_code == 200
+    token = terminal_token(TOKEN, ME['id'])
+    lines = [record.getMessage() for record in caplog.records if record.name == 'httpx']
+    assert lines and all(token not in line for line in lines)
+    assert any('/<token>/sessions' in line for line in lines)
