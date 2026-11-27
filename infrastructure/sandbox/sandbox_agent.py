@@ -23,16 +23,28 @@ import os
 import re
 import subprocess
 import sys
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 PORT = 7681
 SESSION_NAME = re.compile(r'^[A-Za-z0-9_-]{1,40}$')
 UUID = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
-MAX_BODY = 64 * 1024
+# JSON arrives ASCII-escaped, so 20 000 Vietnamese characters take about 120 KB.
+# VI: JSON tới dạng thoát ASCII, nên 20 000 ký tự tiếng Việt chiếm khoảng 120 KB.
+MAX_BODY = 256 * 1024
 MAX_COMMAND = 20_000
+MAX_TEXT = 20_000
+MAX_UPLOAD = 25 * 1024 * 1024
+SCROLLBACK_LINES = 2000
+PASTE_BUFFER = 'flowie'
+# The keys termi sends (src/validate.mjs), and menu numbers.
+# VI: Các phím termi gửi (src/validate.mjs), và số của menu.
+KEYS = frozenset(
+    ['Escape', 'C-c', 'C-d', 'Tab', 'BTab', 'Up', 'Down', 'Left', 'Right', 'Enter', 'PageUp', 'PageDown', *'123456789']
+)
 AGENTS: dict[str, dict[str, Any]] = {
     'claude': {'command': 'claude', 'resume': ['claude', '--resume'], 'package': '@anthropic-ai/claude-code'},
     'codex': {'command': 'codex', 'resume': ['codex', 'resume'], 'package': '@openai/codex'},
@@ -215,6 +227,65 @@ def close_session(name: str) -> None:
         raise Refused(404, 'No such session.')
 
 
+def _session(name: str) -> str:
+    if not SESSION_NAME.match(name) or tmux('has-session', '-t', f'={name}').returncode != 0:
+        raise Refused(404, 'No such session.')
+    return f'={name}:'
+
+
+def send(name: str, body: dict[str, Any]) -> dict[str, Any]:
+    """Types into a session as termi does: a key from the allowed set, then text as a
+    bracketed paste (so a multi-line message, Vietnamese included, arrives whole and an
+    agent does not run it line by line), then Enter if asked.
+    VI: Gõ vào một phiên như termi: một phím trong tập cho phép, rồi chữ dạng bracketed
+    VI: paste (để tin nhiều dòng, kể cả tiếng Việt, tới nguyên vẹn và agent không chạy từng
+    VI: dòng), rồi Enter nếu được yêu cầu."""
+    key, text, enter = body.get('key'), body.get('text') or '', body.get('enter') is True
+    if key is not None and key not in KEYS:
+        raise Refused(400, 'Unsupported key.')
+    if not isinstance(text, str) or len(text) > MAX_TEXT:
+        raise Refused(400, 'The text is too long.')
+    pane = _session(name)
+    if key:
+        tmux('send-keys', '-t', pane, key)
+    if text:
+        if tmux('display-message', '-p', '-t', pane, '#{pane_in_mode}').stdout.strip() == '1':
+            tmux('send-keys', '-t', pane, '-X', 'cancel')
+        tmux('set-buffer', '-b', PASTE_BUFFER, '--', text)
+        tmux('paste-buffer', '-p', '-d', '-b', PASTE_BUFFER, '-t', pane)
+    if enter:
+        tmux('send-keys', '-t', pane, 'Enter')
+    return {'ok': True}
+
+
+def session_text(name: str) -> dict[str, Any]:
+    """The session's screen and the last lines of its history, as plain text to copy.
+    VI: Màn hình của phiên và các dòng lịch sử cuối, dạng chữ thường để copy."""
+    pane = _session(name)
+    text = tmux('capture-pane', '-p', '-J', '-S', f'-{SCROLLBACK_LINES}', '-t', pane).stdout
+    return {'text': text.rstrip()}
+
+
+def save_upload(filename: str, data: bytes) -> dict[str, Any]:
+    """Keeps a file the person attached in ~/.flowie/uploads and returns its path, which
+    the message then names so the agent can read it.
+    VI: Lưu file người dùng đính kèm vào ~/.flowie/uploads và trả đường dẫn, để tin nhắn
+    VI: ghi đường dẫn đó cho agent đọc."""
+    if not data:
+        raise Refused(400, 'The file is empty.')
+    safe = re.sub(r'[^A-Za-z0-9._-]+', '-', os.path.basename(unquote(filename) or 'file')).strip('.-')[:80] or 'file'
+    folder = home() / '.flowie' / 'uploads'
+    folder.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime('%Y%m%d-%H%M%S')
+    target = folder / f'{stamp}-{safe}'
+    for n in range(2, 100):
+        if not target.exists():
+            break
+        target = folder / f'{stamp}-{n}-{safe}'
+    target.write_bytes(data)
+    return {'path': str(target)}
+
+
 def _records(file: Path) -> list[dict[str, Any]]:
     try:
         with file.open('rb') as handle:
@@ -326,13 +397,18 @@ def recent_dirs() -> dict[str, Any]:
     return {'home': str(home()), 'recent': recent[:50]}
 
 
-def route(token: str, method: str, raw_path: str, body: bytes) -> tuple[int, Any]:
+def route(token: str, method: str, raw_path: str, body: bytes, filename: str = '') -> tuple[int, Any]:
     parts = urlsplit(raw_path)
     segments = parts.path.strip('/').split('/')
     if not token or len(segments) < 2 or segments[0] != token:
         return 404, {'error': 'Not found'}
     path = segments[1:]
     query = parse_qs(parts.query)
+    if method == 'POST' and path == ['uploads']:
+        try:
+            return 201, save_upload(filename, body)
+        except Refused as error:
+            return error.status, {'error': str(error)}
     try:
         request = json.loads(body) if body else {}
     except ValueError:
@@ -349,6 +425,10 @@ def route(token: str, method: str, raw_path: str, body: bytes) -> tuple[int, Any
         if method == 'DELETE' and len(path) == 2 and path[0] == 'sessions':
             close_session(path[1])
             return 204, None
+        if method == 'POST' and len(path) == 3 and path[0] == 'sessions' and path[2] == 'send':
+            return 200, send(path[1], request)
+        if method == 'GET' and len(path) == 3 and path[0] == 'sessions' and path[2] == 'text':
+            return 200, session_text(path[1])
         if method == 'GET' and path == ['dirs']:
             return 200, recent_dirs()
         if method == 'GET' and path == ['conversations']:
@@ -367,10 +447,12 @@ def serve(token: str, port: int = PORT) -> None:
 
         def _respond(self) -> None:
             length = int(self.headers.get('Content-Length') or 0)
-            if length > MAX_BODY:
+            limit = MAX_UPLOAD if urlsplit(self.path).path.endswith('/uploads') else MAX_BODY
+            if length > limit:
                 status, answer = 413, {'error': 'Too large'}
             else:
-                status, answer = route(token, self.command, self.path, self.rfile.read(length) if length else b'')
+                body = self.rfile.read(length) if length else b''
+                status, answer = route(token, self.command, self.path, body, self.headers.get('X-Filename', ''))
             payload = b'' if answer is None else json.dumps(answer).encode()
             self.send_response(status)
             self.send_header('Content-Type', 'application/json')

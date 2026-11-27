@@ -30,7 +30,7 @@ import contextlib
 import re
 import shlex
 from typing import Any, Literal
-from urllib.parse import urlsplit
+from urllib.parse import quote, unquote, urlsplit
 
 import httpx
 import websockets
@@ -132,6 +132,7 @@ AGENT_READY_ATTEMPTS = 20
 async def _agent(
     settings: Settings, user_id: str, method: str, path: str, body: Any = None,
     params: dict[str, str] | None = None, accept: tuple[int, ...] = (), wait: bool = False,
+    content: bytes | None = None, headers: dict[str, str] | None = None,
 ) -> tuple[int, Any]:
     """One call to the Flowie agent inside the caller's sandbox, under its secret base path.
     A stopped sandbox is 409; `wait` retries while one that has just started brings it up.
@@ -143,7 +144,9 @@ async def _agent(
     async with httpx.AsyncClient(timeout=30) as client:
         for _ in range(AGENT_READY_ATTEMPTS if wait else 1):
             try:
-                response = await client.request(method, url, json=body, params=params)
+                response = await client.request(
+                    method, url, json=body, params=params, content=content, headers=headers
+                )
                 break
             except httpx.TransportError as error:
                 failure = error
@@ -220,6 +223,62 @@ async def close_sandbox_session(name: str, request: Request, user: Any = Depends
     if not SESSION_NAME.match(name):
         raise ApiError(400, 'Invalid session name.', 'Bad Request')
     await _agent(settings, user_id, 'DELETE', f'sessions/{name}')
+
+
+class SendInput(StrictInput):
+    text: str = Field(default='', max_length=20_000)
+    key: Literal[
+        'Escape', 'C-c', 'C-d', 'Tab', 'BTab', 'Up', 'Down', 'Left', 'Right', 'Enter', 'PageUp', 'PageDown',
+        '1', '2', '3', '4', '5', '6', '7', '8', '9',
+    ] | None = None
+    enter: bool = False
+
+
+@router.post('/sessions/{name}/send')
+async def send_to_sandbox_session(name: str, payload: SendInput, request: Request, user: Any = Depends(current_user)):
+    """Types into a session: a key, then text as one bracketed paste, then Enter if asked.
+    VI: Gõ vào một phiên: một phím, rồi chữ dạng một lần bracketed paste, rồi Enter nếu cần."""
+    settings = _settings(request)
+    user_id = _sandbox_user(settings, user)
+    if not SESSION_NAME.match(name):
+        raise ApiError(400, 'Invalid session name.', 'Bad Request')
+    await _agent(settings, user_id, 'POST', f'sessions/{name}/send', payload.model_dump(exclude_none=True))
+    return {'data': {'ok': True}}
+
+
+@router.get('/sessions/{name}/text')
+async def sandbox_session_text(name: str, request: Request, user: Any = Depends(current_user)):
+    """The session's screen with its last 2 000 lines of history, as plain text.
+    VI: Màn hình của phiên kèm 2 000 dòng lịch sử cuối, dạng chữ thường."""
+    settings = _settings(request)
+    user_id = _sandbox_user(settings, user)
+    if not SESSION_NAME.match(name):
+        raise ApiError(400, 'Invalid session name.', 'Bad Request')
+    _, text = await _agent(settings, user_id, 'GET', f'sessions/{name}/text')
+    return {'data': text}
+
+
+MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+
+
+@router.post('/uploads', status_code=201)
+async def upload_to_sandbox(request: Request, user: Any = Depends(current_user)):
+    """Stores one attached file (raw body, name in `X-Filename`) in the sandbox's
+    ~/.flowie/uploads and returns its path for the message.
+    VI: Lưu một file đính kèm (thân thô, tên trong `X-Filename`) vào ~/.flowie/uploads của
+    VI: sandbox và trả đường dẫn để ghi vào tin nhắn."""
+    settings = _settings(request)
+    user_id = _sandbox_user(settings, user)
+    if int(request.headers.get('content-length') or 0) > MAX_UPLOAD_BYTES:
+        raise ApiError(413, 'The file is larger than 25 MB.', 'Payload Too Large')
+    data = await request.body()
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise ApiError(413, 'The file is larger than 25 MB.', 'Payload Too Large')
+    # Browsers send the name URL-encoded; re-encoding keeps any other header value ASCII.
+    # VI: Trình duyệt gửi tên đã URL-encode; mã hoá lại để header luôn là ASCII.
+    filename = quote(unquote(request.headers.get('x-filename', 'file'))[:200], safe='')
+    _, saved = await _agent(settings, user_id, 'POST', 'uploads', content=data, headers={'x-filename': filename})
+    return {'data': saved}
 
 
 @router.get('/dirs')

@@ -54,7 +54,16 @@ class FakeTmux:
             rows = [f"{n}\t11\t{s['pid']}\t{s['dir']}\t100\t{200 + i}" for i, (n, s) in enumerate(self.sessions.items())]
             return done('\n'.join(rows) + '\n')
         if verb == 'capture-pane':
+            self.captured = rest
             return done(self.sessions[target]['screen'])
+        if verb == 'display-message':
+            return done('1\n' if self.sessions[target].get('copy_mode') else '0\n')
+        if verb == 'set-buffer':
+            self.buffer = rest[-1]
+            return done()
+        if verb == 'paste-buffer':
+            self.typed.append(('paste', '-p' in rest, self.buffer))
+            return done()
         return done(code=1)
 
 
@@ -202,6 +211,57 @@ def test_with_real_tmux(tmp_path, monkeypatch):
         assert (tmp_path / 'done.txt').read_text().strip() == 'ready-42'
         sessions = call('GET', 'sessions')[1]
         assert [(s['name'], s['state'], s['dir']) for s in sessions] == [(name, 'shell', str(tmp_path.resolve()))]
+        assert call('POST', f'sessions/{name}/send', {'text': 'echo "xin chào $((1+1))" > vi.txt', 'enter': True})[0] == 200
+        for _ in range(50):
+            if (tmp_path / 'vi.txt').exists() and (tmp_path / 'vi.txt').read_text().strip():
+                break
+            subprocess.run(['sleep', '0.1'], check=False)
+        assert (tmp_path / 'vi.txt').read_text().strip() == 'xin chào 2'
+        assert 'xin chào' in call('GET', f'sessions/{name}/text')[1]['text']
     finally:
         subprocess.run(['tmux', 'kill-server'], check=False, capture_output=True)
         shutil.rmtree(sockets, ignore_errors=True)
+
+
+def test_send_pastes_text_whole_then_presses_enter(sandbox):
+    _, fake, _ = sandbox
+    call('POST', 'sessions', {'name': 'cl'})
+    fake.typed.clear()
+    fake.sessions['cl']['copy_mode'] = True
+    text = 'Sửa lỗi đăng nhập\nrồi chạy test'
+    assert call('POST', 'sessions/cl/send', {'text': text, 'enter': True}) == (200, {'ok': True})
+    assert fake.typed == [('-X', 'cancel'), ('paste', True, text), ('Enter',)]
+    fake.typed.clear()
+    assert call('POST', 'sessions/cl/send', {'key': 'BTab'})[0] == 200
+    assert fake.typed == [('BTab',)]
+
+
+@pytest.mark.parametrize('body', [{'key': 'C-z'}, {'key': 'rm'}, {'text': 'x' * 20_001}, {'text': 5}])
+def test_send_refuses_other_keys_and_long_text(sandbox, body):
+    _, fake, _ = sandbox
+    call('POST', 'sessions', {'name': 'cl'})
+    fake.typed.clear()
+    assert call('POST', 'sessions/cl/send', body)[0] == 400
+    assert fake.typed == []
+    assert call('POST', 'sessions/missing/send', {'key': 'Enter'})[0] == 404
+
+
+def test_session_text_includes_history(sandbox):
+    _, fake, _ = sandbox
+    call('POST', 'sessions', {'name': 'cl'})
+    fake.sessions['cl']['screen'] = 'line 1\nline 2\n\n'
+    assert call('GET', 'sessions/cl/text') == (200, {'text': 'line 1\nline 2'})
+    assert fake.captured[fake.captured.index('-S') + 1] == '-2000'
+
+
+def test_uploads_land_in_the_home_with_a_safe_name(sandbox):
+    home, _, _ = sandbox
+    status, saved = agent.route(TOKEN, 'POST', f'/{TOKEN}/uploads', b'\x89PNG', '..%2F..%2Fetc%2Fảnh chụp.png')
+    assert status == 201
+    path = Path(saved['path'])
+    assert path.parent == home / '.flowie' / 'uploads'
+    assert path.name.endswith('-nh-ch-p.png') and path.read_bytes() == b'\x89PNG'
+    second = agent.route(TOKEN, 'POST', f'/{TOKEN}/uploads', b'x', 'a.txt')[1]['path']
+    third = agent.route(TOKEN, 'POST', f'/{TOKEN}/uploads', b'y', 'a.txt')[1]['path']
+    assert second != third
+    assert agent.route(TOKEN, 'POST', f'/{TOKEN}/uploads', b'', 'a.txt')[0] == 400
