@@ -110,6 +110,17 @@ class Settings:
     # host này qua HTTP hoặc HTTPS; mọi host khác phải là API HTTPS chính thức của provider.
     # Để trống thì giữ nguyên bảo vệ SSRF chỉ cho phép host chính thức.
     agent_provider_allowed_hosts: tuple[str, ...] = ()
+    # Personal coding sandboxes (docs/sandbox.md). Only the lowercase emails in
+    # sandbox_users may start one or open its terminal; empty turns the feature off.
+    # The token is the sandbox-manager's bearer token, which also derives each
+    # sandbox's termi token, so it never leaves the server side.
+    # VI: Sandbox lập trình cá nhân (docs/sandbox.md). Chỉ email (chữ thường) trong
+    # VI: sandbox_users được khởi động sandbox hay mở terminal của nó; để trống là tắt.
+    # VI: Token là bearer token của sandbox-manager, cũng dùng để suy ra token termi của
+    # VI: từng sandbox, nên không bao giờ rời phía server.
+    sandbox_users: tuple[str, ...] = ()
+    sandbox_manager_url: str = 'http://circle-sandbox-manager:4100'
+    sandbox_manager_token: str = ''
 
     @classmethod
     def from_environment(cls) -> Settings:
@@ -172,6 +183,9 @@ class Settings:
             mcp_max_result_bytes=max(1024, min(1048576, int(getenv('MCP_MAX_RESULT_BYTES', '262144')))),
             mcp_max_idempotency_keys=max(100,min(100000,int(getenv('MCP_MAX_IDEMPOTENCY_KEYS','10000')))),
             api_public_url=getenv('API_PUBLIC_URL', 'http://localhost:4000/api/v1').rstrip('/'),
+            sandbox_users=_origins(getenv('SANDBOX_USERS', '').lower()),
+            sandbox_manager_url=getenv('SANDBOX_MANAGER_URL', 'http://circle-sandbox-manager:4100').rstrip('/'),
+            sandbox_manager_token=getenv('SANDBOX_MANAGER_TOKEN', ''),
         )
 
 

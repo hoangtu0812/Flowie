@@ -120,8 +120,22 @@ services:
          MCP_TOOL_TIMEOUT_SECONDS: ${MCP_TOOL_TIMEOUT_SECONDS:-30}
          MCP_MAX_RESULT_BYTES: ${MCP_MAX_RESULT_BYTES:-262144}
          MCP_MAX_IDEMPOTENCY_KEYS: ${MCP_MAX_IDEMPOTENCY_KEYS:-10000}
+         # Personal coding sandboxes (docs/sandbox.md); empty SANDBOX_USERS keeps them off.
+         # VI: Sandbox lập trình cá nhân (docs/sandbox.md); SANDBOX_USERS rỗng là tắt.
+         SANDBOX_USERS: ${SANDBOX_USERS:-}
+         SANDBOX_MANAGER_TOKEN: ${SANDBOX_MANAGER_TOKEN:-}
       ports:
          - '${API_PORT:-4000}:4000'
+      # The API reaches each sandbox's termi by container name on the sandbox
+      # network. Its fixed address sits below the range handed to sandboxes, so
+      # no sandbox can ever hold the one address the firewall lets through.
+      # VI: API gọi termi của từng sandbox theo tên container trên mạng sandbox. Địa chỉ
+      # VI: cố định của nó nằm dưới dải cấp cho sandbox, nên không sandbox nào có được
+      # VI: địa chỉ duy nhất mà firewall cho qua.
+      networks:
+         default: {}
+         sandbox:
+            ipv4_address: ${SANDBOX_API_IP:-172.31.250.2}
       depends_on:
          postgres:
             condition: service_healthy
@@ -178,11 +192,9 @@ services:
       environment:
          SANDBOX_MANAGER_TOKEN: ${SANDBOX_MANAGER_TOKEN:-}
          SANDBOX_IMAGE: ${SANDBOX_IMAGE:-flowie-sandbox:latest}
-         SANDBOX_SUBNET: ${SANDBOX_SUBNET:-172.31.250.0/24}
          SANDBOX_CPUS: ${SANDBOX_CPUS:-1}
          SANDBOX_MEMORY_MB: ${SANDBOX_MEMORY_MB:-2048}
          SANDBOX_PIDS: ${SANDBOX_PIDS:-512}
-         DOCKER_NETWORK_MTU: ${DOCKER_NETWORK_MTU:-1400}
       volumes:
          - /var/run/docker.sock:/var/run/docker.sock
 
@@ -197,6 +209,20 @@ networks:
          # daemon-wide setting does not reach a Compose network, so it is
          # declared here as well.
          com.docker.network.driver.mtu: ${DOCKER_NETWORK_MTU:-1400}
+   # Per-user sandboxes (docs/sandbox.md). The bridge name is fixed because the
+   # host firewall (infrastructure/sandbox/sandbox-firewall.sh) matches it.
+   # VI: Sandbox của từng người (docs/sandbox.md). Tên bridge cố định vì firewall của
+   # VI: host (infrastructure/sandbox/sandbox-firewall.sh) khớp theo nó.
+   sandbox:
+      name: flowie-sandbox
+      driver: bridge
+      driver_opts:
+         com.docker.network.bridge.name: flowie-sbx0
+         com.docker.network.driver.mtu: ${DOCKER_NETWORK_MTU:-1400}
+      ipam:
+         config:
+            - subnet: ${SANDBOX_SUBNET:-172.31.250.0/24}
+              ip_range: ${SANDBOX_IP_RANGE:-172.31.250.128/25}
 
 volumes:
    postgres_data:

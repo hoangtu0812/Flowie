@@ -55,6 +55,7 @@ from .modules.recurring.api import router as recurring_router
 from .modules.releases.api import router as releases_router
 from .modules.reporting.api import router as reporting_router
 from .modules.reviews.api import router as reviews_router
+from .modules.sandbox.api import router as sandbox_router
 from .modules.scm.router import router as scm_router
 from .modules.scm.router import webhook_router as scm_webhook_router
 from .modules.search.api import router as search_router
@@ -130,6 +131,7 @@ ROUTERS: list[APIRouter] = [
     sharepoint_router,
     news_router,
     api_keys_router,
+    sandbox_router,
     customer_requests_router,
     asks_router,
     slas_router,

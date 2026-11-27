@@ -31,11 +31,13 @@ READ_ONLY_ROLE = "ADMIN_VIEWER"
 ADMIN_READ_ROLES = frozenset({"OWNER", "ADMIN", READ_ONLY_ROLE})
 WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 # The caller's own account, sign-in and inbox are personal, not workspace data, and joining,
-# creating or leaving a workspace changes only the caller's membership.
+# creating or leaving a workspace changes only the caller's membership. A personal sandbox
+# belongs to the caller, not to a workspace.
 # VI: Tài khoản, đăng nhập và hộp thư của chính người gọi là dữ liệu cá nhân, không phải dữ liệu
 # VI: workspace; nhận lời mời, tạo hay rời workspace chỉ đổi membership của chính người gọi.
+# VI: Sandbox cá nhân thuộc về người gọi, không thuộc workspace nào.
 PERSONAL_PATHS = re.compile(
-    r"^/api/v1/(auth(/|$)|users/me(/|$)|notifications(/|$)|workspaces/?$|workspaces/invitations/|workspaces/[^/]+/leave$)"
+    r"^/api/v1/(auth(/|$)|users/me(/|$)|notifications(/|$)|sandbox(/|$)|workspaces/?$|workspaces/invitations/|workspaces/[^/]+/leave$)"
 )
 WORKSPACE_PATH = re.compile(r"^/api/v1/workspaces/([^/]+)")
 

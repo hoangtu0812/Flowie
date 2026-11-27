@@ -4,24 +4,26 @@
 # reach the internet but nothing on the server or the LAN: not the host itself,
 # not Postgres, MinIO or any other container, not another user's sandbox, and
 # no private, carrier-grade NAT or link-local address. Only addresses listed in
-# SANDBOX_ALLOW (ip or ip:port, for an internal git server) are let through,
-# and SANDBOX_API_IP (the Flowie API on the sandbox network) may open
-# connections to sandboxes. Usage: sandbox-firewall.sh apply|remove|status.
-# Run as root; the rules live in two chains of their own and are rebuilt
+# SANDBOX_ALLOW (ip or ip:port, for an internal git server) are let through.
+# SANDBOX_API_IP (the Flowie API's fixed address on the sandbox network) is not
+# a sandbox: it may open connections to sandboxes, and its own traffic through
+# the bridge (it may route there) is left alone.
+# Usage: sandbox-firewall.sh apply|remove|status. Run as root; the rules live in two chains of their own and are rebuilt
 # whole on every apply, so applying twice is harmless.
 # VI: Cô lập sandbox lập trình của từng người trên host (docs/sandbox.md).
 # VI: Sandbox chạy agent có shell và thông tin đăng nhập của người dùng, nên được ra
 # VI: internet nhưng không được tới thứ gì trên server hay LAN: không tới chính host,
 # VI: Postgres, MinIO hay container nào khác, không tới sandbox của người khác, và không
 # VI: tới địa chỉ private, CGNAT hay link-local nào. Chỉ địa chỉ trong SANDBOX_ALLOW
-# VI: (ip hoặc ip:port, cho máy git nội bộ) được cho qua, và SANDBOX_API_IP (API Flowie
-# VI: trên mạng sandbox) được mở kết nối tới sandbox. Cách dùng:
-# VI: sandbox-firewall.sh apply|remove|status. Chạy bằng root; luật nằm trong hai
+# VI: (ip hoặc ip:port, cho máy git nội bộ) được cho qua. SANDBOX_API_IP (địa chỉ cố
+# VI: định của API Flowie trên mạng sandbox) không phải sandbox: nó được mở kết nối tới
+# VI: sandbox, và lưu lượng của chính nó qua bridge (nó có thể đi đường đó) không bị đụng.
+# VI: Cách dùng: sandbox-firewall.sh apply|remove|status. Chạy bằng root; luật nằm trong hai
 # VI: chain riêng và được dựng lại toàn bộ mỗi lần apply, nên apply hai lần không sao.
 set -euo pipefail
 
 BRIDGE="${SANDBOX_BRIDGE:-flowie-sbx0}"
-API_IP="${SANDBOX_API_IP:-}"
+API_IP="${SANDBOX_API_IP:-172.31.250.2}"
 read -r -a ALLOW <<< "${SANDBOX_ALLOW:-}"
 FORWARD_CHAIN=FLOWIE-SANDBOX
 INPUT_CHAIN=FLOWIE-SANDBOX-IN
@@ -56,9 +58,7 @@ apply() {
   done
 
   iptables -A "$FORWARD_CHAIN" -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN
-  if [[ -n "$API_IP" ]]; then
-    iptables -A "$FORWARD_CHAIN" -s "$API_IP" -o "$BRIDGE" -j RETURN
-  fi
+  iptables -A "$FORWARD_CHAIN" -s "$API_IP" -j RETURN
   for target in "${ALLOW[@]}"; do
     if [[ "$target" == *:* ]]; then
       iptables -A "$FORWARD_CHAIN" -d "${target%%:*}" -p tcp --dport "${target##*:}" -j RETURN
@@ -77,6 +77,7 @@ apply() {
   # VI: Mọi thứ gửi tới chính host (SSH, deploy console, service ngoài Docker) đi
   # VI: qua INPUT, nơi DOCKER-USER không thấy.
   iptables -A "$INPUT_CHAIN" -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN
+  iptables -A "$INPUT_CHAIN" -s "$API_IP" -j RETURN
   iptables -A "$INPUT_CHAIN" -j DROP
 
   iptables -C DOCKER-USER -i "$BRIDGE" -j "$FORWARD_CHAIN" 2>/dev/null \

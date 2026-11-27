@@ -17,6 +17,8 @@ VI: `python -m app.sandbox_manager`; chỉ dùng thư viện chuẩn.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import http.client
 import json
 import os
@@ -34,6 +36,7 @@ from typing import Any, Protocol
 # VI: an toàn khi nằm trong tên container và đường dẫn API Docker.
 USER_ID = re.compile(r'^[a-z0-9]{20,40}$')
 USER_LABEL = 'vn.bsr.flowie.sandbox.user'
+TERMI_PORT = 7680
 HOME = '/home/node'
 MIN_TOKEN_LENGTH = 32
 
@@ -42,12 +45,11 @@ MIN_TOKEN_LENGTH = 32
 class Config:
     token: str
     image: str = 'flowie-sandbox:latest'
+    # Created by Compose with the `api` service (docker-compose.yml), which is
+    # also how the API reaches the sandboxes by container name.
+    # VI: Do Compose tạo cùng service `api` (docker-compose.yml), cũng là cách API
+    # VI: gọi tới sandbox theo tên container.
     network: str = 'flowie-sandbox'
-    # The firewall script matches this interface name, so it is fixed here.
-    # VI: Script firewall khớp theo tên interface này nên nó được cố định ở đây.
-    bridge: str = 'flowie-sbx0'
-    subnet: str = '172.31.250.0/24'
-    mtu: str = '1400'
     cpus: float = 1.0
     memory_mb: int = 2048
     pids: int = 512
@@ -68,8 +70,6 @@ class Config:
         return cls(
             token=token,
             image=env.get('SANDBOX_IMAGE', defaults.image),
-            subnet=env.get('SANDBOX_SUBNET', defaults.subnet),
-            mtu=env.get('DOCKER_NETWORK_MTU', defaults.mtu),
             cpus=float(env.get('SANDBOX_CPUS', defaults.cpus)),
             memory_mb=int(env.get('SANDBOX_MEMORY_MB', defaults.memory_mb)),
             pids=int(env.get('SANDBOX_PIDS', defaults.pids)),
@@ -126,6 +126,22 @@ def container_name(user_id: str) -> str:
     return f'flowie-sandbox-{user_id}'
 
 
+def termi_token(secret: str, user_id: str) -> str:
+    """The token a user's termi requires in `X-Termi-Token`. It is derived from the
+    manager token rather than stored, so the API (which holds the same secret) can
+    compute it for the signed-in user and nothing has to be kept in the database.
+    It reaches only the container's environment and the API, never a browser.
+    Rotating SANDBOX_MANAGER_TOKEN changes every token: remove the containers so
+    the next `ensure` creates them with the new one.
+    VI: Token mà termi của một người dùng yêu cầu trong `X-Termi-Token`. Nó được suy ra
+    VI: từ token của manager thay vì lưu lại, nên API (giữ cùng secret) tính được cho
+    VI: người đang đăng nhập và không cần lưu gì trong database. Nó chỉ nằm trong biến
+    VI: môi trường của container và trong API, không bao giờ tới trình duyệt. Đổi
+    VI: SANDBOX_MANAGER_TOKEN thì mọi token đổi theo: xoá các container để lần `ensure`
+    VI: sau tạo lại với token mới."""
+    return hmac.new(secret.encode(), f'termi:{user_id}'.encode(), hashlib.sha256).hexdigest()
+
+
 def container_spec(config: Config, user_id: str) -> dict[str, Any]:
     """The only container configuration the manager ever creates. It runs as the
     image's unprivileged user with every capability dropped and privilege
@@ -145,6 +161,7 @@ def container_spec(config: Config, user_id: str) -> dict[str, Any]:
         'User': 'node',
         'WorkingDir': HOME,
         'Labels': {USER_LABEL: user_id},
+        'Env': [f'TERMI_TOKEN={termi_token(config.token, user_id)}'],
         'HostConfig': {
             'Init': True,
             'CapDrop': ['ALL'],
@@ -174,26 +191,6 @@ class Manager:
     def __init__(self, config: Config, docker: DockerApi):
         self.config = config
         self.docker = docker
-
-    def ensure_network(self) -> None:
-        """Creates the sandbox bridge with its fixed interface name and subnet
-        when it is missing; the firewall rules are written against both.
-        VI: Tạo bridge sandbox với tên interface và subnet cố định khi chưa có; luật
-        VI: firewall được viết theo cả hai."""
-        status, _ = self.docker.request('GET', f'/networks/{self.config.network}')
-        if status == 200:
-            return
-        status, body = self.docker.request('POST', '/networks/create', {
-            'Name': self.config.network,
-            'Driver': 'bridge',
-            'Options': {
-                'com.docker.network.bridge.name': self.config.bridge,
-                'com.docker.network.driver.mtu': self.config.mtu,
-            },
-            'IPAM': {'Config': [{'Subnet': self.config.subnet}]},
-        })
-        if status != 201:
-            raise SandboxError(502, f'Could not create network: {body}')
 
     def describe(self, user_id: str) -> dict[str, Any] | None:
         status, body = self.docker.request('GET', f'/containers/{container_name(user_id)}/json')
@@ -300,7 +297,6 @@ def serve(manager: Manager) -> None:
 
         do_GET = do_PUT = do_POST = do_DELETE = _respond
 
-    manager.ensure_network()
     server = ThreadingHTTPServer(('0.0.0.0', manager.config.port), Handler)
     print(f'sandbox-manager listening on :{manager.config.port}', file=sys.stderr, flush=True)
     server.serve_forever()
