@@ -56,6 +56,13 @@ ENV DISABLE_AUTOUPDATER=1 \
     LANG=C.UTF-8 \
     TERM=xterm-256color \
     SHELL=/bin/bash
+# Managed settings give every Claude Code session Flowie's status line, which records the
+# plan limits for the usage chip (docs/sandbox.md), as termi installs its own.
+# VI: Managed settings cho mọi phiên Claude Code dùng status line của Flowie, thứ ghi lại
+# VI: giới hạn gói cho chip usage (docs/sandbox.md), như termi cài status line của nó.
+RUN mkdir -p /etc/claude-code \
+ && printf '%s\n' '{"statusLine": {"type": "command", "command": "python3 /usr/local/lib/flowie/claude_statusline.py"}}' \
+      > /etc/claude-code/managed-settings.json
 RUN git config --system credential.helper store \
  && git config --system init.defaultBranch main
 
@@ -64,4 +71,5 @@ WORKDIR /home/node
 COPY --chmod=0755 sandbox-start.sh /usr/local/bin/sandbox-start
 COPY --chmod=0755 sandbox-session.sh /usr/local/bin/sandbox-session
 COPY --chmod=0755 sandbox_agent.py /usr/local/lib/flowie/sandbox_agent.py
+COPY --chmod=0755 claude_statusline.py /usr/local/lib/flowie/claude_statusline.py
 CMD ["sandbox-start"]

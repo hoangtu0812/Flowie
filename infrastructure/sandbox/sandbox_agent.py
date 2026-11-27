@@ -680,6 +680,116 @@ def git_op(body: dict[str, Any]) -> dict[str, Any]:
     return {'ok': True, 'output': out.strip()[:MAX_OP_OUTPUT]}
 
 
+# ---- Usage, ported from termi (src/system.mjs, src/agents/claude.mjs and codex.mjs limits) ----
+# VI: ---- Mức dùng, chuyển từ termi (src/system.mjs, giới hạn trong src/agents/claude.mjs, codex.mjs) ----
+
+CGROUP = Path('/sys/fs/cgroup')
+CPU_SAMPLE_SECONDS = 0.2
+ROLLOUT_FILES = 30
+TAIL_BYTES = 256 * 1024
+_cpu_sample: dict[str, float] = {}
+
+
+def _read(path: Path) -> str:
+    try:
+        return path.read_text().strip()
+    except OSError:
+        return ''
+
+
+def cpu_percent(cgroup: Path = CGROUP) -> int | None:
+    """CPU the container used since the last call, as a share of its limit (cgroup v2).
+    VI: CPU container đã dùng kể từ lần gọi trước, theo tỷ lệ so với giới hạn của nó (cgroup v2)."""
+    usage = re.search(r'usage_usec (\d+)', _read(cgroup / 'cpu.stat'))
+    if not usage:
+        return None
+    quota, _, period = (_read(cgroup / 'cpu.max') or 'max 100000').partition(' ')
+    cpus = int(quota) / int(period or 100000) if quota != 'max' else float(os.cpu_count() or 1)
+    now, used = time.monotonic(), int(usage.group(1))
+    previous = dict(_cpu_sample)
+    _cpu_sample.update(at=now, used=used)
+    if not previous:
+        time.sleep(CPU_SAMPLE_SECONDS)
+        return cpu_percent(cgroup)
+    elapsed = (now - previous['at']) * 1_000_000 * cpus
+    return max(0, min(100, round((used - previous['used']) / elapsed * 100))) if elapsed > 0 else None
+
+
+def memory(cgroup: Path = CGROUP) -> dict[str, int | None]:
+    current, limit = _read(cgroup / 'memory.current'), _read(cgroup / 'memory.max')
+    return {'used': int(current) if current.isdigit() else None, 'limit': int(limit) if limit.isdigit() else None}
+
+
+def _tail_records(file: Path) -> list[dict[str, Any]]:
+    try:
+        with file.open('rb') as handle:
+            handle.seek(max(0, file.stat().st_size - TAIL_BYTES))
+            lines = handle.read().decode('utf-8', 'replace').split('\n')
+    except OSError:
+        return []
+    records = []
+    for line in lines:
+        try:
+            record = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(record, dict):
+            records.append(record)
+    return records
+
+
+def _window(window: Any, now: float, percent_key: str) -> dict[str, Any] | None:
+    if not isinstance(window, dict) or not isinstance(window.get('resets_at'), (int, float)):
+        return None
+    if window['resets_at'] <= now:
+        return None
+    return {'pct': round(float(window.get(percent_key) or 0)), 'resetsAt': int(window['resets_at'] * 1000),
+            **({'minutes': window['window_minutes']} if 'window_minutes' in window else {})}
+
+
+def codex_limits(now: float | None = None) -> dict[str, Any] | None:
+    """Codex's plan windows from the newest rollout that reported them (`token_count`).
+    VI: Các khung giới hạn gói của Codex từ file rollout mới nhất có báo (`token_count`)."""
+    root = home() / '.codex' / 'sessions'
+    files = sorted(root.glob('**/rollout-*.jsonl'), key=lambda f: f.stat().st_mtime, reverse=True) if root.is_dir() else []
+    moment = now if now is not None else time.time()
+    for file in files[:ROLLOUT_FILES]:
+        for record in reversed(_tail_records(file)):
+            payload = record.get('payload') or {}
+            rates = payload.get('rate_limits') if payload.get('type') == 'token_count' else None
+            if isinstance(rates, dict):
+                return {'plan': rates.get('plan_type'),
+                        'primary': _window(rates.get('primary'), moment, 'used_percent'),
+                        'secondary': _window(rates.get('secondary'), moment, 'used_percent')}
+    return None
+
+
+def claude_limits(now: float | None = None) -> dict[str, Any] | None:
+    """Claude's 5-hour and 7-day windows, as Flowie's statusline script last saw them.
+    VI: Khung 5 giờ và 7 ngày của Claude, theo lần cuối script statusline của Flowie thấy."""
+    try:
+        saved = json.loads((home() / '.flowie' / 'claude-usage.json').read_text())
+    except (OSError, ValueError):
+        return None
+    rates = saved.get('rate_limits') if isinstance(saved, dict) else None
+    if not isinstance(rates, dict):
+        return None
+    moment = now if now is not None else time.time()
+    return {'fiveHour': _window(rates.get('five_hour'), moment, 'used_percentage'),
+            'sevenDay': _window(rates.get('seven_day'), moment, 'used_percentage'), 'at': saved.get('at')}
+
+
+def usage() -> dict[str, Any]:
+    disk = os.statvfs(home())
+    return {
+        'cpu': cpu_percent(),
+        'memory': memory(),
+        'disk': {'free': disk.f_bavail * disk.f_frsize, 'total': disk.f_blocks * disk.f_frsize},
+        'claude': claude_limits(),
+        'codex': codex_limits(),
+    }
+
+
 def route(token: str, method: str, raw_path: str, body: bytes, filename: str = '') -> tuple[int, Any]:
     parts = urlsplit(raw_path)
     segments = parts.path.strip('/').split('/')
@@ -727,6 +837,8 @@ def route(token: str, method: str, raw_path: str, body: bytes, filename: str = '
             )
         if method == 'POST' and path == ['git', 'op']:
             return 200, git_op(request)
+        if method == 'GET' and path == ['usage']:
+            return 200, usage()
         if method == 'GET' and path == ['dirs']:
             return 200, recent_dirs()
         if method == 'GET' and path == ['conversations']:

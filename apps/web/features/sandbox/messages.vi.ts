@@ -99,4 +99,14 @@ export const messages = {
    'Stage': 'Stage',
    'Commit message': 'Nội dung commit',
    'Commits': 'Các commit',
+   'Sandbox usage': 'Mức dùng sandbox',
+   'Memory': 'Bộ nhớ',
+   'Free disk': 'Ổ còn trống',
+   'Claude, 5 hours': 'Claude, 5 giờ',
+   'Claude, 7 days': 'Claude, 7 ngày',
+   'Codex, short window': 'Codex, khung ngắn',
+   'Codex, weekly window': 'Codex, khung tuần',
+   'resets {time}': 'đặt lại {time}',
+   'Plan limits appear after Claude Code or Codex has answered once.':
+      'Giới hạn gói hiện sau khi Claude Code hoặc Codex trả lời lần đầu.',
 } as const;

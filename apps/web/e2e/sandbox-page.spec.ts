@@ -410,3 +410,50 @@ test('The Files and Git tabs browse the session folder and run git actions', asy
    await expect(diff.getByTestId('diff-text')).toContainText('+new');
    await expect(diff).toContainText('src/app.py');
 });
+
+test('The usage chip shows CPU, memory and the busiest plan windows', async ({ page }) => {
+   const soon = Date.now() + 3_600_000;
+   await page.route('**/api/v1/sandbox', (route) =>
+      route.fulfill({ json: { data: { state: 'running' } } })
+   );
+   await page.route('**/api/v1/sandbox/sessions', (route) => route.fulfill({ json: { data: [] } }));
+   await page.route('**/api/v1/sandbox/dirs', (route) =>
+      route.fulfill({ json: { data: { home: '/home/node', recent: [] } } })
+   );
+   await page.route('**/api/v1/sandbox/usage', (route) =>
+      route.fulfill({
+         json: {
+            data: {
+               cpu: 12,
+               memory: { used: 1024 ** 3, limit: 2 * 1024 ** 3 },
+               disk: { free: 40 * 1024 ** 3, total: 100 * 1024 ** 3 },
+               claude: {
+                  fiveHour: { pct: 34, resetsAt: soon },
+                  sevenDay: { pct: 9, resetsAt: soon },
+               },
+               codex: {
+                  plan: 'plus',
+                  primary: { pct: 12, resetsAt: soon, minutes: 300 },
+                  secondary: null,
+               },
+            },
+         },
+      })
+   );
+   await page.route(/\/api\/v1\/sandbox\/ui\/\?arg=/, (route) =>
+      route.fulfill({ contentType: 'text/html', body: '<p>terminal is here</p>' })
+   );
+   await signIn(page);
+   await page.goto(`/${fixture.slug}/sandbox`);
+
+   const chip = page.getByRole('button', { name: 'Sandbox usage' });
+   await expect(chip).toContainText('CPU 12% · RAM 50%');
+   await expect(chip).toContainText('Claude 34%');
+   await expect(chip).toContainText('Codex 12%');
+   await chip.click();
+   const details = page.getByTestId('usage-details');
+   await expect(details).toContainText('1.0 GB / 2.0 GB');
+   await expect(details).toContainText('40.0 GB');
+   await expect(details).toContainText('Claude, 7 days');
+   await expect(details).not.toContainText('Codex, weekly window');
+});

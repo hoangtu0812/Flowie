@@ -30,6 +30,7 @@ import { NewSessionDialog } from './new-session-dialog';
 import { Composer, KeyRow } from './session-controls';
 import { FilesPanel } from './files-panel';
 import { GitPanel } from './git-panel';
+import { UsageChip } from './usage-chip';
 import { cn } from '@/lib/utils';
 import { SessionList } from './session-list';
 import { messages } from './messages.vi';
@@ -172,6 +173,7 @@ export function SandboxPage() {
             <HStack gap={2} className="ml-auto items-center">
                {running && (
                   <>
+                     <UsageChip />
                      <Button
                         label={tx('Open in a new tab')}
                         icon={<ExternalLink className="size-4" />}

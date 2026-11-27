@@ -342,3 +342,57 @@ def test_git_overview_ops_and_diffs(repo):
     failed = call('POST', 'git/op', {'dir': str(repo), 'op': 'push'})
     assert failed[0] == 400 and failed[1]['error']  # no remote: git's own words come back
     assert call('GET', f'git?dir={repo.parent}')[0] == 400  # not a repository
+
+
+def test_cpu_and_memory_come_from_the_cgroup(tmp_path, monkeypatch):
+    (tmp_path / 'cpu.max').write_text('50000 100000\n')  # half a CPU
+    (tmp_path / 'cpu.stat').write_text('usage_usec 1100000\nuser_usec 1\n')
+    (tmp_path / 'memory.current').write_text('536870912\n')
+    (tmp_path / 'memory.max').write_text('2147483648\n')
+    monkeypatch.setattr(agent, '_cpu_sample', {'at': 10.0, 'used': 1_000_000})
+    monkeypatch.setattr(agent.time, 'monotonic', lambda: 10.4)
+    assert agent.cpu_percent(tmp_path) == 50  # 0.1 s of CPU in 0.4 s on half a CPU
+    assert agent.memory(tmp_path) == {'used': 536870912, 'limit': 2147483648}
+    (tmp_path / 'memory.max').write_text('max\n')
+    assert agent.memory(tmp_path)['limit'] is None
+    assert agent.cpu_percent(tmp_path / 'missing') is None
+
+
+def test_plan_limits_of_codex_and_claude(sandbox):
+    home, _, _ = sandbox
+    now = 1_800_000_000
+    rollout = home / '.codex' / 'sessions' / '2026' / '11' / '27' / 'rollout-1.jsonl'
+    rollout.parent.mkdir(parents=True)
+    rollout.write_text('\n'.join(json.dumps(r) for r in [
+        {'type': 'event_msg', 'payload': {'type': 'token_count', 'rate_limits': {'plan_type': 'plus',
+            'primary': {'used_percent': 12.4, 'window_minutes': 300, 'resets_at': now + 600},
+            'secondary': {'used_percent': 40, 'window_minutes': 10080, 'resets_at': now - 1}}}},
+        {'type': 'response_item', 'payload': {'type': 'message'}},
+    ]))
+    assert agent.codex_limits(now) == {
+        'plan': 'plus', 'primary': {'pct': 12, 'resetsAt': (now + 600) * 1000, 'minutes': 300}, 'secondary': None,
+    }
+    assert agent.claude_limits(now) is None
+    usage_file = home / '.flowie' / 'claude-usage.json'
+    usage_file.parent.mkdir(parents=True)
+    usage_file.write_text(json.dumps({'at': 5, 'rate_limits': {
+        'five_hour': {'used_percentage': 33.6, 'resets_at': now + 60}, 'seven_day': {'used_percentage': 9, 'resets_at': now + 9}}}))
+    assert agent.claude_limits(now) == {
+        'fiveHour': {'pct': 34, 'resetsAt': (now + 60) * 1000}, 'sevenDay': {'pct': 9, 'resetsAt': (now + 9) * 1000}, 'at': 5,
+    }
+    status, usage = call('GET', 'usage')
+    assert status == 200 and set(usage) == {'cpu', 'memory', 'disk', 'claude', 'codex'}
+    assert usage['disk']['free'] > 0
+
+
+def test_statusline_records_claude_limits_and_prints_model_and_folder(tmp_path):
+    spec = importlib.util.spec_from_file_location('claude_statusline', ROOT / 'infrastructure/sandbox/claude_statusline.py')
+    assert spec and spec.loader
+    statusline = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(statusline)
+    status = {'model': {'display_name': 'Opus'}, 'workspace': {'current_dir': '/home/node/work/DTD-7'},
+              'rate_limits': {'five_hour': {'used_percentage': 20, 'resets_at': 1}}}
+    assert statusline.main(json.dumps(status), tmp_path) == 'Opus · DTD-7'
+    saved = json.loads((tmp_path / '.flowie' / 'claude-usage.json').read_text())
+    assert saved['rate_limits'] == status['rate_limits'] and saved['at'] > 0
+    assert statusline.main('not json', tmp_path) == ''

@@ -392,3 +392,18 @@ def test_files_and_git_reach_the_agent_with_their_parameters(monkeypatch):
     assert image.content == b'<svg/>' and image.headers['content-type'] == 'image/svg+xml'
     assert image.headers['content-security-policy'] == 'sandbox' and image.headers['x-content-type-options'] == 'nosniff'
     assert client.get('/api/v1/sandbox/file/raw?path=/home/node/a.md').status_code == 404
+
+
+def test_usage_passes_through_and_is_null_while_stopped(monkeypatch):
+    up = [True]
+
+    def agent(request, path):
+        assert path == 'usage'
+        if not up[0]:
+            raise httpx.ConnectError('stopped')
+        return httpx.Response(200, json={'cpu': 5})
+
+    client = agent_client(ME, monkeypatch, agent)
+    assert client.get('/api/v1/sandbox/usage').json() == {'data': {'cpu': 5}}
+    up[0] = False
+    assert client.get('/api/v1/sandbox/usage').json() == {'data': None}
