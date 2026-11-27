@@ -103,7 +103,7 @@ pull request and commit references, which are for us.
 
 ### Fixed
 
-- "Open on Azure DevOps" on a pull request now opens the pull request page instead of a page of raw JSON, including for pull requests synced before this fix. Rebuild `api`; no migration.
+- "Open on Azure DevOps" on a pull request now opens the pull request page instead of a page of raw JSON, including for pull requests synced before this fix. Rebuild `api`; no migration. (#355)
   VI: "Open on Azure DevOps" trên pull request giờ mở trang pull request thay vì một trang JSON thô, kể cả với pull request đã đồng bộ trước bản sửa này. Build lại `api`; không có migration.
 
 ## [0.25.0] — 2026-11-19 14:31 +07
