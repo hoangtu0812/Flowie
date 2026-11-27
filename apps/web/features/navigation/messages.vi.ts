@@ -55,6 +55,7 @@ export const messages: Readonly<Record<string, string>> = {
    'Service Desk': 'Service Desk',
    'My issues': 'Công việc của tôi',
    'Agent': 'Agent',
+   'Sandbox': 'Sandbox',
    'Dashboard': 'Báo cáo',
    'Views': 'Chế độ xem',
    'Timesheet': 'Bảng chấm công',

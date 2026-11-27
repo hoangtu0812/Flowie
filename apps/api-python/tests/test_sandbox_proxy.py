@@ -1,8 +1,12 @@
 import asyncio
+import contextlib
 import threading
+import time
 from dataclasses import replace
+from types import SimpleNamespace
 
 import httpx
+import jwt
 import pytest
 import websockets
 from fastapi import FastAPI
@@ -146,3 +150,27 @@ def test_socket_is_piped_to_the_callers_ttyd_with_termi_credentials(monkeypatch)
     assert seen['headers']['Origin'] == 'http://localhost:7680'
     assert seen['headers']['Host'] == 'localhost:7680'
     assert 'Cookie' not in seen['headers']
+
+
+def test_open_terminal_outlives_the_access_token_but_not_the_session(monkeypatch):
+    settings = Settings.from_environment()
+    now = int(time.time())
+    claims = {'sub': ME['id'], 'sid': 's1', 'ver': 1, 'iat': now - 3600, 'exp': now - 60,
+              'token_use': 'access', 'aud': 'flowie-web', 'iss': 'flowie'}
+    token = jwt.encode(claims, settings.auth_jwt_secret, algorithm='HS256')
+    sessions = {'s1'}
+
+    async def identity(db, claims):
+        return ME if claims['sid'] in sessions else None
+
+    monkeypatch.setattr(sandbox, 'active_identity', identity)
+    socket = SimpleNamespace(
+        cookies={'flowie_access': token},
+        app=SimpleNamespace(state=SimpleNamespace(settings=settings, session_factory=contextlib.nullcontext)),
+    )
+    with pytest.raises(ApiError):
+        asyncio.run(sandbox._socket_user(socket))
+    assert asyncio.run(sandbox._socket_user(socket, opening=False)) == ME
+    sessions.clear()
+    with pytest.raises(ApiError):
+        asyncio.run(sandbox._socket_user(socket, opening=False))

@@ -30,7 +30,7 @@ def expired():
     )
 
 
-def decode_access(token, settings):
+def decode_access(token, settings, *, verify_exp=True):
     try:
         claims = jwt.decode(
             token,
@@ -38,7 +38,7 @@ def decode_access(token, settings):
             algorithms=["HS256"],
             audience="flowie-web",
             issuer="flowie",
-            options={"require": ["sub", "sid", "ver", "iat", "exp"]},
+            options={"require": ["sub", "sid", "ver", "iat", "exp"], "verify_exp": verify_exp},
         )
         if (
             claims.get("token_use") != "access"

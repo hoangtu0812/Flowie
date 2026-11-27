@@ -21,6 +21,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { loadCurrentWorkspace } from '@/lib/workspaces';
+import { sandboxEnabled } from '@/lib/sandbox';
 import {
    Bot,
    ClipboardCheck,
@@ -28,6 +29,7 @@ import {
    GitPullRequestArrow,
    Inbox,
    LifeBuoy,
+   SquareTerminal,
 } from 'lucide-react';
 
 /**
@@ -65,6 +67,12 @@ export function NavInbox() {
    const latestDocumentEvent = notifications.find((item) => item.entityType === 'document')?.id;
    const [mounted, setMounted] = useState(false);
    useEffect(() => setMounted(true), []);
+   // Only people listed in SANDBOX_USERS see the Sandbox entry; it is not in Customize sidebar.
+   // VI: Chỉ người có trong SANDBOX_USERS thấy mục Sandbox; mục này không có trong Tùy chỉnh thanh bên.
+   const [sandbox, setSandbox] = useState(false);
+   useEffect(() => {
+      void sandboxEnabled().then(setSandbox);
+   }, []);
 
    useEffect(() => {
       let unsubscribe: () => void = () => undefined;
@@ -131,6 +139,16 @@ export function NavInbox() {
                   </SidebarMenuItem>
                );
             })}
+            {sandbox && (
+               <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                     <Link href={`/${orgId}/sandbox`}>
+                        <SquareTerminal />
+                        <span>{tx('Sandbox')}</span>
+                     </Link>
+                  </SidebarMenuButton>
+               </SidebarMenuItem>
+            )}
          </SidebarMenu>
       </SidebarGroup>
    );

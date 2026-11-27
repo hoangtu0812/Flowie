@@ -169,11 +169,15 @@ def _own_origin(settings: Settings, origin: str | None) -> bool:
     return origin in settings.cors_origins or origin == f'{app.scheme}://{app.netloc}'
 
 
-async def _socket_user(socket: WebSocket) -> dict[str, Any]:
+async def _socket_user(socket: WebSocket, *, opening: bool = True) -> dict[str, Any]:
+    """The socket keeps its handshake cookie, so later checks skip the token's
+    15-minute expiry and ask only whether the session and account are still active.
+    VI: Socket giữ cookie lúc handshake, nên các lần kiểm sau bỏ qua hạn 15 phút của token
+    VI: và chỉ hỏi phiên và tài khoản còn hoạt động không."""
     token = socket.cookies.get('flowie_access')
     if not token:
         raise expired()
-    claims = decode_access(token, _settings(socket))
+    claims = decode_access(token, _settings(socket), verify_exp=opening)
     async with socket.app.state.session_factory() as db:
         user = await active_identity(db, claims)
     if user is None:
@@ -201,7 +205,7 @@ async def _pump(socket: WebSocket, upstream: Any) -> None:
         # VI: Người đã đăng xuất hoặc bị khoá mất terminal đang mở trong vòng một phút.
         while True:
             await asyncio.sleep(SOCKET_RECHECK_SECONDS)
-            _sandbox_user(_settings(socket), await _socket_user(socket))
+            _sandbox_user(_settings(socket), await _socket_user(socket, opening=False))
 
     tasks = [asyncio.create_task(job()) for job in (to_upstream, to_browser, recheck)]
     try:
