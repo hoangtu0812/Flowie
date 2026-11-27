@@ -87,6 +87,9 @@ export type SandboxSession = {
    agent: SandboxAgent | null;
    state: 'working' | 'waiting' | 'idle' | 'shell';
    preview: string;
+   /** Branch and uncommitted files of the folder; null outside a repository. */
+   branch?: string | null;
+   changes?: number | null;
 };
 
 export type SandboxConversation = {

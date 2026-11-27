@@ -51,7 +51,7 @@ For a signed-in user whose email is in `SANDBOX_USERS` (everyone else gets 403):
 | `POST /api/v1/sandbox/stop` | Stop it |
 | `GET /api/v1/sandbox/repositories?issueId=` | `{data: [{id, name}]}`: repositories of the issue's project the caller can read |
 | `POST /api/v1/sandbox/open` | `{issueId, repositoryId, agent}` with `agent` `claude` or `codex`: start the sandbox and open the issue's session; `{data: {session}}` |
-| `GET /api/v1/sandbox/sessions` | `{data: [{name, dir, agent, state, preview}]}`: tmux sessions, most recently used first; `agent` is `claude`, `codex` or null, `state` is `working`, `waiting`, `idle` or `shell`; empty while stopped |
+| `GET /api/v1/sandbox/sessions` | `{data: [{name, dir, agent, state, preview, branch, changes}]}`: tmux sessions, most recently used first; `agent` is `claude`, `codex` or null, `state` is `working`, `waiting`, `idle` or `shell`; `branch` and `changes` (uncommitted files) of the folder, null outside a repository, cached 15 s; empty while stopped |
 | `POST /api/v1/sandbox/sessions` | `{name, dir?, agent?, resume?}`: a session in a folder of the home running Claude Code or Codex (optionally `--resume <conversation id>`) or a shell; `201`, `409` if the name exists |
 | `POST /api/v1/sandbox/sessions/<name>/rename` | `{to}` |
 | `DELETE /api/v1/sandbox/sessions/<name>` | Close that session (`204`) |
@@ -106,6 +106,18 @@ The Flowie access cookie lasts 15 minutes and is renewed by the Flowie web
 app. The Sandbox page asks for the sandbox state every minute, which renews
 it. A terminal opened in a tab of its own needs a Flowie page (the Sandbox
 page or any other) open alongside it.
+
+The page is laid out like termi's desktop since v1.10 (DTD-1074): an activity
+bar on the left (Sessions, Files, Git; Alt+1/2/3), where clicking the active view
+collapses the side panel; the side panel, resizable from 240 to 720 px (double
+click resets) and collapsed with Ctrl/Cmd+B, both remembered in the browser;
+the main area with the open session's terminal, where files also open; and a
+status bar with the session's folder, branch and uncommitted files (both open
+Git) and the usage chip. With no session open, the main area shows termi's
+start page: continue a session (waiting ones first) and up to five recent
+projects, each with a Claude Code and a Codex button and one that resumes the
+project's latest conversation. On phones the activity bar is a row on top with
+Terminal as one more view, and the key row shows only there.
 
 The Sandbox page lists the sessions beside the terminal, as termi does: the
 ones waiting for the person first, then working, idle and plain shells, each

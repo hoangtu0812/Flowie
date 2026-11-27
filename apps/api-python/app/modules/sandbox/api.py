@@ -187,7 +187,7 @@ async def _agent(
     return response.status_code, answer
 
 
-SESSION_FIELDS = ('name', 'dir', 'agent', 'state', 'preview')
+SESSION_FIELDS = ('name', 'dir', 'agent', 'state', 'preview', 'branch', 'changes')
 
 
 @router.get('/sessions')

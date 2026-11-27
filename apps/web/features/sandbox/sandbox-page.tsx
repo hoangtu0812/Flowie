@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Button } from '@astryxdesign/core/Button';
 import { Dialog, DialogHeader } from '@astryxdesign/core/Dialog';
@@ -8,6 +8,7 @@ import { HStack, Layout, LayoutContent, LayoutFooter, VStack } from '@astryxdesi
 import { Text } from '@astryxdesign/core/Text';
 import { TextInput } from '@astryxdesign/core/TextInput';
 import { ExternalLink, Play, Plus, Square } from 'lucide-react';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/common/loading-state';
 import { QueryState } from '@/components/common/query-state';
@@ -23,12 +24,15 @@ import {
    sandboxSessionUrl,
    startSandbox,
    stopSandbox,
+   type SandboxFile,
    type SandboxSession,
    type SandboxState,
 } from '@/lib/sandbox';
 import { NewSessionDialog } from './new-session-dialog';
 import { Composer, KeyRow } from './session-controls';
-import { FilesPanel } from './files-panel';
+import { FilesPanel, FileViewer } from './files-panel';
+import { HomePage } from './home-page';
+import { ActivityBar, ResizeHandle, StatusBar, useSidePanel, type SidePanel } from './workbench';
 import { GitPanel } from './git-panel';
 import { UsageChip } from './usage-chip';
 import { cn } from '@/lib/utils';
@@ -70,11 +74,59 @@ export function SandboxPage() {
    // Starts on the session "Open with Claude/Codex" on an issue asked for, if any.
    // VI: Bắt đầu ở phiên mà "Mở bằng Claude/Codex" trên task yêu cầu, nếu có.
    const [selected, setSelected] = useState<string | null>(useSearchParams().get('session'));
-   const current = selected ?? sessions[0]?.name ?? 'main';
+   const current = selected;
    const currentSession = sessions.find((session) => session.name === current);
    const currentAgent = currentSession?.agent ?? null;
-   const [pane, setPane] = useState<'terminal' | 'files' | 'git'>('terminal');
+   const [panel, setPanel] = useState<SidePanel>('sessions');
+   const side = useSidePanel();
+   const sideRef = useRef<HTMLElement>(null);
+   const isMobile = useIsMobile();
+   // On phones one view fills the screen: a panel, or the session's terminal.
+   // VI: Trên điện thoại một màn hình chiếm toàn bộ: một panel, hoặc terminal của phiên.
+   const [terminalShown, setTerminalShown] = useState(Boolean(selected));
+   const [openFile, setOpenFile] = useState<SandboxFile | null>(null);
    const [draft, setDraft] = useState('');
+
+   const openSession = (name: string | null) => {
+      setSelected(name);
+      setOpenFile(null);
+      setTerminalShown(Boolean(name));
+   };
+
+   const choosePanel = useCallback(
+      (next: SidePanel) => {
+         if (isMobile) {
+            setPanel(next);
+            setTerminalShown(false);
+            return;
+         }
+         if (next === panel && !side.collapsed) side.toggle(true);
+         else {
+            setPanel(next);
+            side.toggle(false);
+         }
+      },
+      [isMobile, panel, side]
+   );
+
+   // termi's shortcuts: Ctrl/Cmd+B collapses the side panel, Alt+1/2/3 open Sessions, Files, Git.
+   // VI: Phím tắt của termi: Ctrl/Cmd+B thu gọn panel bên, Alt+1/2/3 mở Phiên, File, Git.
+   const onKey = useCallback(
+      (event: KeyboardEvent) => {
+         if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'b') {
+            event.preventDefault();
+            side.toggle();
+         } else if (event.altKey && ['Digit1', 'Digit2', 'Digit3'].includes(event.code)) {
+            event.preventDefault();
+            choosePanel((['sessions', 'files', 'git'] as const)[Number(event.code.slice(-1)) - 1]);
+         }
+      },
+      [choosePanel, side]
+   );
+   useEffect(() => {
+      document.addEventListener('keydown', onKey, true);
+      return () => document.removeEventListener('keydown', onKey, true);
+   }, [onKey]);
    // A per-browser convenience, so it lives in localStorage.
    // VI: Tiện ích theo từng trình duyệt nên lưu trong localStorage.
    const [fontSize, setFontSize] = useState(FONT_DEFAULT);
@@ -144,7 +196,7 @@ export function SandboxPage() {
       } catch (error) {
          toast.error(error instanceof Error ? error.message : String(error));
       }
-      if (name === current) setSelected(null);
+      if (name === current) openSession(null);
       void refreshSessions();
    };
 
@@ -152,7 +204,7 @@ export function SandboxPage() {
       if (!renaming) return;
       try {
          const name = await renameSandboxSession(renaming.from, renaming.to);
-         if (renaming.from === current) setSelected(name);
+         if (renaming.from === current) openSession(name);
          setRenaming(null);
          void refreshSessions();
       } catch (error) {
@@ -173,16 +225,18 @@ export function SandboxPage() {
             <HStack gap={2} className="ml-auto items-center">
                {running && (
                   <>
-                     <UsageChip />
-                     <Button
-                        label={tx('Open in a new tab')}
-                        icon={<ExternalLink className="size-4" />}
-                        isIconOnly
-                        href={sandboxSessionUrl(current, fontSize)}
-                        target="_blank"
-                        size="sm"
-                        variant="ghost"
-                     />
+                     {isMobile && <UsageChip />}
+                     {current && (
+                        <Button
+                           label={tx('Open in a new tab')}
+                           icon={<ExternalLink className="size-4" />}
+                           isIconOnly
+                           href={sandboxSessionUrl(current, fontSize)}
+                           target="_blank"
+                           size="sm"
+                           variant="ghost"
+                        />
+                     )}
                      <Button
                         label={tx('Stop')}
                         icon={<Square className="size-4" />}
@@ -229,85 +283,133 @@ export function SandboxPage() {
          )}
          {running && (
             <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-               <aside className="flex max-h-56 shrink-0 flex-col border-b lg:max-h-none lg:w-72 lg:border-b-0 lg:border-r">
-                  <div className="px-3 pt-2">
-                     <Button
-                        label={tx('New session')}
-                        icon={<Plus className="size-4" />}
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setCreating(true)}
-                     />
-                  </div>
-                  <div className="min-h-0 flex-1 overflow-y-auto">
-                     <SessionList
-                        sessions={sessions}
-                        current={current}
-                        home={home}
-                        onSelect={setSelected}
-                        onRename={(name) => setRenaming({ from: name, to: name })}
-                        onClose={(name) => void closeSession(name)}
-                     />
-                  </div>
-               </aside>
-               <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-                  <div
-                     role="tablist"
-                     aria-label={tx('Sandbox views')}
-                     className="flex shrink-0 gap-1 border-b px-2 py-1"
-                  >
-                     {(
-                        [
-                           ['terminal', 'Terminal'],
-                           ['files', 'Files'],
-                           ['git', 'Git'],
-                        ] as const
-                     ).map(([key, label]) => (
-                        <button
-                           key={key}
-                           type="button"
-                           role="tab"
-                           aria-selected={pane === key}
-                           onClick={() => setPane(key)}
-                           className={cn(
-                              'rounded px-2 py-0.5 text-xs text-muted-foreground hover:bg-accent',
-                              pane === key && 'bg-accent text-foreground'
-                           )}
-                        >
-                           {tx(label)}
-                        </button>
-                     ))}
-                  </div>
-                  {pane === 'files' && (
+               <ActivityBar
+                  panel={panel}
+                  collapsed={!isMobile && side.collapsed}
+                  onPanel={choosePanel}
+                  terminalShown={terminalShown}
+                  onTerminal={() => setTerminalShown(true)}
+                  badges={{
+                     sessions: sessions.filter((session) => session.state === 'waiting').length,
+                     git: currentSession?.changes ?? 0,
+                  }}
+               />
+               <aside
+                  ref={sideRef}
+                  aria-label={tx('Side panel')}
+                  style={isMobile ? undefined : { width: side.width }}
+                  className={cn(
+                     'min-h-0 min-w-0 flex-1 flex-col lg:flex-none lg:border-r',
+                     isMobile
+                        ? terminalShown
+                           ? 'hidden'
+                           : 'flex'
+                        : side.collapsed
+                          ? 'hidden'
+                          : 'flex'
+                  )}
+               >
+                  {panel === 'sessions' && (
+                     <>
+                        <div className="px-3 pt-2">
+                           <Button
+                              label={tx('New session')}
+                              icon={<Plus className="size-4" />}
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setCreating(true)}
+                           />
+                        </div>
+                        <div className="min-h-0 flex-1 overflow-y-auto">
+                           <SessionList
+                              sessions={sessions}
+                              current={current ?? ''}
+                              home={home}
+                              onSelect={openSession}
+                              onRename={(name) => setRenaming({ from: name, to: name })}
+                              onClose={(name) => void closeSession(name)}
+                           />
+                        </div>
+                     </>
+                  )}
+                  {panel === 'files' && (
                      <FilesPanel
                         start={currentSession?.dir || home}
                         home={home}
-                        onInsert={(path) => {
-                           setDraft((text) => (text ? `${text} ${path}` : path));
-                           setPane('terminal');
+                        onOpen={(file) => {
+                           setOpenFile(file);
+                           setTerminalShown(true);
                         }}
                      />
                   )}
-                  {pane === 'git' && <GitPanel dir={currentSession?.dir || home} />}
-                  <iframe
-                     key={`${current}-${fontSize}`}
-                     title={tx('Sandbox terminal')}
-                     src={sandboxSessionUrl(current, fontSize)}
-                     allow="clipboard-read; clipboard-write"
-                     className={cn(
-                        'min-h-0 w-full flex-1 border-0',
-                        pane !== 'terminal' && 'hidden'
-                     )}
-                  />
-                  {pane === 'terminal' && <KeyRow session={current} onFont={changeFont} />}
-                  <Composer
-                     session={current}
-                     agent={currentAgent}
-                     text={draft}
-                     setText={setDraft}
-                  />
-               </div>
+                  {panel === 'git' && <GitPanel dir={currentSession?.dir || home} />}
+               </aside>
+               {!side.collapsed && <ResizeHandle panel={sideRef} onResize={side.resize} />}
+               <main
+                  aria-label={tx('Session')}
+                  className={cn(
+                     'min-h-0 min-w-0 flex-1 flex-col',
+                     isMobile && !terminalShown ? 'hidden' : 'flex'
+                  )}
+               >
+                  {openFile && (
+                     <FileViewer
+                        file={openFile}
+                        home={home}
+                        onClose={() => setOpenFile(null)}
+                        onInsert={(path) => {
+                           setDraft((text) => (text ? `${text} ${path}` : path));
+                           setOpenFile(null);
+                        }}
+                     />
+                  )}
+                  {!current && !openFile && (
+                     <HomePage
+                        sessions={sessions}
+                        home={home}
+                        onOpen={(name) => {
+                           openSession(name);
+                           void refreshSessions();
+                        }}
+                        onNewSession={() => setCreating(true)}
+                     />
+                  )}
+                  {current && (
+                     <>
+                        <iframe
+                           key={`${current}-${fontSize}`}
+                           title={tx('Sandbox terminal')}
+                           src={sandboxSessionUrl(current, fontSize)}
+                           allow="clipboard-read; clipboard-write"
+                           className={cn('min-h-0 w-full flex-1 border-0', openFile && 'hidden')}
+                           onLoad={(event) => {
+                              // The terminal is same-origin, so the shortcuts work while it has focus.
+                              // VI: Terminal cùng origin, nên phím tắt vẫn chạy khi terminal đang focus.
+                              try {
+                                 event.currentTarget.contentWindow?.document.addEventListener(
+                                    'keydown',
+                                    onKey,
+                                    true
+                                 );
+                              } catch {
+                                 // A cross-origin terminal (local development) keeps its own keys.
+                              }
+                           }}
+                        />
+                        <KeyRow session={current} onFont={changeFont} />
+                        <Composer
+                           session={current}
+                           agent={currentAgent}
+                           text={draft}
+                           setText={setDraft}
+                        />
+                     </>
+                  )}
+               </main>
             </div>
+         )}
+         {running && (
+            <StatusBar session={currentSession} home={home} onGit={() => choosePanel('git')} />
          )}
          {creating && (
             <NewSessionDialog
