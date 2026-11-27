@@ -586,3 +586,124 @@ test('The start page, side panel and status bar follow termi', async ({ page }) 
    await expect(status).toContainText('3 uncommitted');
    await expect(views.getByRole('button', { name: 'Git' })).toContainText('3');
 });
+
+test('Chat shows the conversation, folds tool steps and opens changed files', async ({ page }) => {
+   const home = '/home/node';
+   const repo = `${home}/work/DTD-7-flowie`;
+   const conversation = '0f8fad5b-d9cb-469f-a165-70867728950e';
+   const created: unknown[] = [];
+   const chat = {
+      agent: 'claude',
+      state: 'idle',
+      dir: repo,
+      items: [
+         { kind: 'msg', who: 'user', text: 'Sửa lỗi đăng nhập', t: null },
+         {
+            kind: 'tools',
+            t: null,
+            steps: [
+               { verb: 'Read', detail: 'login.py' },
+               { verb: 'Edit', detail: 'login.py', file: `${repo}/app/login.py`, change: 'edit' },
+               {
+                  verb: 'Create',
+                  detail: 'test_login.py',
+                  file: `${repo}/tests/test_login.py`,
+                  change: 'create',
+               },
+            ],
+         },
+         { kind: 'msg', who: 'assistant', text: '**Xong**, test đã qua.', t: null },
+      ],
+   };
+   await page.route('**/api/v1/sandbox', (route) =>
+      route.fulfill({ json: { data: { state: 'running' } } })
+   );
+   await page.route('**/api/v1/sandbox/dirs', (route) =>
+      route.fulfill({ json: { data: { home, recent: [repo] } } })
+   );
+   await page.route('**/api/v1/sandbox/conversations?*', (route) =>
+      route.fulfill({
+         json: {
+            data: [
+               {
+                  agent: 'claude',
+                  id: conversation,
+                  cwd: repo,
+                  title: 'Sửa lỗi đăng nhập',
+                  mtime: 1,
+               },
+            ],
+         },
+      })
+   );
+   await page.route(`**/api/v1/sandbox/conversations/claude/${conversation}`, (route) =>
+      route.fulfill({ json: { data: { ...chat, state: undefined } } })
+   );
+   await page.route('**/api/v1/sandbox/sessions', (route) => {
+      if (route.request().method() === 'POST') {
+         created.push(route.request().postDataJSON());
+         return route.fulfill({ status: 201, json: { data: { name: 'DTD-7-flowie-claude' } } });
+      }
+      return route.fulfill({
+         json: {
+            data: [{ name: 'DTD-7', dir: repo, agent: 'claude', state: 'idle', preview: '' }],
+         },
+      });
+   });
+   await page.route('**/api/v1/sandbox/sessions/DTD-7/chat', (route) =>
+      route.fulfill({ json: { data: chat } })
+   );
+   await page.route('**/api/v1/sandbox/git/diff?*', (route) =>
+      route.fulfill({
+         json: { data: { text: '@@ -1 +1 @@\n-old\n+new', files: [], commit: null } },
+      })
+   );
+   await page.route('**/api/v1/sandbox/file?*', (route) =>
+      route.fulfill({
+         json: { data: { path: `${repo}/tests/test_login.py`, text: 'def test_login(): pass\n' } },
+      })
+   );
+   await page.route(/\/api\/v1\/sandbox\/ui\/\?arg=/, (route) =>
+      route.fulfill({ contentType: 'text/html', body: '<p>terminal is here</p>' })
+   );
+   await signIn(page);
+   await page.goto(`/${fixture.slug}/sandbox`);
+
+   // A past conversation can be read from the start page and resumed from there.
+   await page.getByRole('button', { name: 'Read Sửa lỗi đăng nhập' }).click();
+   const viewer = page.getByTestId('conversation-viewer');
+   await expect(viewer.getByText('test đã qua.')).toBeVisible();
+   await viewer.getByRole('button', { name: 'Resume' }).click();
+   await expect.poll(() => created.length).toBe(1);
+   expect(created[0]).toEqual({
+      name: 'DTD-7-flowie-claude',
+      dir: repo,
+      agent: 'claude',
+      resume: conversation,
+   });
+
+   await page
+      .getByRole('list', { name: 'Terminal sessions' })
+      .getByRole('button', { name: /^DTD-7/ })
+      .click();
+   const views = page.getByRole('tablist', { name: 'Session views' });
+   await views.getByRole('tab', { name: 'Chat' }).click();
+   const chatView = page.getByTestId('chat-view');
+   await expect(chatView.getByText('Sửa lỗi đăng nhập')).toBeVisible();
+   await expect(chatView.locator('strong', { hasText: 'Xong' })).toBeVisible();
+   await expect(chatView.getByRole('button', { name: /3 steps/ })).toBeVisible();
+   await chatView.getByRole('button', { name: /3 steps/ }).click();
+   await expect(chatView.getByText('Read', { exact: true })).toBeVisible();
+
+   await chatView.getByRole('button', { name: 'login.py', exact: true }).click();
+   await expect(
+      page.getByRole('dialog', { name: 'login.py' }).getByTestId('diff-text')
+   ).toContainText('+new');
+   await page.keyboard.press('Escape');
+   await chatView.getByRole('button', { name: 'test_login.py' }).click();
+   await expect(page.getByTestId('file-view')).toContainText('def test_login()');
+   await page.getByRole('button', { name: 'Close the file' }).click();
+
+   await views.getByRole('tab', { name: 'Terminal' }).click();
+   await expect(page.locator('iframe[title="Sandbox terminal"]')).toBeVisible();
+});

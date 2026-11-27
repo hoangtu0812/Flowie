@@ -406,3 +406,77 @@ def test_sessions_carry_their_branch_and_uncommitted_count(repo, monkeypatch):
     monkeypatch.setattr(agent, '_git_summaries', {})
     assert agent.git_summary(str(repo))['changes'] == 5
     assert agent.git_summary(str(repo.parent)) == {'branch': None, 'changes': None}
+
+
+def test_claude_chat_groups_tools_and_keeps_edited_files(sandbox):
+    home, fake, ps = sandbox
+    folder = home / 'work' / 'DTD-7-flowie'
+    transcript = agent.claude_project_dir(str(folder)) / f'{CONVERSATION}.jsonl'
+    transcript.parent.mkdir(parents=True)
+    records = [
+        {'type': 'user', 'isMeta': True, 'message': {'content': '<command-name>/clear</command-name>'}},
+        {'type': 'user', 'timestamp': 't1', 'message': {'content': 'Sửa lỗi đăng nhập'}},
+        {'type': 'assistant', 'timestamp': 't2', 'message': {'content': [
+            {'type': 'text', 'text': 'Tôi xem file trước.'},
+            {'type': 'tool_use', 'name': 'Read', 'input': {'file_path': f'{folder}/app/login.py'}},
+        ]}},
+        {'type': 'user', 'timestamp': 't3', 'message': {'content': [{'type': 'tool_result', 'content': 'ok'}]}},
+        {'type': 'assistant', 'timestamp': 't4', 'message': {'content': [
+            {'type': 'tool_use', 'name': 'Edit', 'input': {'file_path': f'{folder}/app/login.py'}},
+            {'type': 'tool_use', 'name': 'Bash', 'input': {'command': 'pytest -q', 'description': 'Chạy test'}},
+            {'type': 'tool_use', 'name': 'Write', 'input': {'file_path': f'{folder}/tests/test_login.py'}},
+        ]}},
+        {'type': 'assistant', 'isSidechain': True, 'message': {'content': 'inside a subagent'}},
+        {'type': 'assistant', 'timestamp': 't5', 'message': {'content': [{'type': 'text', 'text': 'Xong, test đã qua.'}]}},
+    ]
+    transcript.write_text('\n'.join(json.dumps(r) for r in records) + '\n')
+    call('POST', 'sessions', {'name': 'DTD-7', 'dir': str(folder)})
+    pid = fake.sessions['DTD-7']['pid']
+    ps['out'] = f'{pid} 1 bash\n900 {pid} node /usr/local/bin/claude\n'
+    status, chat = call('GET', 'sessions/DTD-7/chat')
+    assert status == 200 and chat['agent'] == 'claude' and chat['dir'] == str(folder.resolve())
+    assert [(i['kind'], i.get('who'), i.get('text')) for i in chat['items']] == [
+        ('msg', 'user', 'Sửa lỗi đăng nhập'),
+        ('msg', 'assistant', 'Tôi xem file trước.'),
+        ('tools', None, None),
+        ('msg', 'assistant', 'Xong, test đã qua.'),
+    ]
+    steps = chat['items'][2]['steps']
+    assert [(s['verb'], s['detail']) for s in steps] == [
+        ('Read', 'login.py'), ('Edit', 'login.py'), ('Run', 'pytest -q'), ('Create', 'test_login.py'),
+    ]
+    assert steps[1]['file'] == f'{folder}/app/login.py' and steps[1]['change'] == 'edit'
+    assert steps[3]['change'] == 'create' and 'file' not in steps[0]
+    limited = agent.chat_items(agent.claude_events, agent._tail_lines(transcript), 1)  # newest message only
+    assert [i.get('text') for i in limited if i['kind'] == 'msg'] == ['Xong, test đã qua.']
+    assert call('GET', 'sessions/DTD-7/chat?limit=x')[0] == 200
+    viewed = call('GET', f'conversations/claude/{CONVERSATION}')
+    assert viewed[0] == 200 and len(viewed[1]['items']) == 4
+    assert call('GET', 'conversations/claude/not-a-uuid')[0] == 400
+    assert call('GET', f'conversations/claude/{uuid.UUID(int=1)}')[0] == 404
+    assert call('GET', f'conversations/bash/{CONVERSATION}')[0] == 400
+
+
+def test_codex_chat_reads_messages_commands_and_patches(sandbox):
+    home, _, _ = sandbox
+    folder = str(home / 'work' / 'DTD-7-flowie')
+    codex_id = str(uuid.UUID(int=9))
+    rollout = home / '.codex' / 'sessions' / '2026' / '11' / '27' / 'rollout-9.jsonl'
+    rollout.parent.mkdir(parents=True)
+    patch = '*** Begin Patch\n*** Update File: app/login.py\n@@\n-x\n+y\n*** Add File: docs/login.md\n+hi\n*** End Patch'
+    rollout.write_text('\n'.join(json.dumps(r) for r in [
+        {'type': 'session_meta', 'payload': {'id': codex_id, 'cwd': folder}},
+        {'type': 'response_item', 'payload': {'type': 'message', 'role': 'user', 'content': [{'type': 'input_text', 'text': '# AGENTS.md\nrules'}]}},
+        {'type': 'response_item', 'payload': {'type': 'message', 'role': 'user', 'content': [{'type': 'input_text', 'text': 'Thêm tài liệu'}]}},
+        {'type': 'response_item', 'payload': {'type': 'function_call', 'name': 'shell', 'arguments': json.dumps({'command': ['bash', '-lc', 'ls']})}},
+        {'type': 'response_item', 'payload': {'type': 'custom_tool_call', 'name': 'apply_patch', 'input': patch}},
+        {'type': 'response_item', 'payload': {'type': 'message', 'role': 'assistant', 'content': [{'type': 'output_text', 'text': 'Đã thêm.'}]}},
+    ]) + '\n')
+    assert agent.transcript_of('codex', folder) == rollout
+    chat = call('GET', f'conversations/codex/{codex_id}')[1]
+    assert [i.get('text') for i in chat['items'] if i['kind'] == 'msg'] == ['Thêm tài liệu', 'Đã thêm.']
+    steps = chat['items'][1]['steps']
+    assert steps[0] == {'verb': 'Run', 'detail': 'bash -lc ls'}
+    assert steps[1]['verb'] == 'Edit' and steps[1]['files'] == [
+        {'file': f'{folder}/app/login.py', 'change': 'edit'}, {'file': f'{folder}/docs/login.md', 'change': 'create'},
+    ]

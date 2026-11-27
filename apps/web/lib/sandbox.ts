@@ -313,3 +313,40 @@ export type SandboxUsage = {
 export async function loadSandboxUsage(): Promise<SandboxUsage | null> {
    return responseData(await authenticatedFetch(`${api}/sandbox/usage`), 'Could not read usage.');
 }
+
+export type SandboxChatStep = {
+   verb: string;
+   detail: string;
+   file?: string;
+   change?: 'edit' | 'create';
+   files?: { file: string; change: 'edit' | 'create' }[];
+};
+
+export type SandboxChatItem =
+   | { kind: 'msg'; who: 'user' | 'assistant'; text: string; t: string | null }
+   | { kind: 'tools'; steps: SandboxChatStep[]; t: string | null };
+
+export type SandboxChat = {
+   agent: SandboxAgent | null;
+   state?: SandboxSession['state'];
+   dir: string;
+   items: SandboxChatItem[];
+};
+
+/** The session's conversation as termi's chat. VI: Hội thoại của phiên dạng chat của termi. */
+export async function loadSandboxChat(name: string): Promise<SandboxChat> {
+   return responseData(
+      await authenticatedFetch(`${api}/sandbox/sessions/${encodeURIComponent(name)}/chat`),
+      'Could not read the conversation.'
+   );
+}
+
+export async function loadSandboxConversation(
+   agent: SandboxAgent,
+   id: string
+): Promise<SandboxChat> {
+   return responseData(
+      await authenticatedFetch(`${api}/sandbox/conversations/${agent}/${encodeURIComponent(id)}`),
+      'Could not read the conversation.'
+   );
+}

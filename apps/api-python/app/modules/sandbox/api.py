@@ -412,6 +412,39 @@ async def sandbox_usage(request: Request, user: Any = Depends(current_user)):
     return {'data': found}
 
 
+@router.get('/sessions/{name}/chat')
+async def sandbox_session_chat(
+    name: str, request: Request, limit: int = Query(default=80, ge=10, le=200), user: Any = Depends(current_user)
+):
+    """The session's conversation with its agent, as termi's chat: messages and grouped tool steps.
+    VI: Hội thoại của phiên với agent, như chat của termi: các tin và nhóm bước tool."""
+    settings = _settings(request)
+    user_id = _sandbox_user(settings, user)
+    if not SESSION_NAME.match(name):
+        raise ApiError(400, 'Invalid session name.', 'Bad Request')
+    _, chat = await _agent(settings, user_id, 'GET', f'sessions/{name}/chat', params={'limit': str(limit)})
+    return {'data': chat}
+
+
+@router.get('/conversations/{agent}/{conversation}')
+async def sandbox_conversation(
+    agent: Literal['claude', 'codex'],
+    conversation: str,
+    request: Request,
+    limit: int = Query(default=80, ge=10, le=200),
+    user: Any = Depends(current_user),
+):
+    """A past conversation, read without reopening it. VI: Một hội thoại cũ, đọc mà không mở lại."""
+    settings = _settings(request)
+    user_id = _sandbox_user(settings, user)
+    if not re.match(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', conversation):
+        raise ApiError(400, 'Invalid conversation.', 'Bad Request')
+    _, chat = await _agent(
+        settings, user_id, 'GET', f'conversations/{agent}/{conversation}', params={'limit': str(limit)}
+    )
+    return {'data': chat}
+
+
 @router.get('/dirs')
 async def sandbox_dirs(request: Request, user: Any = Depends(current_user)):
     """Folders to start a session in: the home, open sessions' folders, issue worktrees and clones.

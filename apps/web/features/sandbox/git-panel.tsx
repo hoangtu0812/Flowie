@@ -59,7 +59,7 @@ function GraphCell({ width, row }: { width: number; row: SandboxGit['graph']['ro
 
 /** A unified diff with added, removed and hunk lines coloured. */
 /** VI: Diff dạng unified, tô màu dòng thêm, dòng xoá và dòng hunk. */
-function DiffText({ text }: { text: string }) {
+export function DiffText({ text }: { text: string }) {
    return (
       <pre className="whitespace-pre-wrap break-all font-mono text-xs" data-testid="diff-text">
          {text.split('\n').map((line, index) => (
@@ -111,7 +111,9 @@ export function GitPanel({ dir }: { dir: string }) {
          ),
       [dir]
    );
-   useEffect(() => void reload(), [reload]);
+   useEffect(() => {
+      void reload();
+   }, [reload]);
 
    const run = async (op: SandboxGitOp, label: string) => {
       if (!git) return;
@@ -289,43 +291,51 @@ export function GitPanel({ dir }: { dir: string }) {
             ))}
          </ul>
 
-         {diff && (
-            <Dialog
-               isOpen
-               aria-label={diff.title}
-               width={960}
-               onOpenChange={(isOpen) => !isOpen && setDiff(null)}
-            >
-               <Layout
-                  height="auto"
-                  padding={4}
-                  header={<DialogHeader title={diff.title} onOpenChange={() => setDiff(null)} />}
-               >
-                  <LayoutContent>
-                     {diff.diff.commit && (
-                        <Text type="supporting" className="mb-2 block text-xs">
-                           {diff.diff.commit.author} · {diff.diff.commit.hash.slice(0, 12)} ·{' '}
-                           {new Date(diff.diff.commit.t).toLocaleString()}
-                        </Text>
-                     )}
-                     {diff.diff.files && diff.diff.files.length > 0 && (
-                        <ul className="mb-2 text-xs">
-                           {diff.diff.files.map((file) => (
-                              <li key={file.path} className="font-mono">
-                                 <span className="text-emerald-700">+{file.add ?? '?'}</span>{' '}
-                                 <span className="text-red-700">−{file.del ?? '?'}</span>{' '}
-                                 {file.path}
-                              </li>
-                           ))}
-                        </ul>
-                     )}
-                     <div className="max-h-[60vh] overflow-auto rounded bg-muted p-2">
-                        <DiffText text={diff.diff.text} />
-                     </div>
-                  </LayoutContent>
-               </Layout>
-            </Dialog>
-         )}
+         {diff && <DiffDialog title={diff.title} diff={diff.diff} onClose={() => setDiff(null)} />}
       </div>
+   );
+}
+
+/** A diff in a dialog: commit details, changed files with counts, and the coloured patch. */
+/** VI: Một diff trong hộp thoại: thông tin commit, file thay đổi kèm số dòng, và bản vá tô màu. */
+export function DiffDialog({
+   title,
+   diff,
+   onClose,
+}: {
+   title: string;
+   diff: SandboxDiff;
+   onClose: () => void;
+}) {
+   return (
+      <Dialog isOpen aria-label={title} width={960} onOpenChange={(isOpen) => !isOpen && onClose()}>
+         <Layout
+            height="auto"
+            padding={4}
+            header={<DialogHeader title={title} onOpenChange={onClose} />}
+         >
+            <LayoutContent>
+               {diff.commit && (
+                  <Text type="supporting" className="mb-2 block text-xs">
+                     {diff.commit.author} · {diff.commit.hash.slice(0, 12)} ·{' '}
+                     {new Date(diff.commit.t).toLocaleString()}
+                  </Text>
+               )}
+               {diff.files && diff.files.length > 0 && (
+                  <ul className="mb-2 text-xs">
+                     {diff.files.map((file) => (
+                        <li key={file.path} className="font-mono">
+                           <span className="text-emerald-700">+{file.add ?? '?'}</span>{' '}
+                           <span className="text-red-700">−{file.del ?? '?'}</span> {file.path}
+                        </li>
+                     ))}
+                  </ul>
+               )}
+               <div className="max-h-[60vh] overflow-auto rounded bg-muted p-2">
+                  <DiffText text={diff.text} />
+               </div>
+            </LayoutContent>
+         </Layout>
+      </Dialog>
    );
 }

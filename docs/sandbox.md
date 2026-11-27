@@ -65,6 +65,8 @@ For a signed-in user whose email is in `SANDBOX_USERS` (everyone else gets 403):
 | `GET /api/v1/sandbox/git/diff?dir=&rev=&file=&staged=` | A file's diff (staged or not), a commit's, or all uncommitted changes, with numstat |
 | `POST /api/v1/sandbox/git` | `{dir, op, paths?, message?, branch?}`: `stage`, `unstage`, `commit`, `fetch`, `pull` (fast-forward only), `push` (sets the upstream the first time), `switch` |
 | `GET /api/v1/sandbox/usage` | `{data: {cpu, memory: {used, limit}, disk: {free, total}, claude, codex}}`, null while stopped |
+| `GET /api/v1/sandbox/sessions/<name>/chat?limit=` | `{data: {agent, state, dir, items}}`: the session's conversation as termi's chat; `items` are messages `{kind: msg, who, text}` and tool groups `{kind: tools, steps: [{verb, detail, file?, change?, files?}]}` |
+| `GET /api/v1/sandbox/conversations/<agent>/<id>` | A past conversation in the same form, read without reopening it |
 | `GET /api/v1/sandbox/dirs` | `{data: {home, recent}}`: open sessions' folders, `~/work/*`, `~/repos/*`, folders of past conversations |
 | `GET /api/v1/sandbox/conversations?dir=` | `{data: [{agent, id, cwd, title, mtime}]}`: past Claude Code and Codex conversations, newest first |
 | `/api/v1/sandbox/ui/?arg=<name>` | ttyd attached to that session (created if new), for the caller's own container only |
@@ -118,6 +120,17 @@ start page: continue a session (waiting ones first) and up to five recent
 projects, each with a Claude Code and a Codex button and one that resumes the
 project's latest conversation. On phones the activity bar is a row on top with
 Terminal as one more view, and the key row shows only there.
+
+Sessions running Claude Code or Codex have a Chat | Terminal switch in the main
+area (DTD-1075), remembered per session. Chat reads the last 4 MB of the
+agent's conversation file (Claude: the newest file in
+`~/.claude/projects/<folder with every non-alphanumeric character as ->`;
+Codex: the newest rollout whose `cwd` is the folder), shows your messages and
+the agent's answers (Markdown), and folds the tool calls between them into one
+"N steps" row; files the agent edited open their diff, files it created open
+the file (Codex's `apply_patch` counts too). It refreshes every 3 seconds. The
+start page can also read a project's latest conversation without reopening it
+and resume it from there.
 
 The Sandbox page lists the sessions beside the terminal, as termi does: the
 ones waiting for the person first, then working, idle and plain shells, each

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Folder, History, Plus, SquareTerminal } from 'lucide-react';
+import { Eye, Folder, History, Plus, SquareTerminal } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@astryxdesign/core/Button';
 import { useMessages } from '@/features/shared/use-messages';
@@ -46,17 +46,22 @@ export function HomePage({
    home,
    onOpen,
    onNewSession,
+   onView,
 }: {
    sessions: SandboxSession[];
    home: string;
    onOpen: (name: string) => void;
    onNewSession: () => void;
+   /** Reads a past conversation without reopening it. */
+   onView: (conversation: { agent: SandboxAgent; id: string; title: string; dir: string }) => void;
 }) {
    const tx = useMessages(messages);
    const [projects, setProjects] = useState<string[]>([]);
    const [latest, setLatest] = useState<Record<string, SandboxConversation | undefined>>({});
    const [hour, setHour] = useState(12);
-   useEffect(() => setHour(new Date().getHours()), []);
+   useEffect(() => {
+      setHour(new Date().getHours());
+   }, []);
 
    useEffect(() => {
       void loadSandboxDirs().then(
@@ -160,6 +165,24 @@ export function HomePage({
                                  {shortDir(dir, home)}
                               </span>
                            </span>
+                           {latest[dir] && (
+                              <button
+                                 type="button"
+                                 aria-label={tx('Read {title}', { title: latest[dir]!.title })}
+                                 title={latest[dir]!.title}
+                                 onClick={() =>
+                                    onView({
+                                       agent: latest[dir]!.agent,
+                                       id: latest[dir]!.id,
+                                       title: latest[dir]!.title,
+                                       dir,
+                                    })
+                                 }
+                                 className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                              >
+                                 <Eye className="size-4" />
+                              </button>
+                           )}
                            {latest[dir] && (
                               <button
                                  type="button"
