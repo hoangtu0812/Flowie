@@ -40,3 +40,39 @@ export function sandboxEnabled(): Promise<boolean> {
    );
    return enabled;
 }
+
+export type SandboxAgent = 'claude' | 'codex';
+export type SandboxRepository = { id: string; name: string };
+
+/** Repositories of the issue's project that "Open with Claude/Codex" can use. */
+/** VI: Các repository của dự án chứa task mà "Mở bằng Claude/Codex" dùng được. */
+export async function loadSandboxRepositories(issueId: string): Promise<SandboxRepository[]> {
+   const response = await authenticatedFetch(
+      `${api}/sandbox/repositories?issueId=${encodeURIComponent(issueId)}`
+   );
+   return responseData<SandboxRepository[]>(response, 'Could not load the repositories.');
+}
+
+/** Starts the sandbox and opens the issue's terminal session; returns the session name. */
+/** VI: Khởi động sandbox và mở phiên terminal của task; trả về tên phiên. */
+export async function openInSandbox(
+   issueId: string,
+   repositoryId: string,
+   agent: SandboxAgent
+): Promise<string> {
+   const response = await authenticatedFetch(`${api}/sandbox/open`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ issueId, repositoryId, agent }),
+   });
+   return (await responseData<{ session: string }>(response, 'Could not open the sandbox.'))
+      .session;
+}
+
+/** termi's page, opened on one session's terminal when `session` is given. */
+/** VI: Trang termi, mở thẳng terminal của một phiên khi có `session`. */
+export function sandboxSessionUrl(session?: string | null): string {
+   return session
+      ? `${sandboxUiUrl}#${new URLSearchParams({ s: session, t: 'term' })}`
+      : sandboxUiUrl;
+}

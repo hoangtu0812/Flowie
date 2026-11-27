@@ -12,4 +12,10 @@ export const messages = {
       'Container riêng của bạn có Claude Code, Codex, git và gh. Đăng nhập tài khoản của bạn trong terminal; thông tin đăng nhập được giữ lại giữa các phiên.',
    'Sign-ins are stored on the Flowie server, where its administrators can read them.':
       'Thông tin đăng nhập lưu trên máy chủ Flowie, quản trị viên máy chủ đọc được.',
+   'Open with…': 'Mở bằng…',
+   'Loading…': 'Đang tải…',
+   'No repository is configured for this project.': 'Dự án này chưa cấu hình repository.',
+   'Open with {agent}': 'Mở bằng {agent}',
+   '{agent} in {repository}': '{agent} trong {repository}',
+   'Starting the sandbox…': 'Đang khởi động sandbox…',
 } as const;

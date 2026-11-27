@@ -4,6 +4,7 @@ const fixture = JSON.parse(readFileSync('.e2e-fixture.json', 'utf8')) as {
    slug: string;
    email: string;
    password: string;
+   issues: { id: string; identifier: string }[];
 };
 
 // The fixture API has no sandbox-manager, so these tests answer /sandbox themselves and check
@@ -55,4 +56,35 @@ test('People without sandbox access see no Sandbox entry', async ({ page }) => {
 
    await page.goto(`/${fixture.slug}/sandbox`);
    await expect(page.getByText('Sandbox is not enabled for your account.')).toBeVisible();
+});
+
+test('Open with Codex on an issue opens the Sandbox page on the issue session', async ({
+   page,
+}) => {
+   const issue = fixture.issues[0];
+   let opened: unknown;
+   await page.route('**/api/v1/sandbox', (route) =>
+      route.fulfill({ json: { data: { state: 'running' } } })
+   );
+   await page.route('**/api/v1/sandbox/repositories?*', (route) =>
+      route.fulfill({ json: { data: [{ id: 'repo-1', name: 'flowie' }] } })
+   );
+   await page.route('**/api/v1/sandbox/open', (route) => {
+      opened = route.request().postDataJSON();
+      return route.fulfill({ json: { data: { session: `${issue.identifier}-flowie` } } });
+   });
+   await page.route('**/api/v1/sandbox/ui/', (route) =>
+      route.fulfill({ contentType: 'text/html', body: '<p>termi is here</p>' })
+   );
+   await signIn(page);
+   await page.goto(`/${fixture.slug}/issue/${issue.identifier}`);
+
+   await page.getByRole('button', { name: 'Open with…' }).click();
+   await page.getByRole('menuitem', { name: 'Open with Codex' }).click();
+   await expect(page).toHaveURL(new RegExp(`/sandbox\\?session=${issue.identifier}-flowie$`));
+   expect(opened).toEqual({ issueId: issue.id, repositoryId: 'repo-1', agent: 'codex' });
+   await expect(page.locator('iframe[title="Sandbox terminal"]')).toHaveAttribute(
+      'src',
+      new RegExp(`/sandbox/ui/#s=${issue.identifier}-flowie&t=term$`)
+   );
 });

@@ -37,6 +37,7 @@ import { projectPath } from '@/lib/project-route';
 import { HStack } from '@astryxdesign/core/Layout';
 import { Text } from '@astryxdesign/core/Text';
 import { DesignSurface } from '@/components/common/design-surface';
+import { OpenInSandbox } from '@/features/sandbox/open-in-sandbox';
 
 /**
  * Issue breadcrumbs show its team and project regardless of the entry route, followed by
@@ -244,6 +245,7 @@ export default function HeaderNav() {
          </div>
 
          <div className="flex items-center gap-1 shrink-0">
+            {issue?.project && <OpenInSandbox issueId={issue.id} />}
             {index >= 0 && (
                <span className="text-xs text-muted-foreground mr-1">
                   {index + 1} / {issues.length}

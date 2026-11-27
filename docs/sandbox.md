@@ -7,8 +7,9 @@ on a project's repository, through a browser terminal served by
 image, the manager and the host firewall; phase 2 (DTD-1057) runs termi in the
 container and proxies it through the API; phase 3 adds the Sandbox page
 (`/<workspace>/sandbox`, in the sidebar only for people in `SANDBOX_USERS`),
-which starts and stops the sandbox and embeds termi. The "Open with
-Claude/Codex" action on a task comes in a later phase of DTD-1055.
+which starts and stops the sandbox and embeds termi; phase 4 adds "Open
+with…" on an issue (below). Stopping an idle sandbox on its own is still to
+come.
 
 ## Pieces
 
@@ -46,7 +47,32 @@ For a signed-in user whose email is in `SANDBOX_USERS` (everyone else gets 403):
 | `GET /api/v1/sandbox` | `{data: {state}}`: `none`, `created`, `running`, `exited`… |
 | `PUT /api/v1/sandbox` | Create if missing, start if stopped |
 | `POST /api/v1/sandbox/stop` | Stop it |
+| `GET /api/v1/sandbox/repositories?issueId=` | `{data: [{id, name}]}`: repositories of the issue's project the caller can read |
+| `POST /api/v1/sandbox/open` | `{issueId, repositoryId, agent}` with `agent` `claude` or `codex`: start the sandbox and open the issue's session; `{data: {session}}` |
 | `/api/v1/sandbox/ui/` | termi, for the caller's own container only |
+
+## Open with Claude/Codex
+
+On an issue whose project has a repository (Settings → Code & reviews),
+people with a sandbox see "Open with…" in the issue header. Choosing an agent
+calls `POST /api/v1/sandbox/open`, which:
+
+1. checks that the caller can read the issue and that the repository belongs
+   to its project;
+2. starts the sandbox;
+3. creates the termi session `<issue identifier>-<repository name>` in
+   `/home/node` and types one shell line into it: clone the repository into
+   `~/repos/<name>` if it is not there, fetch, add the worktree
+   `~/work/<session>` on branch `flowie/<session>` from `origin/<base branch>`
+   (or reuse it), then run `claude` or `codex` there with the issue's title,
+   description (first 4000 characters), branch and the repository's
+   instructions as the first prompt.
+
+The browser then opens the Sandbox page on that session. When the session
+already exists, nothing is typed: opening the issue again goes back to it.
+git asks for credentials in the terminal the first time a private repository
+is cloned (`gh auth login` for GitHub, a personal access token for Azure
+DevOps).
 
 The proxy picks the container from the authenticated user id, never from the
 request. It forwards only `accept`, `content-type`, `x-termi`, `range`,
