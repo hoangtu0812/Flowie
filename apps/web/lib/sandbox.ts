@@ -71,8 +71,12 @@ export async function openInSandbox(
 
 /** The terminal (ttyd) attached to one tmux session; ttyd creates the session if it is new. */
 /** VI: Terminal (ttyd) gắn vào một phiên tmux; ttyd tạo phiên nếu chưa có. */
-export function sandboxSessionUrl(session: string): string {
-   return `${sandboxUiUrl}?${new URLSearchParams({ arg: session })}`;
+export function sandboxSessionUrl(session: string, fontSize?: number): string {
+   const query = new URLSearchParams({ arg: session });
+   // ttyd reads its client options from the page's query, so the font size travels with it.
+   // VI: ttyd đọc tuỳ chọn client từ query của trang, nên cỡ chữ đi kèm URL.
+   if (fontSize) query.set('fontSize', String(fontSize));
+   return `${sandboxUiUrl}?${query}`;
 }
 
 /** A tmux session and the agent running in it (`state` is `shell` when there is none). */
@@ -147,4 +151,53 @@ export async function closeSandboxSession(name: string): Promise<void> {
       { method: 'DELETE' }
    );
    if (!response.ok) await responseData(response, 'Could not close the session.');
+}
+
+export type SandboxKey =
+   | 'Escape'
+   | 'C-c'
+   | 'C-d'
+   | 'Tab'
+   | 'BTab'
+   | 'Up'
+   | 'Down'
+   | 'Left'
+   | 'Right'
+   | 'Enter'
+   | 'PageUp'
+   | 'PageDown';
+
+/** Types into a session: a key, then text as one bracketed paste, then Enter if asked. */
+/** VI: Gõ vào một phiên: một phím, rồi chữ dạng một lần bracketed paste, rồi Enter nếu cần. */
+export async function sendToSandboxSession(
+   name: string,
+   input: { text?: string; key?: SandboxKey; enter?: boolean }
+): Promise<void> {
+   const response = await authenticatedFetch(
+      `${api}/sandbox/sessions/${encodeURIComponent(name)}/send`,
+      {
+         method: 'POST',
+         headers: { 'content-type': 'application/json' },
+         body: JSON.stringify(input),
+      }
+   );
+   await responseData(response, 'Could not send to the session.');
+}
+
+export async function loadSandboxSessionText(name: string): Promise<string> {
+   const response = await authenticatedFetch(
+      `${api}/sandbox/sessions/${encodeURIComponent(name)}/text`
+   );
+   return (await responseData<{ text: string }>(response, 'Could not read the session.')).text;
+}
+
+/** Puts an attached file in the sandbox and returns its path there. */
+/** VI: Đưa file đính kèm vào sandbox và trả đường dẫn của nó trong đó. */
+export async function uploadToSandbox(file: File): Promise<string> {
+   const response = await authenticatedFetch(`${api}/sandbox/uploads`, {
+      method: 'POST',
+      headers: { 'x-filename': encodeURIComponent(file.name) },
+      body: file,
+   });
+   return (await responseData<{ path: string }>(response, 'Could not upload the file.')).path;
 }

@@ -87,7 +87,7 @@ test('Open with Codex on an issue opens the Sandbox page on the issue session', 
    expect(opened).toEqual({ issueId: issue.id, repositoryId: 'repo-1', agent: 'codex' });
    await expect(page.locator('iframe[title="Sandbox terminal"]')).toHaveAttribute(
       'src',
-      new RegExp(`/sandbox/ui/\\?arg=${issue.identifier}-flowie$`)
+      new RegExp(`/sandbox/ui/\\?arg=${issue.identifier}-flowie(&|$)`)
    );
 });
 
@@ -164,7 +164,7 @@ test('The Sandbox page lists agent sessions and creates, renames and closes them
    await expect(list.getByText('~/work/DTD-7-flowie')).toBeVisible();
 
    await list.getByRole('button', { name: /^DTD-7-flowie/ }).click();
-   await expect(terminal).toHaveAttribute('src', /\?arg=DTD-7-flowie$/);
+   await expect(terminal).toHaveAttribute('src', /\?arg=DTD-7-flowie(&|$)/);
 
    await page.getByRole('button', { name: 'New session' }).click();
    const dialog = page.getByRole('dialog', { name: 'New session' });
@@ -177,7 +177,7 @@ test('The Sandbox page lists agent sessions and creates, renames and closes them
       dir: `${home}/work/DTD-7-flowie`,
       agent: 'claude',
    });
-   await expect(terminal).toHaveAttribute('src', /\?arg=DTD-7-flowie-claude$/);
+   await expect(terminal).toHaveAttribute('src', /\?arg=DTD-7-flowie-claude(&|$)/);
 
    await page.getByRole('button', { name: 'Actions for main' }).click();
    await page.getByRole('menuitem', { name: 'Rename' }).click();
@@ -192,4 +192,93 @@ test('The Sandbox page lists agent sessions and creates, renames and closes them
    await page.getByRole('menuitem', { name: 'Close session' }).click();
    await expect(list.getByRole('button', { name: /^review/ })).toHaveCount(0);
    expect(calls).toEqual(['POST /sessions/main/rename', 'DELETE /sessions/review']);
+});
+
+test('The message box, quick actions, keys, attachments, copy and font size reach the session', async ({
+   page,
+}) => {
+   const sent: unknown[] = [];
+   const uploads: string[] = [];
+   await page.route('**/api/v1/sandbox', (route) =>
+      route.fulfill({ json: { data: { state: 'running' } } })
+   );
+   await page.route('**/api/v1/sandbox/dirs', (route) =>
+      route.fulfill({ json: { data: { home: '/home/node', recent: [] } } })
+   );
+   await page.route('**/api/v1/sandbox/sessions', (route) =>
+      route.fulfill({
+         json: {
+            data: [{ name: 'cl', dir: '/home/node', agent: 'claude', state: 'idle', preview: '' }],
+         },
+      })
+   );
+   await page.route('**/api/v1/sandbox/sessions/cl/send', (route) => {
+      sent.push(route.request().postDataJSON());
+      return route.fulfill({ json: { data: { ok: true } } });
+   });
+   await page.route('**/api/v1/sandbox/sessions/cl/text', (route) =>
+      route.fulfill({ json: { data: { text: 'line one\nline two' } } })
+   );
+   await page.route('**/api/v1/sandbox/uploads', (route) => {
+      uploads.push(decodeURIComponent(route.request().headers()['x-filename']));
+      return route.fulfill({
+         status: 201,
+         json: { data: { path: '/home/node/.flowie/uploads/1-shot.png' } },
+      });
+   });
+   await page.route(/\/api\/v1\/sandbox\/ui\/\?arg=/, (route) =>
+      route.fulfill({ contentType: 'text/html', body: '<p>terminal is here</p>' })
+   );
+   await signIn(page);
+   await page.goto(`/${fixture.slug}/sandbox`);
+
+   const box = page.getByLabel('Message to the session');
+   await box.fill('Sửa lỗi đăng nhập');
+   await box.press('Shift+Enter');
+   await box.pressSequentially('rồi chạy test');
+   await box.press('Enter');
+   await expect.poll(() => sent.length).toBe(1);
+   expect(sent[0]).toEqual({ text: 'Sửa lỗi đăng nhập\nrồi chạy test', enter: true });
+   await expect(box).toHaveValue('');
+
+   await page.getByTestId('attach-input').setInputFiles({
+      name: 'ảnh chụp.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from('png'),
+   });
+   await expect(page.getByRole('list', { name: 'Attachments' })).toContainText('ảnh chụp.png');
+   await box.fill('Xem ảnh này');
+   await page.getByRole('button', { name: 'Send', exact: true }).click();
+   await expect.poll(() => sent.length).toBe(2);
+   expect(uploads).toEqual(['ảnh chụp.png']);
+   expect(sent[1]).toEqual({
+      text: 'Xem ảnh này\n\n/home/node/.flowie/uploads/1-shot.png',
+      enter: true,
+   });
+
+   page.once('dialog', (dialog) => void dialog.accept());
+   await page.getByRole('button', { name: 'Quick actions' }).click();
+   await page.getByRole('menuitem', { name: /^Push/ }).click();
+   await expect.poll(() => sent.length).toBe(3);
+   expect(sent[2]).toEqual({ text: 'Push the current branch to the remote.', enter: true });
+   await page.getByRole('button', { name: 'Quick actions' }).click();
+   await page.getByRole('menuitem', { name: /^Review/ }).click();
+   await expect.poll(() => sent.length).toBe(4);
+   expect(sent[3]).toEqual({ text: '/code-review', enter: true });
+
+   await page
+      .getByRole('toolbar', { name: 'Terminal keys' })
+      .getByRole('button', { name: 'BTab' })
+      .click();
+   await expect.poll(() => sent.length).toBe(5);
+   expect(sent[4]).toEqual({ key: 'BTab' });
+
+   await page.getByRole('button', { name: 'Session text' }).click();
+   await expect(page.getByTestId('session-text')).toHaveText('line one\nline two');
+   await page.keyboard.press('Escape');
+
+   const terminal = page.locator('iframe[title="Sandbox terminal"]');
+   await expect(terminal).toHaveAttribute('src', /arg=cl&fontSize=14$/);
+   await page.getByRole('button', { name: 'Larger text' }).click();
+   await expect(terminal).toHaveAttribute('src', /arg=cl&fontSize=15$/);
 });

@@ -27,6 +27,7 @@ import {
    type SandboxState,
 } from '@/lib/sandbox';
 import { NewSessionDialog } from './new-session-dialog';
+import { Composer, KeyRow } from './session-controls';
 import { SessionList } from './session-list';
 import { messages } from './messages.vi';
 
@@ -37,6 +38,16 @@ const KEEP_ALIVE_MS = 60_000;
 // VI: Trạng thái agent đổi theo từng giây; danh sách làm mới theo nhịp này khi sandbox chạy.
 const SESSIONS_MS = 5_000;
 const NAME = /^[A-Za-z0-9_-]{1,40}$/;
+const FONT_KEY = 'flowie.sandbox.fontSize';
+const FONT_DEFAULT = 14;
+
+function savedFont(): number {
+   try {
+      return Number(localStorage.getItem(FONT_KEY)) || FONT_DEFAULT;
+   } catch {
+      return FONT_DEFAULT;
+   }
+}
 
 type View =
    | { kind: 'loading' }
@@ -56,6 +67,20 @@ export function SandboxPage() {
    // VI: Bắt đầu ở phiên mà "Mở bằng Claude/Codex" trên task yêu cầu, nếu có.
    const [selected, setSelected] = useState<string | null>(useSearchParams().get('session'));
    const current = selected ?? sessions[0]?.name ?? 'main';
+   const currentAgent = sessions.find((session) => session.name === current)?.agent ?? null;
+   // A per-browser convenience, so it lives in localStorage.
+   // VI: Tiện ích theo từng trình duyệt nên lưu trong localStorage.
+   const [fontSize, setFontSize] = useState(FONT_DEFAULT);
+   useEffect(() => setFontSize(savedFont()), []);
+   const changeFont = (delta: number) => {
+      const next = Math.min(28, Math.max(9, fontSize + delta));
+      setFontSize(next);
+      try {
+         localStorage.setItem(FONT_KEY, String(next));
+      } catch {
+         // Storage can be blocked; the size still applies until the page reloads.
+      }
+   };
 
    const run = useCallback(async (action: () => Promise<SandboxState>) => {
       try {
@@ -144,7 +169,8 @@ export function SandboxPage() {
                      <Button
                         label={tx('Open in a new tab')}
                         icon={<ExternalLink className="size-4" />}
-                        href={sandboxSessionUrl(current)}
+                        isIconOnly
+                        href={sandboxSessionUrl(current, fontSize)}
                         target="_blank"
                         size="sm"
                         variant="ghost"
@@ -216,13 +242,17 @@ export function SandboxPage() {
                      />
                   </div>
                </aside>
-               <iframe
-                  key={current}
-                  title={tx('Sandbox terminal')}
-                  src={sandboxSessionUrl(current)}
-                  allow="clipboard-read; clipboard-write"
-                  className="min-h-0 w-full flex-1 border-0"
-               />
+               <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                  <iframe
+                     key={`${current}-${fontSize}`}
+                     title={tx('Sandbox terminal')}
+                     src={sandboxSessionUrl(current, fontSize)}
+                     allow="clipboard-read; clipboard-write"
+                     className="min-h-0 w-full flex-1 border-0"
+                  />
+                  <KeyRow session={current} onFont={changeFont} />
+                  <Composer session={current} agent={currentAgent} />
+               </div>
             </div>
          )}
          {creating && (
