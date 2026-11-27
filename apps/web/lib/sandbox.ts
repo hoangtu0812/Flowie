@@ -418,3 +418,33 @@ export function ciBadge(ci: SandboxCi | null): 'failure' | 'running' | 'ok' | nu
    if (latest.status !== 'completed') return 'running';
    return latest.result === 'failure' ? 'failure' : 'ok';
 }
+
+export type SandboxQuickAction = { label: string; text: string; ask: boolean };
+/** Saved quick actions: shared (null = the built-in ones) and the folder's repository's own. */
+/** VI: Thao tác nhanh đã lưu: dùng chung (null = mặc định) và của repository chứa thư mục. */
+export type SandboxQuick = {
+   shared: SandboxQuickAction[] | null;
+   project: SandboxQuickAction[];
+   projectDir: string | null;
+};
+
+export async function loadSandboxQuick(dir: string): Promise<SandboxQuick> {
+   return responseData(
+      await authenticatedFetch(`${api}/sandbox/quick?${new URLSearchParams({ dir })}`),
+      'Could not read the quick actions.'
+   );
+}
+
+/** Null actions restore the built-in ones. VI: actions null là về mặc định. */
+export async function saveSandboxQuick(input: {
+   scope: 'shared' | 'project';
+   dir: string;
+   actions: SandboxQuickAction[] | null;
+}): Promise<void> {
+   const response = await authenticatedFetch(`${api}/sandbox/quick`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+   });
+   await responseData(response, 'Could not save the quick actions.');
+}

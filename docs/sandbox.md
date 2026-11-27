@@ -70,6 +70,8 @@ For a signed-in user whose email is in `SANDBOX_USERS` (everyone else gets 403):
 | `GET /api/v1/sandbox/ci?dir=&fresh=` | `{data: {provider, repo, page, branch, pipelines, runs}}` for the folder's repository on GitHub Actions or Azure Pipelines; `{provider: null}` elsewhere; cached 15 s unless `fresh` |
 | `GET /api/v1/sandbox/ci/log?dir=&id=` | `{data: {text}}`: the last 400 lines of the run's failed steps |
 | `POST /api/v1/sandbox/ci` | `{dir, id, action}` with `rerun` (only failed jobs on GitHub; a new run of the pipeline on the same ref on Azure) or `cancel` |
+| `GET /api/v1/sandbox/quick?dir=` | `{data: {shared, project, projectDir}}`: the saved quick actions `[{label, text, ask}]`; `shared` null means the built-in ones, `project` belongs to the folder's repository (`projectDir`, its git top level) |
+| `PUT /api/v1/sandbox/quick` | `{scope, dir?, actions}` with `scope` `shared` or `project`; ≤ 30 actions, label ≤ 40 and text ≤ 2 000 characters; `actions: null` restores the built-in list (shared) or removes the project's |
 | `GET /api/v1/sandbox/dirs` | `{data: {home, recent}}`: open sessions' folders, `~/work/*`, `~/repos/*`, folders of past conversations |
 | `GET /api/v1/sandbox/conversations?dir=` | `{data: [{agent, id, cwd, title, mtime}]}`: past Claude Code and Codex conversations, newest first |
 | `/api/v1/sandbox/ui/?arg=<name>` | ttyd attached to that session (created if new), for the caller's own container only |
@@ -164,7 +166,11 @@ whole text reaches the session as one bracketed paste followed by Enter.
 Attached files are uploaded into the sandbox first and their paths are added to
 the message. Quick actions send termi's prepared requests (status, commit,
 push, create PR, merge PR, review, run tests, `/compact`); push and both PR
-actions ask first. Large uploads also need the reverse proxy in front of Flowie
+actions ask first. "Edit quick actions…" (DTD-1077, termi v1.12) edits either
+the shared list, which replaces the built-in one, or the list of the session's
+repository, which is shown first; each action has a name, the message and
+whether to ask before sending. Both live in the sandbox in
+`~/.flowie/quick-actions.json`, keyed by the repository's top folder. Large uploads also need the reverse proxy in front of Flowie
 to accept 25 MB bodies.
 
 Beside the terminal, Files and Git tabs work on the current session's folder

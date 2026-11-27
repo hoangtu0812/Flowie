@@ -292,6 +292,114 @@ test('The message box, quick actions, keys, attachments, copy and font size reac
    await expect(terminal).toHaveAttribute('src', /arg=cl&fontSize=15$/);
 });
 
+test('Quick actions can be edited, shared or for the session repository', async ({ page }) => {
+   const sent: unknown[] = [];
+   const saves: unknown[] = [];
+   let quick = {
+      shared: null as unknown,
+      project: [{ label: 'Deploy', text: 'Run ./deploy.sh staging', ask: false }],
+      projectDir: '/home/node/app',
+   };
+   await page.route('**/api/v1/sandbox', (route) =>
+      route.fulfill({ json: { data: { state: 'running' } } })
+   );
+   await page.route('**/api/v1/sandbox/dirs', (route) =>
+      route.fulfill({ json: { data: { home: '/home/node', recent: [] } } })
+   );
+   await page.route('**/api/v1/sandbox/sessions', (route) =>
+      route.fulfill({
+         json: {
+            data: [
+               { name: 'cl', dir: '/home/node/app', agent: 'claude', state: 'idle', preview: '' },
+            ],
+         },
+      })
+   );
+   await page.route('**/api/v1/sandbox/sessions/cl/send', (route) => {
+      sent.push(route.request().postDataJSON());
+      return route.fulfill({ json: { data: { ok: true } } });
+   });
+   await page.route('**/api/v1/sandbox/quick**', (route) => {
+      if (route.request().method() === 'PUT') {
+         const body = route.request().postDataJSON() as { actions: unknown };
+         saves.push(body);
+         quick = { ...quick, shared: body.actions };
+      } else {
+         expect(new URL(route.request().url()).searchParams.get('dir')).toBe('/home/node/app');
+      }
+      return route.fulfill({ json: { data: quick } });
+   });
+   await page.route(/\/api\/v1\/sandbox\/ui\/\?arg=/, (route) =>
+      route.fulfill({ contentType: 'text/html', body: '<p>terminal is here</p>' })
+   );
+   await signIn(page);
+   await page.goto(`/${fixture.slug}/sandbox`);
+   await page
+      .getByRole('list', { name: 'Terminal sessions' })
+      .getByRole('button', { name: /^cl/ })
+      .click();
+
+   // The repository's own action comes first, then the built-in ones.
+   await page.getByRole('button', { name: 'Quick actions' }).click();
+   const items = page.getByRole('menuitem');
+   await expect(items.first()).toContainText('Deploy');
+   await expect(page.getByRole('menuitem', { name: /^Push/ })).toBeVisible();
+   await page.getByRole('menuitem', { name: /^Deploy/ }).click();
+   await expect.poll(() => sent.length).toBe(1);
+   expect(sent[0]).toEqual({ text: 'Run ./deploy.sh staging', enter: true });
+
+   // Editing the shared list starts from the built-in one; saving replaces it.
+   await page.getByRole('button', { name: 'Quick actions' }).click();
+   await page.getByRole('menuitem', { name: 'Edit quick actions…' }).click();
+   const editor = page.getByRole('dialog', { name: 'Edit quick actions' });
+   const rows = editor.getByRole('list', { name: 'Quick actions' }).getByRole('listitem');
+   await expect(rows).toHaveCount(8);
+   for (let count = 8; count > 1; count -= 1) {
+      await rows
+         .last()
+         .getByRole('button', { name: /^Remove/ })
+         .click();
+   }
+   await editor.getByRole('button', { name: 'Add an action' }).click();
+   await rows.last().getByLabel('Name').fill('Lint');
+   await rows
+      .last()
+      .getByLabel('Message to the agent')
+      .fill('Run the linter and fix what it finds.');
+   await rows.last().getByRole('checkbox').check();
+   await editor.getByRole('button', { name: 'Save' }).click();
+   await expect.poll(() => saves.length).toBe(1);
+   expect(saves[0]).toEqual({
+      scope: 'shared',
+      dir: '/home/node/app',
+      actions: [
+         {
+            label: 'Status',
+            text: 'Tell me briefly: which branch this is, what is changed and not committed, and which commits are not pushed.',
+            ask: false,
+         },
+         { label: 'Lint', text: 'Run the linter and fix what it finds.', ask: true },
+      ],
+   });
+   await expect(editor).toBeHidden();
+
+   page.once('dialog', (dialog) => void dialog.accept());
+   await page.getByRole('button', { name: 'Quick actions' }).click();
+   await expect(page.getByRole('menuitem', { name: /^Push/ })).toHaveCount(0);
+   await page.getByRole('menuitem', { name: /^Lint/ }).click();
+   await expect.poll(() => sent.length).toBe(2);
+   expect(sent[1]).toEqual({ text: 'Run the linter and fix what it finds.', enter: true });
+
+   // Restore defaults sends null and brings the built-in list back.
+   await page.getByRole('button', { name: 'Quick actions' }).click();
+   await page.getByRole('menuitem', { name: 'Edit quick actions…' }).click();
+   await editor.getByRole('button', { name: 'Restore defaults' }).click();
+   await expect.poll(() => saves.length).toBe(2);
+   expect(saves[1]).toEqual({ scope: 'shared', dir: '/home/node/app', actions: null });
+   await page.getByRole('button', { name: 'Quick actions' }).click();
+   await expect(page.getByRole('menuitem', { name: /^Push/ })).toBeVisible();
+});
+
 test('The Files and Git tabs browse the session folder and run git actions', async ({ page }) => {
    const repo = '/home/node/work/DTD-7-flowie';
    const ops: unknown[] = [];

@@ -500,6 +500,7 @@ export function SandboxPage() {
                         <Composer
                            session={current}
                            agent={currentAgent}
+                           dir={currentSession?.dir ?? ''}
                            text={draft}
                            setText={setDraft}
                         />
