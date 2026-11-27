@@ -21,7 +21,7 @@ from app.core.config import Settings
 from app.core.errors import ApiError, api_error_handler
 from app.modules.identity.auth import current_user
 from app.modules.sandbox import api as sandbox
-from app.sandbox_manager import termi_token
+from app.sandbox_manager import terminal_token
 
 TOKEN = 'm' * 64
 ME = {'id': 'ctwwf9lkb5z0bsyzit9na6opp', 'email': 'me@bsr.com.vn'}
@@ -69,34 +69,35 @@ def test_status_hides_the_address_and_reports_none_when_missing(monkeypatch):
     assert client.put('/api/v1/sandbox').json() == {'data': {'state': 'running'}}
 
 
-def test_ui_proxy_reaches_only_the_callers_container_without_flowie_credentials(monkeypatch):
+def test_ui_proxy_reaches_only_the_callers_ttyd_under_its_secret_path(monkeypatch):
     seen = []
 
-    def termi(request):
+    def ttyd(request):
         seen.append(request)
-        return httpx.Response(200, json={'ok': True}, headers={'set-cookie': 'x=1', 'x-termi-build': '7'})
+        return httpx.Response(200, text='<html>', headers={'set-cookie': 'x=1', 'content-type': 'text/html'})
 
-    client = make_client(ME, monkeypatch, termi)
-    response = client.post(
-        '/api/v1/sandbox/ui/api/send?session=main',
-        json={'text': 'hi'},
-        headers={'x-termi': '1', 'authorization': 'Bearer flowie', 'x-termi-token': 'forged'},
+    client = make_client(ME, monkeypatch, ttyd)
+    response = client.get(
+        '/api/v1/sandbox/ui/?arg=main',
+        headers={'authorization': 'Bearer flowie', 'accept': 'text/html'},
         cookies={'flowie_access': 'secret'},
     )
     assert response.status_code == 200
     assert 'set-cookie' not in response.headers
-    assert response.headers['x-termi-build'] == '7'
-    client.get('/api/v1/sandbox/ui/%2e%2e/m/other/api/sessions')
+    assert response.headers['content-type'].startswith('text/html')
+    assert client.get('/api/v1/sandbox/ui/%2e%2e/token').status_code == 404
+    assert client.get('/api/v1/sandbox/ui/a/../../token').status_code in (404, 307)
+    assert client.post('/api/v1/sandbox/ui/token').status_code == 405
+    token = terminal_token(TOKEN, ME['id'])
     for request in seen:
         assert request.url.host == f"flowie-sandbox-{ME['id']}"
         assert request.url.port == 7680
-        assert request.headers['host'] == 'localhost:7680'
-        assert request.headers['x-termi-token'] == termi_token(TOKEN, ME['id'])
+        assert request.url.path.startswith(f'/{token}/')
         assert 'cookie' not in request.headers
         assert 'authorization' not in request.headers
-    assert seen[0].url.path == '/api/send'
-    assert seen[0].url.query == b'session=main'
-    assert seen[0].content == b'{"text":"hi"}'
+    assert seen[0].url.path == f'/{token}/'
+    assert seen[0].url.query == b'arg=main'
+    assert seen[0].headers['accept'] == 'text/html'
 
 
 def test_ui_without_trailing_slash_redirects(monkeypatch):
@@ -106,7 +107,7 @@ def test_ui_without_trailing_slash_redirects(monkeypatch):
     assert response.headers['location'] == 'ui/'
 
 
-@pytest.mark.parametrize(('path', 'origin'), [('term/ws', 'https://evil.example'), ('term/ws', None), ('api/x', ORIGIN)])
+@pytest.mark.parametrize(('path', 'origin'), [('ws', 'https://evil.example'), ('ws', None), ('term/ws', ORIGIN)])
 def test_socket_refuses_other_origins_and_non_terminal_paths(monkeypatch, path, origin):
     client = make_client(ME, monkeypatch)
     headers = {'origin': origin} if origin else {}
@@ -115,7 +116,7 @@ def test_socket_refuses_other_origins_and_non_terminal_paths(monkeypatch, path, 
     assert closed.value.code == 4403
 
 
-def test_socket_is_piped_to_the_callers_ttyd_with_termi_credentials(monkeypatch):
+def test_socket_is_piped_to_the_callers_ttyd_under_its_secret_path(monkeypatch):
     seen = {}
     ready = threading.Event()
     port_box = {}
@@ -138,20 +139,17 @@ def test_socket_is_piped_to_the_callers_ttyd_with_termi_credentials(monkeypatch)
     threading.Thread(target=run_upstream, daemon=True).start()
     ready.wait(5)
     monkeypatch.setattr(sandbox, 'container_name', lambda user_id: '127.0.0.1' if user_id == ME['id'] else 'nowhere')
-    monkeypatch.setattr(sandbox, 'TERMI_PORT', port_box['port'])
+    monkeypatch.setattr(sandbox, 'TERMINAL_PORT', port_box['port'])
 
     async def signed_in(socket):
         return ME
 
     monkeypatch.setattr(sandbox, '_socket_user', signed_in)
     client = make_client(ME, monkeypatch)
-    with client.websocket_connect('/api/v1/sandbox/ui/term/ws?arg=main', headers={'origin': ORIGIN}, subprotocols=['tty']) as socket:
+    with client.websocket_connect('/api/v1/sandbox/ui/ws?arg=main', headers={'origin': ORIGIN}, subprotocols=['tty']) as socket:
         socket.send_bytes(b'\x001')
         assert socket.receive_bytes() == b'\x001'
-    assert seen['path'] == '/term/ws?arg=main'
-    assert seen['headers']['X-Termi-Token'] == termi_token(TOKEN, ME['id'])
-    assert seen['headers']['Origin'] == 'http://localhost:7680'
-    assert seen['headers']['Host'] == 'localhost:7680'
+    assert seen['path'] == f"/{terminal_token(TOKEN, ME['id'])}/ws?arg=main"
     assert 'Cookie' not in seen['headers']
 
 
@@ -209,7 +207,7 @@ def test_open_command_clones_once_gives_the_issue_a_worktree_and_starts_the_agen
     assert prompt.endswith('Run pnpm test.')
 
 
-def open_client(user, monkeypatch, termi):
+def open_client(user, monkeypatch, sessions):
     async def readable(db, caller, issue_id):
         assert issue_id == ISSUE['id']
         return None, ISSUE
@@ -220,42 +218,59 @@ def open_client(user, monkeypatch, termi):
     monkeypatch.setattr(sandbox, '_readable_issue', readable)
     monkeypatch.setattr(sandbox, '_repositories', repositories)
 
-    def handler(request):
-        if request.url.port == 4100:
-            return httpx.Response(200, json={'state': 'running'})
-        return termi(request)
+    def manager(request):
+        assert request.url.port == 4100
+        if request.url.path.endswith('/sessions'):
+            return sessions(request)
+        return httpx.Response(200, json={'state': 'running'})
 
-    client = make_client(user, monkeypatch, handler)
+    client = make_client(user, monkeypatch, manager)
     client.app.dependency_overrides[sandbox.get_session] = lambda: None
     return client
 
 
-def test_open_creates_the_issue_session_and_types_the_command(monkeypatch):
+def test_open_creates_the_issue_session_with_the_command(monkeypatch):
     seen = []
 
-    def termi(request):
+    def sessions(request):
         seen.append(request)
-        assert request.url.host == f"flowie-sandbox-{ME['id']}"
-        assert request.headers['x-termi'] == '1'
-        assert request.headers['x-termi-token'] == termi_token(TOKEN, ME['id'])
-        return httpx.Response(200, json={'ok': True})
+        assert request.url.path == f"/sandboxes/{ME['id']}/sessions"
+        return httpx.Response(201, json={'name': 'DTD-7-flowie-web'})
 
-    client = open_client(ME, monkeypatch, termi)
+    client = open_client(ME, monkeypatch, sessions)
     body = {'issueId': ISSUE['id'], 'repositoryId': REPOSITORY['id'], 'agent': 'codex'}
     assert client.post('/api/v1/sandbox/open', json=body).json() == {'data': {'session': 'DTD-7-flowie-web'}}
-    assert [r.url.path for r in seen] == ['/api/sessions', '/api/send']
-    sent = json.loads(seen[1].content)
-    assert sent['session'] == 'DTD-7-flowie-web' and sent['enter'] is True
-    assert 'codex ' in sent['text']
+    sent = json.loads(seen[0].content)
+    assert sent['name'] == 'DTD-7-flowie-web'
+    assert sent['command'].endswith(" && codex 'Flowie task DTD-7: Fix the user'\"'\"'s login\n\nSteps:\n1. it'\"'\"'s \"broken\" $(rm -rf /)\n\nRepository flowie.web; you are on branch flowie/DTD-7-flowie-web, created from main.\n\nRun pnpm test.'")
 
 
 def test_open_reuses_an_existing_session_and_refuses_strangers_and_other_repositories(monkeypatch):
-    seen = []
-    client = open_client(ME, monkeypatch, lambda request: seen.append(request) or httpx.Response(409, json={}))
+    client = open_client(ME, monkeypatch, lambda request: httpx.Response(409, json={'error': 'The session exists.'}))
     body = {'issueId': ISSUE['id'], 'repositoryId': REPOSITORY['id'], 'agent': 'claude'}
-    assert client.post('/api/v1/sandbox/open', json=body).status_code == 200
-    assert [r.url.path for r in seen] == ['/api/sessions']
+    assert client.post('/api/v1/sandbox/open', json=body).json() == {'data': {'session': 'DTD-7-flowie-web'}}
     assert client.post('/api/v1/sandbox/open', json={**body, 'repositoryId': 'cother'}).status_code == 404
     assert client.post('/api/v1/sandbox/open', json={**body, 'agent': 'bash'}).status_code == 422
     stranger = open_client(STRANGER, monkeypatch, lambda request: httpx.Response(500))
     assert stranger.post('/api/v1/sandbox/open', json=body).status_code == 403
+
+
+def test_sessions_are_listed_most_recent_first_and_empty_while_stopped(monkeypatch):
+    answers = [
+        httpx.Response(200, json=[{'name': 'main', 'activity': 10, 'output': 20}, {'name': 'DTD-7', 'activity': 30, 'output': 5}]),
+        httpx.Response(409, json={'error': 'The sandbox is not running.'}),
+    ]
+    closed = []
+
+    def manager(request):
+        if request.method == 'DELETE':
+            closed.append(request.url.path)
+            return httpx.Response(204)
+        return answers.pop(0)
+
+    client = make_client(ME, monkeypatch, manager)
+    assert client.get('/api/v1/sandbox/sessions').json() == {'data': [{'name': 'DTD-7'}, {'name': 'main'}]}
+    assert client.get('/api/v1/sandbox/sessions').json() == {'data': []}
+    assert client.delete('/api/v1/sandbox/sessions/DTD-7').status_code == 204
+    assert client.delete('/api/v1/sandbox/sessions/a.b').status_code == 400
+    assert closed == [f"/sandboxes/{ME['id']}/sessions/DTD-7"]

@@ -1,27 +1,26 @@
 """The signed-in user's personal coding sandbox (docs/sandbox.md).
 
-`/api/v1/sandbox` starts, stops and reports the caller's own container through
-sandbox-manager, and `/api/v1/sandbox/ui/...` is a reverse proxy (HTTP and the
-terminal WebSocket) to the termi instance inside it. The container is always
-the caller's: its name comes from the authenticated user id, never from the
-request, so no URL, header or body can reach another person's sandbox. Only
-emails listed in SANDBOX_USERS get anything but 403.
+`/api/v1/sandbox` starts, stops and reports the caller's own container and its
+tmux sessions through sandbox-manager, and `/api/v1/sandbox/ui/...` is a
+reverse proxy (HTTP and the terminal WebSocket) to the ttyd inside it. The
+container is always the caller's: its name comes from the authenticated user
+id, never from the request, so no URL, header or body can reach another
+person's sandbox. Only emails listed in SANDBOX_USERS get anything but 403.
 
 The proxy forwards a fixed set of headers and nothing that identifies the
-person to Flowie: the session cookie and Authorization header stay here. It
-adds the sandbox's termi token, which the browser never sees, and presents
-itself to termi as `localhost`, the only host termi accepts.
+person to Flowie: the session cookie and Authorization header stay here. ttyd
+answers only under the sandbox's secret base path, which the proxy adds and
+the browser never sees.
 VI: Sandbox lập trình cá nhân của người đang đăng nhập (docs/sandbox.md).
 VI: `/api/v1/sandbox` khởi động, dừng và báo trạng thái container của chính người gọi
-VI: qua sandbox-manager, còn `/api/v1/sandbox/ui/...` là reverse proxy (HTTP và
-VI: WebSocket của terminal) tới termi bên trong. Container luôn là của người gọi: tên
-VI: lấy từ id người dùng đã xác thực, không bao giờ từ request, nên không URL, header
-VI: hay body nào tới được sandbox của người khác. Chỉ email trong SANDBOX_USERS nhận được
-VI: thứ gì khác ngoài 403.
+VI: cùng các phiên tmux của nó qua sandbox-manager, còn `/api/v1/sandbox/ui/...` là
+VI: reverse proxy (HTTP và WebSocket của terminal) tới ttyd bên trong. Container luôn là
+VI: của người gọi: tên lấy từ id người dùng đã xác thực, không bao giờ từ request, nên
+VI: không URL, header hay body nào tới được sandbox của người khác. Chỉ email trong
+VI: SANDBOX_USERS nhận được thứ gì khác ngoài 403.
 VI: Proxy chỉ chuyển một tập header cố định và không chuyển gì định danh người đó với
-VI: Flowie: cookie phiên và header Authorization ở lại đây. Nó thêm token termi của
-VI: sandbox, thứ trình duyệt không bao giờ thấy, và xưng là `localhost` với termi, host
-VI: duy nhất termi chấp nhận.
+VI: Flowie: cookie phiên và header Authorization ở lại đây. ttyd chỉ trả lời dưới đường
+VI: dẫn gốc bí mật của sandbox, do proxy thêm vào và trình duyệt không bao giờ thấy.
 """
 
 from __future__ import annotations
@@ -44,7 +43,13 @@ from websockets.asyncio.client import connect
 from ...core.config import Settings
 from ...core.errors import ApiError
 from ...db.session import get_session
-from ...sandbox_manager import TERMI_PORT, USER_ID, container_name, termi_token
+from ...sandbox_manager import (
+    SESSION_NAME,
+    TERMINAL_PORT,
+    USER_ID,
+    container_name,
+    terminal_token,
+)
 from ..access.membership import workspace_role
 from ..agent_runs.queries import list_repositories_select_project_repositories_sql
 from ..identity.auth import current_user
@@ -56,12 +61,8 @@ from .queries import ISSUE_WORKSPACE_SELECT_ISSUES
 
 router = APIRouter(prefix='/api/v1/sandbox', tags=['sandbox'])
 
-TERMI_HOST = f'localhost:{TERMI_PORT}'
-REQUEST_HEADERS = ('accept', 'content-type', 'x-termi', 'range', 'if-none-match', 'last-event-id')
-RESPONSE_HEADERS = (
-    'content-type', 'cache-control', 'content-disposition', 'content-range', 'accept-ranges', 'etag',
-    'x-termi-build', 'x-frame-options', 'content-security-policy', 'referrer-policy',
-)
+REQUEST_HEADERS = ('accept', 'range', 'if-none-match', 'if-modified-since')
+RESPONSE_HEADERS = ('content-type', 'cache-control', 'content-range', 'accept-ranges', 'etag', 'last-modified')
 SOCKET_RECHECK_SECONDS = 60
 
 
@@ -80,20 +81,26 @@ def _sandbox_user(settings: Settings, user: dict[str, Any]) -> str:
     return user_id
 
 
-async def _manager(settings: Settings, method: str, path: str) -> tuple[int, Any]:
+async def _manager(
+    settings: Settings, method: str, path: str, body: Any = None, accept: tuple[int, ...] = ()
+) -> tuple[int, Any]:
+    """One sandbox-manager call. A refusal becomes 502 unless its status is in `accept`.
+    VI: Một lời gọi sandbox-manager. Lời từ chối thành 502 trừ khi mã nằm trong `accept`."""
     try:
         async with httpx.AsyncClient(timeout=90) as client:
             response = await client.request(
                 method,
                 f'{settings.sandbox_manager_url}{path}',
                 headers={'Authorization': f'Bearer {settings.sandbox_manager_token}'},
+                json=body,
             )
     except httpx.HTTPError as error:
         raise ApiError(502, 'The sandbox service is unavailable.', 'Bad Gateway') from error
-    body = response.json() if response.content else None
-    if response.status_code >= 500 or response.status_code in (400, 401, 409):
+    answer = response.json() if response.content else None
+    refused = response.status_code >= 500 or response.status_code in (400, 401, 409)
+    if refused and response.status_code not in accept:
         raise ApiError(502, 'The sandbox service refused the request.', 'Bad Gateway')
-    return response.status_code, body
+    return response.status_code, answer
 
 
 def _state(status: int, body: Any) -> dict[str, Any]:
@@ -118,8 +125,26 @@ async def stop_sandbox(request: Request, user: Any = Depends(current_user)):
     return _state(*await _manager(_settings(request), 'POST', f'/sandboxes/{user_id}/stop'))
 
 
+@router.get('/sessions')
+async def sandbox_sessions(request: Request, user: Any = Depends(current_user)):
+    """The caller's tmux sessions, most recently used first; none while the sandbox is stopped.
+    VI: Các phiên tmux của người gọi, phiên dùng gần nhất trước; rỗng khi sandbox đang dừng."""
+    user_id = _sandbox_user(_settings(request), user)
+    status, body = await _manager(_settings(request), 'GET', f'/sandboxes/{user_id}/sessions', accept=(409,))
+    sessions = body if status == 200 and isinstance(body, list) else []
+    ordered = sorted(sessions, key=lambda s: max(s.get('activity', 0), s.get('output', 0)), reverse=True)
+    return {'data': [{'name': s['name']} for s in ordered]}
+
+
+@router.delete('/sessions/{name}', status_code=204)
+async def close_sandbox_session(name: str, request: Request, user: Any = Depends(current_user)):
+    user_id = _sandbox_user(_settings(request), user)
+    if not SESSION_NAME.match(name):
+        raise ApiError(400, 'Invalid session name.', 'Bad Request')
+    await _manager(_settings(request), 'DELETE', f'/sandboxes/{user_id}/sessions/{name}')
+
+
 PROMPT_DESCRIPTION_CHARS = 4000
-TERMI_READY_ATTEMPTS = 20
 
 
 class OpenInput(StrictInput):
@@ -196,22 +221,6 @@ def open_command(issue: dict[str, Any], repository: dict[str, Any], agent: str, 
     )
 
 
-async def _termi(settings: Settings, user_id: str, path: str, body: dict[str, Any]) -> httpx.Response:
-    """POSTs to the caller's termi, waiting while a sandbox that has just started brings it up.
-    VI: POST tới termi của người gọi, chờ trong lúc sandbox vừa khởi động bật termi lên."""
-    headers = _upstream_headers({'x-termi': '1'}, settings, user_id)
-    url = f'http://{container_name(user_id)}:{TERMI_PORT}{path}'
-    failure: Exception | None = None
-    async with httpx.AsyncClient(timeout=30) as client:
-        for _ in range(TERMI_READY_ATTEMPTS):
-            try:
-                return await client.post(url, json=body, headers=headers)
-            except httpx.TransportError as error:
-                failure = error
-                await asyncio.sleep(1)
-    raise ApiError(502, 'The sandbox terminal did not start.', 'Bad Gateway') from failure
-
-
 @router.post('/open')
 async def open_in_sandbox(
     payload: OpenInput, request: Request, user: Any = Depends(current_user), db: Any = Depends(get_session)
@@ -230,46 +239,45 @@ async def open_in_sandbox(
         raise ApiError(404, 'Repository not found for this issue.', 'Not Found')
     session = f"{issue['identifier']}-{_slug(repository['name'])}"[:40].rstrip('-')
     await _manager(settings, 'PUT', f'/sandboxes/{user_id}')
-    created = await _termi(settings, user_id, '/api/sessions', {'name': session, 'dir': '/home/node'})
-    if created.status_code == 200:
-        command = open_command(issue, repository, payload.agent, session)
-        sent = await _termi(settings, user_id, '/api/send', {'session': session, 'text': command, 'enter': True})
-        if sent.status_code != 200:
-            raise ApiError(502, 'The sandbox terminal refused the command.', 'Bad Gateway')
-    elif created.status_code != 409:
-        raise ApiError(502, 'The sandbox terminal refused the session.', 'Bad Gateway')
+    command = open_command(issue, repository, payload.agent, session)
+    # 409: the issue's session exists already, so opening again goes back to it untouched.
+    # VI: 409: phiên của task đã có, nên mở lại là quay về nó, không gõ gì thêm.
+    await _manager(
+        settings, 'POST', f'/sandboxes/{user_id}/sessions', {'name': session, 'command': command}, accept=(409,)
+    )
     return {'data': {'session': session}}
 
 
 @router.get('/ui', include_in_schema=False)
 async def sandbox_ui_root():
-    # termi's client uses relative URLs, so the page must end with a slash.
-    # VI: Client termi dùng URL tương đối nên trang phải kết thúc bằng dấu gạch chéo.
+    # ttyd's page builds its token and WebSocket URLs from its own path, which must end with a slash.
+    # VI: Trang ttyd dựng URL token và WebSocket từ đường dẫn của chính nó, phải kết thúc bằng gạch chéo.
     return RedirectResponse('ui/', status_code=307)
 
 
-def _upstream_headers(source: Any, settings: Settings, user_id: str) -> dict[str, str]:
-    headers = {name: source[name] for name in REQUEST_HEADERS if name in source}
-    headers['host'] = TERMI_HOST
-    headers['x-termi-token'] = termi_token(settings.sandbox_manager_token, user_id)
-    return headers
+def _terminal_url(scheme: str, settings: Settings, user_id: str, path: str) -> str:
+    """The caller's ttyd under its secret base path.
+    VI: ttyd của người gọi dưới đường dẫn gốc bí mật của nó."""
+    token = terminal_token(settings.sandbox_manager_token, user_id)
+    return f'{scheme}://{container_name(user_id)}:{TERMINAL_PORT}/{token}/{path}'
 
 
-@router.api_route('/ui/{path:path}', methods=['GET', 'HEAD', 'POST', 'PUT', 'DELETE'], include_in_schema=False)
+@router.api_route('/ui/{path:path}', methods=['GET', 'HEAD'], include_in_schema=False)
 async def sandbox_ui(path: str, request: Request, user: Any = Depends(current_user)):
-    """Streams one request to the caller's termi and its answer back, so
-    long-lived event streams pass through without being buffered.
-    VI: Chuyển một request tới termi của người gọi và truyền ngược câu trả lời theo luồng,
-    VI: để các luồng sự kiện dài chạy qua mà không bị gom lại."""
+    """Streams ttyd's page and its assets from the caller's sandbox.
+    VI: Truyền trang ttyd và tài nguyên của nó từ sandbox của người gọi."""
     settings = _settings(request)
     user_id = _sandbox_user(settings, user)
+    # `..` would climb out of the secret base path once the URL is normalised.
+    # VI: `..` sẽ leo ra khỏi đường dẫn gốc bí mật khi URL được chuẩn hoá.
+    if any(part in ('.', '..') for part in path.split('/')):
+        raise ApiError(404, 'Not found.', 'Not Found')
     client = httpx.AsyncClient(timeout=httpx.Timeout(30, read=None))
     upstream = client.build_request(
         request.method,
-        f'http://{container_name(user_id)}:{TERMI_PORT}/{path}',
+        _terminal_url('http', settings, user_id, path),
         params=request.query_params,
-        headers=_upstream_headers(request.headers, settings, user_id),
-        content=await request.body(),
+        headers={name: request.headers[name] for name in REQUEST_HEADERS if name in request.headers},
     )
     try:
         response = await client.send(upstream, stream=True)
@@ -351,15 +359,11 @@ async def _pump(socket: WebSocket, upstream: Any) -> None:
 
 @router.websocket('/ui/{path:path}')
 async def sandbox_socket(socket: WebSocket, path: str) -> None:
-    """Proxies the terminal WebSocket (`term/ws`) to the caller's ttyd through
-    termi. termi and ttyd check Host and Origin, so the upstream handshake says
-    `localhost` for both while the TCP connection goes to the container.
-    VI: Proxy WebSocket của terminal (`term/ws`) tới ttyd của người gọi qua termi. termi
-    VI: và ttyd kiểm Host và Origin, nên handshake phía sau ghi `localhost` cho cả hai
-    VI: trong khi kết nối TCP đi tới container."""
+    """Proxies the terminal WebSocket (`ws`, with ttyd's `?arg=<session>`) to the caller's ttyd.
+    VI: Proxy WebSocket của terminal (`ws`, kèm `?arg=<phiên>` của ttyd) tới ttyd của người gọi."""
     settings = _settings(socket)
     try:
-        if not path.startswith('term/') or not _own_origin(settings, socket.headers.get('origin')):
+        if path != 'ws' or not _own_origin(settings, socket.headers.get('origin')):
             raise ApiError(403, 'Forbidden', 'Forbidden')
         user_id = _sandbox_user(settings, await _socket_user(socket))
     except ApiError as error:
@@ -368,13 +372,7 @@ async def sandbox_socket(socket: WebSocket, path: str) -> None:
     query = f'?{socket.url.query}' if socket.url.query else ''
     try:
         upstream = await connect(
-            f'ws://{TERMI_HOST}/{path}{query}',
-            host=container_name(user_id),
-            port=TERMI_PORT,
-            additional_headers={
-                'X-Termi-Token': termi_token(settings.sandbox_manager_token, user_id),
-                'Origin': f'http://{TERMI_HOST}',
-            },
+            _terminal_url('ws', settings, user_id, path) + query,
             subprotocols=[websockets.Subprotocol(name) for name in socket.scope.get('subprotocols', [])],
             open_timeout=10,
             max_size=None,

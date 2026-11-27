@@ -1,12 +1,12 @@
 """Stops sandboxes nobody has used for SANDBOX_IDLE_MINUTES (docs/sandbox.md).
 
 Use means terminal input or output in any of the sandbox's tmux sessions, which
-termi reports per session. An agent that is still working prints to its screen,
+sandbox-manager reads with `tmux list-sessions`. An agent that is still working prints to its screen,
 so it is never stopped mid-task; a tab that is merely open is not use. The home
 volume stays, so the next Start or "Open with…" brings everything back.
 VI: Dừng các sandbox không ai dùng trong SANDBOX_IDLE_MINUTES phút (docs/sandbox.md).
 VI: Dùng nghĩa là có nhập hoặc output terminal trong bất kỳ phiên tmux nào của sandbox,
-VI: termi báo theo từng phiên. Agent còn đang làm việc thì in ra màn hình nên không bao
+VI: sandbox-manager đọc bằng `tmux list-sessions`. Agent còn đang làm việc thì in ra màn hình nên không bao
 VI: giờ bị dừng giữa chừng; chỉ mở tab thì không tính là dùng. Volume home được giữ, nên
 VI: lần Khởi động hoặc "Mở bằng…" sau sẽ có lại mọi thứ.
 """
@@ -20,11 +20,9 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
-import httpx
-
 from ...core.config import Settings
-from ...sandbox_manager import TERMI_PORT, container_name
-from .api import _manager, _upstream_headers
+from ...core.errors import ApiError
+from .api import _manager
 
 logger = logging.getLogger(__name__)
 
@@ -48,18 +46,13 @@ def last_activity(started_at: str | None, sessions: list[dict[str, Any]], now: f
 
 
 async def _sessions(settings: Settings, user_id: str) -> list[dict[str, Any]]:
-    """termi's sessions, or none when termi does not answer: then only the start time counts.
-    VI: Các phiên của termi, hoặc rỗng khi termi không trả lời: khi đó chỉ tính giờ khởi động."""
+    """The sandbox's tmux sessions, or none when they cannot be read: then only the start time counts.
+    VI: Các phiên tmux của sandbox, hoặc rỗng khi không đọc được: khi đó chỉ tính giờ khởi động."""
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.get(
-                f'http://{container_name(user_id)}:{TERMI_PORT}/api/sessions',
-                headers=_upstream_headers({}, settings, user_id),
-            )
-    except httpx.HTTPError:
+        status, body = await _manager(settings, 'GET', f'/sandboxes/{user_id}/sessions')
+    except ApiError:
         return []
-    body = response.json() if response.status_code == 200 else []
-    return body if isinstance(body, list) else []
+    return body if status == 200 and isinstance(body, list) else []
 
 
 async def stop_idle_sandboxes(settings: Settings, now: Callable[[], float] = time.time) -> list[str]:

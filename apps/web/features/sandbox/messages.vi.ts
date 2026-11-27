@@ -18,4 +18,7 @@ export const messages = {
    'Open with {agent}': 'Mở bằng {agent}',
    '{agent} in {repository}': '{agent} trong {repository}',
    'Starting the sandbox…': 'Đang khởi động sandbox…',
+   'Terminal sessions': 'Các phiên terminal',
+   'New terminal': 'Terminal mới',
+   'Close this session': 'Đóng phiên này',
 } as const;

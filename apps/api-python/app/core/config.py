@@ -113,10 +113,10 @@ class Settings:
     # Personal coding sandboxes (docs/sandbox.md). Only the lowercase emails in
     # sandbox_users may start one or open its terminal; empty turns the feature off.
     # The token is the sandbox-manager's bearer token, which also derives each
-    # sandbox's termi token, so it never leaves the server side.
+    # sandbox's terminal token, so it never leaves the server side.
     # VI: Sandbox lập trình cá nhân (docs/sandbox.md). Chỉ email (chữ thường) trong
     # VI: sandbox_users được khởi động sandbox hay mở terminal của nó; để trống là tắt.
-    # VI: Token là bearer token của sandbox-manager, cũng dùng để suy ra token termi của
+    # VI: Token là bearer token của sandbox-manager, cũng dùng để suy ra token terminal của
     # VI: từng sandbox, nên không bao giờ rời phía server.
     sandbox_users: tuple[str, ...] = ()
     sandbox_manager_url: str = 'http://circle-sandbox-manager:4100'
