@@ -2,7 +2,14 @@ from typing import Any
 
 import pytest
 
-from app.sandbox_manager import USER_LABEL, Config, Manager, container_spec, handle
+from app.sandbox_manager import (
+    USER_LABEL,
+    Config,
+    Manager,
+    container_spec,
+    handle,
+    termi_token,
+)
 
 TOKEN = 'x' * 40
 USER = 'ctwwf9lkb5z0bsyzit9na6opp'
@@ -84,6 +91,8 @@ def test_ensure_creates_a_locked_down_container_and_starts_it():
     assert host['Memory'] == host['MemorySwap'] == 2048 * 1024 * 1024
     assert [mount['Source'] for mount in host['Mounts']] == [f'flowie-sandbox-home-{USER}']
     assert 'Binds' not in host and 'PortBindings' not in host
+    assert create[2]['Env'] == [f'TERMI_TOKEN={termi_token(TOKEN, USER)}']
+    assert termi_token(TOKEN, USER) != termi_token(TOKEN, 'c' * 25)
 
 
 def test_ensure_on_a_running_sandbox_changes_nothing():

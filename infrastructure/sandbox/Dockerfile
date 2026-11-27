@@ -39,6 +39,21 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends gh \
  && rm -rf /var/lib/apt/lists/*
 
+# termi is the terminal and session UI each sandbox serves to its owner through
+# the Flowie API (docs/sandbox.md). It is pinned to one commit and checked
+# against its SHA-256 like ttyd; it needs no npm install.
+# VI: termi là giao diện terminal và phiên mà mỗi sandbox phục vụ cho chủ của nó qua
+# VI: API Flowie (docs/sandbox.md). Nó được ghim theo một commit và kiểm SHA-256 như
+# VI: ttyd; không cần npm install.
+ARG TERMI_COMMIT=7a16b556e37afa8730a2eb92193178d09bea497f
+ARG TERMI_SHA256=f0e5aeb6b42cfc1663f33ca22d2fba13488caef3fb96f8aecaf0f1f7be07ea9b
+RUN curl -fsSL "https://codeload.github.com/hoangtu0812/termi/tar.gz/${TERMI_COMMIT}" -o /tmp/termi.tgz \
+ && echo "${TERMI_SHA256}  /tmp/termi.tgz" | sha256sum -c - \
+ && mkdir -p /opt/termi \
+ && tar -xzf /tmp/termi.tgz -C /opt/termi --strip-components=1 \
+ && rm /tmp/termi.tgz \
+ && chmod 0755 /opt/termi/scripts/attach.sh
+
 RUN npm install --global --no-fund --no-audit \
       "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
       "@openai/codex@${CODEX_VERSION}" \
@@ -54,14 +69,16 @@ RUN npm install --global --no-fund --no-audit \
 # VI: thêm helper riêng cho github.com bên trên.
 ENV DISABLE_AUTOUPDATER=1 \
     LANG=C.UTF-8 \
-    TERM=xterm-256color
+    TERM=xterm-256color \
+    SHELL=/bin/bash \
+    TERMI_HOST=0.0.0.0 \
+    TERMI_PORT=7680 \
+    TERMI_TTYD_PORT=7681 \
+    TERMI_ROOTS=/home/node
 RUN git config --system credential.helper store \
  && git config --system init.defaultBranch main
 
 USER node
 WORKDIR /home/node
-# Phase 1 only keeps the container alive for `docker exec`; the terminal server
-# that the browser reaches replaces this command in a later phase.
-# VI: Giai đoạn 1 chỉ giữ container chạy để `docker exec`; server terminal mà trình
-# VI: duyệt kết nối tới sẽ thay lệnh này ở giai đoạn sau.
-CMD ["sleep", "infinity"]
+COPY --chmod=0755 sandbox-start.sh /usr/local/bin/sandbox-start
+CMD ["sandbox-start"]
