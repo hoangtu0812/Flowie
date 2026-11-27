@@ -354,6 +354,8 @@ test('Quick actions can be edited, shared or for the session repository', async 
    const editor = page.getByRole('dialog', { name: 'Edit quick actions' });
    const rows = editor.getByRole('list', { name: 'Quick actions' }).getByRole('listitem');
    await expect(rows).toHaveCount(8);
+   // The buttons sit in the dialog's footer, not below its scrolled content.
+   await expect(editor.getByRole('button', { name: 'Save' })).toBeInViewport();
    for (let count = 8; count > 1; count -= 1) {
       await rows
          .last()

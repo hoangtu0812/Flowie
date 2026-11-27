@@ -187,6 +187,25 @@ function QuickEditor({
             height="auto"
             padding={4}
             header={<DialogHeader title={tx('Edit quick actions')} onOpenChange={onClose} />}
+            footer={
+               <LayoutFooter>
+                  <HStack gap={2} hAlign="end">
+                     <Button
+                        label={scope === 'shared' ? tx('Restore defaults') : tx('Remove all')}
+                        variant="ghost"
+                        isDisabled={busy}
+                        onClick={() => void save(null)}
+                     />
+                     <Button label={tx('Cancel')} variant="ghost" onClick={onClose} />
+                     <Button
+                        label={tx('Save')}
+                        variant="primary"
+                        isDisabled={busy}
+                        onClick={() => void save(cleaned)}
+                     />
+                  </HStack>
+               </LayoutFooter>
+            }
          >
             <LayoutContent>
                <div role="group" aria-label={tx('Which list')} className="mb-3 flex gap-1">
@@ -265,23 +284,6 @@ function QuickEditor({
                   <Plus className="size-3.5" /> {tx('Add an action')}
                </button>
             </LayoutContent>
-            <LayoutFooter>
-               <HStack gap={2} hAlign="end">
-                  <Button
-                     label={scope === 'shared' ? tx('Restore defaults') : tx('Remove all')}
-                     variant="ghost"
-                     isDisabled={busy}
-                     onClick={() => void save(null)}
-                  />
-                  <Button label={tx('Cancel')} variant="ghost" onClick={onClose} />
-                  <Button
-                     label={tx('Save')}
-                     variant="primary"
-                     isDisabled={busy}
-                     onClick={() => void save(cleaned)}
-                  />
-               </HStack>
-            </LayoutFooter>
          </Layout>
       </Dialog>
    );
