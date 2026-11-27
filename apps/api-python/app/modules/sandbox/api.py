@@ -490,6 +490,38 @@ async def sandbox_ci_action(payload: CiActionInput, request: Request, user: Any 
     return {'data': done}
 
 
+@router.get('/quick')
+async def sandbox_quick(request: Request, dir: str = Query(default='', max_length=4096), user: Any = Depends(current_user)):
+    """The person's quick actions: shared (null = the defaults) and those of the folder's repository.
+    VI: Thao tác nhanh của người dùng: dùng chung (null = mặc định) và của repository chứa thư mục."""
+    settings = _settings(request)
+    user_id = _sandbox_user(settings, user)
+    _, found = await _agent(settings, user_id, 'GET', 'quick', params={'dir': dir} if dir else None)
+    return {'data': found}
+
+
+class QuickAction(StrictInput):
+    label: str = Field(min_length=1, max_length=40)
+    text: str = Field(min_length=1, max_length=2000)
+    ask: bool = False
+
+
+class QuickInput(StrictInput):
+    scope: Literal['shared', 'project']
+    dir: str = Field(default='', max_length=4096)
+    actions: list[QuickAction] | None = Field(default=None, max_length=30)
+
+
+@router.put('/quick')
+async def save_sandbox_quick(payload: QuickInput, request: Request, user: Any = Depends(current_user)):
+    """Saves the shared or the project's quick actions; null actions restore the defaults.
+    VI: Lưu thao tác nhanh dùng chung hoặc của dự án; actions null là về mặc định."""
+    settings = _settings(request)
+    user_id = _sandbox_user(settings, user)
+    _, saved = await _agent(settings, user_id, 'PUT', 'quick', payload.model_dump())
+    return {'data': saved}
+
+
 @router.get('/dirs')
 async def sandbox_dirs(request: Request, user: Any = Depends(current_user)):
     """Folders to start a session in: the home, open sessions' folders, issue worktrees and clones.

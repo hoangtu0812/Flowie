@@ -1254,6 +1254,87 @@ def ci_action(body: dict[str, Any]) -> dict[str, Any]:
     return {'ok': True}
 
 
+# ---- Quick actions the person edits, shared or per project (termi v1.12) ----
+# VI: ---- Thao tác nhanh người dùng tự sửa, dùng chung hoặc theo dự án (termi v1.12) ----
+
+MAX_QUICK = 30
+MAX_QUICK_LABEL = 40
+MAX_QUICK_TEXT = 2000
+
+
+def _quick_file() -> Path:
+    return home() / '.flowie' / 'quick-actions.json'
+
+
+def _quick_saved() -> dict[str, Any]:
+    try:
+        saved = json.loads(_quick_file().read_text())
+    except (OSError, ValueError):
+        return {'shared': None, 'projects': {}}
+    return saved if isinstance(saved, dict) else {'shared': None, 'projects': {}}
+
+
+def _project_of(directory: str) -> str:
+    """The repository a folder belongs to, or the folder itself outside one.
+    VI: Repository chứa thư mục, hoặc chính thư mục khi không nằm trong repository."""
+    folder = inside_home(directory)
+    try:
+        return git(folder, 'rev-parse', '--show-toplevel').strip()
+    except Refused:
+        return folder
+
+
+def _clean_actions(actions: Any) -> list[dict[str, Any]]:
+    if not isinstance(actions, list) or len(actions) > MAX_QUICK:
+        raise Refused(400, f'Up to {MAX_QUICK} quick actions.')
+    cleaned = []
+    for action in actions:
+        label = action.get('label') if isinstance(action, dict) else None
+        text = action.get('text') if isinstance(action, dict) else None
+        if not isinstance(label, str) or not label.strip() or len(label) > MAX_QUICK_LABEL:
+            raise Refused(400, f'Each quick action needs a name of up to {MAX_QUICK_LABEL} characters.')
+        if not isinstance(text, str) or not text.strip() or len(text) > MAX_QUICK_TEXT:
+            raise Refused(400, f'Each quick action needs a request of up to {MAX_QUICK_TEXT} characters.')
+        cleaned.append({'label': label.strip(), 'text': text, 'ask': action.get('ask') is True})
+    return cleaned
+
+
+def quick_actions(directory: str) -> dict[str, Any]:
+    saved = _quick_saved()
+    project = _project_of(directory) if directory else ''
+    return {
+        'shared': saved.get('shared'),
+        'project': (saved.get('projects') or {}).get(project, []) if project else [],
+        'projectDir': project or None,
+    }
+
+
+def save_quick_actions(body: dict[str, Any]) -> dict[str, Any]:
+    scope = body.get('scope')
+    if scope not in ('shared', 'project'):
+        raise Refused(400, 'The scope is shared or project.')
+    reset = body.get('actions') is None
+    actions = None if reset else _clean_actions(body.get('actions'))
+    saved = _quick_saved()
+    stored = saved.get('projects')
+    projects: dict[str, Any] = stored if isinstance(stored, dict) else {}
+    if scope == 'shared':
+        saved['shared'] = actions  # None goes back to the defaults
+    else:
+        project = _project_of(str(body.get('dir') or ''))
+        if actions:
+            projects[project] = actions
+        else:
+            projects.pop(project, None)
+    saved['projects'] = projects
+    target = _quick_file()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_name(f'{target.name}.{os.getpid()}')
+    temporary.write_text(json.dumps(saved, ensure_ascii=False, indent=1))
+    temporary.replace(target)
+    return quick_actions(str(body.get('dir') or '')) if scope == 'project' else {'shared': saved['shared']}
+
+
 def _limit(query: dict[str, list[str]]) -> int:
     try:
         return max(10, min(200, int(query.get('limit', [CHAT_LIMIT])[0])))
@@ -1318,6 +1399,10 @@ def route(token: str, method: str, raw_path: str, body: bytes, filename: str = '
             return 200, ci_log(query.get('dir', [''])[0], query.get('id', [''])[0])
         if method == 'POST' and path == ['ci', 'action']:
             return 200, ci_action(request)
+        if method == 'GET' and path == ['quick']:
+            return 200, quick_actions(query.get('dir', [''])[0])
+        if method == 'PUT' and path == ['quick']:
+            return 200, save_quick_actions(request)
         if method == 'GET' and path == ['usage']:
             return 200, usage()
         if method == 'GET' and path == ['dirs']:
@@ -1357,7 +1442,7 @@ def serve(token: str, port: int = PORT) -> None:
         def log_message(self, format: str, *args: Any) -> None:  # noqa: A002 - BaseHTTPRequestHandler's name
             pass
 
-        do_GET = do_POST = do_DELETE = _respond
+        do_GET = do_POST = do_PUT = do_DELETE = _respond
 
     ThreadingHTTPServer(('0.0.0.0', port), Handler).serve_forever()
 

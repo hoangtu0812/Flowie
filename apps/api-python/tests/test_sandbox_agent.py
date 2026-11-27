@@ -583,3 +583,24 @@ def test_azure_pipelines_use_the_stored_token_and_rest(repo, monkeypatch):
     assert requests[-1] == ('POST', 'pipelines/4/runs', {'resources': {'repositories': {'self': {'refName': 'refs/heads/main'}}}})
     call('POST', 'ci/action', {'dir': str(repo), 'id': '5', 'action': 'cancel'})
     assert requests[-1] == ('PATCH', 'build/builds/5', {'status': 'cancelling'})
+
+
+def test_quick_actions_are_saved_shared_and_per_repository(repo):
+    home = repo.parent.parent
+    assert call('GET', f'quick?dir={repo}/src') == (200, {'shared': None, 'project': [], 'projectDir': str(repo.resolve())})
+    shared = [{'label': 'Lint', 'text': 'Chạy pnpm lint và sửa lỗi', 'ask': False}]
+    assert call('PUT', 'quick', {'scope': 'shared', 'actions': shared}) == (200, {'shared': shared})
+    deploy = [{'label': 'Deploy', 'text': 'Deploy lên staging', 'ask': True, 'extra': 'ignored'}]
+    status, saved = call('PUT', 'quick', {'scope': 'project', 'dir': f'{repo}/src', 'actions': deploy})
+    assert status == 200 and saved['project'] == [{'label': 'Deploy', 'text': 'Deploy lên staging', 'ask': True}]
+    assert call('GET', f'quick?dir={repo}')[1]['shared'] == shared
+    assert call('GET', f'quick?dir={home}')[1]['project'] == []  # another folder has none
+    stored = json.loads((home / '.flowie' / 'quick-actions.json').read_text())
+    assert 'Chạy pnpm lint' in json.dumps(stored, ensure_ascii=False)
+    assert call('PUT', 'quick', {'scope': 'project', 'dir': str(repo), 'actions': []})[1]['project'] == []
+    assert call('PUT', 'quick', {'scope': 'shared', 'actions': None}) == (200, {'shared': None})  # back to defaults
+    for bad in ({'scope': 'all', 'actions': []}, {'scope': 'shared', 'actions': [{'label': '', 'text': 'x'}]},
+                {'scope': 'shared', 'actions': [{'label': 'x' * 41, 'text': 'x'}]},
+                {'scope': 'shared', 'actions': [{'label': 'x', 'text': 'x'}] * 31},
+                {'scope': 'project', 'dir': '/etc', 'actions': []}):
+        assert call('PUT', 'quick', bad)[0] == 400

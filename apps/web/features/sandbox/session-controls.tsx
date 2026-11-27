@@ -1,26 +1,34 @@
 'use client';
 
-import { useRef, useState } from 'react';
-import { Copy, Paperclip, Send, X, Zap } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Copy, Paperclip, Pencil, Plus, Send, Trash2, X, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@astryxdesign/core/Button';
 import { Dialog, DialogHeader } from '@astryxdesign/core/Dialog';
-import { Layout, LayoutContent } from '@astryxdesign/core/Layout';
+import { HStack, Layout, LayoutContent, LayoutFooter } from '@astryxdesign/core/Layout';
+import { TextInput } from '@astryxdesign/core/TextInput';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
    DropdownMenu,
    DropdownMenuContent,
    DropdownMenuItem,
+   DropdownMenuSeparator,
    DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Textarea } from '@/components/ui/textarea';
 import { useMessages } from '@/features/shared/use-messages';
 import {
+   loadSandboxQuick,
    loadSandboxSessionText,
+   saveSandboxQuick,
    sendToSandboxSession,
    uploadToSandbox,
    type SandboxAgent,
    type SandboxKey,
+   type SandboxQuick,
+   type SandboxQuickAction,
 } from '@/lib/sandbox';
+import { cn } from '@/lib/utils';
 import { messages } from './messages.vi';
 
 type Tx = ReturnType<typeof useMessages<typeof messages>>;
@@ -98,6 +106,185 @@ const QUICK: Quick[] = [
 function quickText(quick: Quick, agent: SandboxAgent | null, tx: Tx): string | null {
    if (typeof quick.text === 'string') return tx(quick.text);
    return (agent && quick.text[agent]) || quick.text['*'] || null;
+}
+
+const MAX_QUICK = 30;
+
+/** The built-in actions for this agent, in the saved form. VI: Thao tác mặc định cho agent này. */
+function builtInQuick(
+   agent: SandboxAgent | null,
+   tx: Tx
+): (SandboxQuickAction & { hint: string })[] {
+   return QUICK.flatMap((item) => {
+      const text = quickText(item, agent, tx);
+      return text
+         ? [{ label: tx(item.label), hint: tx(item.hint), text, ask: Boolean(item.ask) }]
+         : [];
+   });
+}
+
+/**
+ * termi's quick-action editor (v1.12): the shared list, which replaces the built-in one, or the
+ * list of the session's repository, shown above it. Editing the built-in list starts from it in
+ * this agent's wording.
+ * VI: Hộp sửa thao tác nhanh của termi (v1.12): danh sách dùng chung, thay cho danh sách mặc định,
+ * VI: hoặc danh sách của repository chứa phiên, hiện phía trên. Sửa danh sách mặc định thì bắt đầu
+ * VI: từ chính nó theo cách gọi của agent này.
+ */
+function QuickEditor({
+   saved,
+   dir,
+   agent,
+   onClose,
+   onSaved,
+}: {
+   saved: SandboxQuick;
+   dir: string;
+   agent: SandboxAgent | null;
+   onClose: () => void;
+   onSaved: () => void;
+}) {
+   const tx = useMessages(messages);
+   const listOf = (scope: 'shared' | 'project'): SandboxQuickAction[] =>
+      scope === 'project'
+         ? saved.project
+         : (saved.shared ??
+           builtInQuick(agent, tx).map(({ label, text, ask }) => ({ label, text, ask })));
+   const [scope, setScope] = useState<'shared' | 'project'>('shared');
+   const [rows, setRows] = useState(() => listOf('shared'));
+   const [busy, setBusy] = useState(false);
+
+   const pick = (next: 'shared' | 'project') => {
+      setScope(next);
+      setRows(listOf(next));
+   };
+   const change = (index: number, patch: Partial<SandboxQuickAction>) =>
+      setRows((list) => list.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+   const save = async (actions: SandboxQuickAction[] | null) => {
+      setBusy(true);
+      try {
+         await saveSandboxQuick({ scope, dir, actions });
+         toast.success(tx('Quick actions saved'));
+         onSaved();
+      } catch (error) {
+         toast.error(error instanceof Error ? error.message : String(error));
+      } finally {
+         setBusy(false);
+      }
+   };
+   const cleaned = rows
+      .map((row) => ({ ...row, label: row.label.trim().slice(0, 40), text: row.text.trim() }))
+      .filter((row) => row.label && row.text);
+
+   return (
+      <Dialog
+         isOpen
+         aria-label={tx('Edit quick actions')}
+         width={720}
+         onOpenChange={(isOpen) => !isOpen && onClose()}
+      >
+         <Layout
+            height="auto"
+            padding={4}
+            header={<DialogHeader title={tx('Edit quick actions')} onOpenChange={onClose} />}
+         >
+            <LayoutContent>
+               <div role="group" aria-label={tx('Which list')} className="mb-3 flex gap-1">
+                  {(['shared', 'project'] as const).map((item) => (
+                     <button
+                        key={item}
+                        type="button"
+                        aria-pressed={scope === item}
+                        disabled={item === 'project' && !saved.projectDir}
+                        onClick={() => pick(item)}
+                        className={cn(
+                           'rounded border px-2 py-0.5 text-xs hover:bg-accent disabled:opacity-50',
+                           scope === item && 'bg-accent'
+                        )}
+                     >
+                        {item === 'shared' ? tx('Shared') : tx('This project')}
+                     </button>
+                  ))}
+                  <span className="ml-2 self-center truncate text-xs text-muted-foreground">
+                     {scope === 'shared'
+                        ? tx('Used in every project.')
+                        : tx('Shown first in {folder}.', {
+                             folder: saved.projectDir?.split('/').pop() ?? '',
+                          })}
+                  </span>
+               </div>
+               <ol
+                  aria-label={tx('Quick actions')}
+                  className="flex max-h-[55vh] flex-col gap-3 overflow-y-auto"
+               >
+                  {rows.map((row, index) => (
+                     <li key={index} className="flex gap-2 rounded border p-2">
+                        <div className="flex min-w-0 flex-1 flex-col gap-2">
+                           <TextInput
+                              label={tx('Name')}
+                              value={row.label}
+                              width="100%"
+                              onChange={(label) => change(index, { label })}
+                           />
+                           <Textarea
+                              aria-label={tx('Message to the agent')}
+                              value={row.text}
+                              maxLength={2000}
+                              rows={2}
+                              onChange={(event) => change(index, { text: event.target.value })}
+                           />
+                           <label className="flex items-center gap-2 text-xs">
+                              <Checkbox
+                                 checked={row.ask}
+                                 onCheckedChange={(checked) =>
+                                    change(index, { ask: checked === true })
+                                 }
+                              />
+                              {tx('Ask before sending')}
+                           </label>
+                        </div>
+                        <button
+                           type="button"
+                           aria-label={tx('Remove {name}', {
+                              name: row.label || String(index + 1),
+                           })}
+                           onClick={() => setRows((list) => list.filter((_, i) => i !== index))}
+                           className="self-start rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+                        >
+                           <Trash2 className="size-4" />
+                        </button>
+                     </li>
+                  ))}
+               </ol>
+               <button
+                  type="button"
+                  disabled={rows.length >= MAX_QUICK}
+                  onClick={() => setRows((list) => [...list, { label: '', text: '', ask: false }])}
+                  className="mt-2 flex items-center gap-1 rounded px-2 py-1 text-xs hover:bg-accent disabled:opacity-50"
+               >
+                  <Plus className="size-3.5" /> {tx('Add an action')}
+               </button>
+            </LayoutContent>
+            <LayoutFooter>
+               <HStack gap={2} hAlign="end">
+                  <Button
+                     label={scope === 'shared' ? tx('Restore defaults') : tx('Remove all')}
+                     variant="ghost"
+                     isDisabled={busy}
+                     onClick={() => void save(null)}
+                  />
+                  <Button label={tx('Cancel')} variant="ghost" onClick={onClose} />
+                  <Button
+                     label={tx('Save')}
+                     variant="primary"
+                     isDisabled={busy}
+                     onClick={() => void save(cleaned)}
+                  />
+               </HStack>
+            </LayoutFooter>
+         </Layout>
+      </Dialog>
+   );
 }
 
 /** Keys an on-screen keyboard lacks, plus font size, as termi's key row. */
@@ -220,11 +407,14 @@ function CopyText({ session }: { session: string }) {
 export function Composer({
    session,
    agent,
+   dir,
    text,
    setText,
 }: {
    session: string;
    agent: SandboxAgent | null;
+   /** The session's folder; its repository may have its own quick actions. */
+   dir: string;
    /** Held by the page, so the file browser can add paths to it. */
    text: string;
    setText: (text: string) => void;
@@ -233,6 +423,19 @@ export function Composer({
    const [files, setFiles] = useState<File[]>([]);
    const [busy, setBusy] = useState(false);
    const picker = useRef<HTMLInputElement>(null);
+   const [saved, setSaved] = useState<SandboxQuick | null>(null);
+   const [editing, setEditing] = useState(false);
+   const loadQuick = () => loadSandboxQuick(dir).then(setSaved, () => undefined);
+   useEffect(() => {
+      void loadSandboxQuick(dir).then(setSaved, () => undefined);
+   }, [dir]);
+   const builtIn = builtInQuick(agent, tx);
+   // The project's own actions first, then the shared list (or the built-in one).
+   // VI: Thao tác của dự án trước, rồi danh sách dùng chung (hoặc mặc định).
+   const actions: (SandboxQuickAction & { hint?: string })[] = [
+      ...(saved?.project ?? []),
+      ...(saved?.shared ?? builtIn),
+   ];
 
    const deliver = async (message: string) => {
       setBusy(true);
@@ -250,15 +453,10 @@ export function Composer({
       }
    };
 
-   const quick = (item: Quick) => {
-      const message = quickText(item, agent, tx);
-      if (!message) return;
-      if (
-         item.ask &&
-         !window.confirm(tx('Send “{action}” to the agent?', { action: tx(item.label) }))
-      )
+   const quick = (item: SandboxQuickAction) => {
+      if (item.ask && !window.confirm(tx('Send “{action}” to the agent?', { action: item.label })))
          return;
-      void deliver(message);
+      void deliver(item.text);
    };
 
    return (
@@ -303,16 +501,34 @@ export function Composer({
                   </button>
                </DropdownMenuTrigger>
                <DropdownMenuContent align="start" side="top" className="w-72">
-                  {QUICK.filter((item) => quickText(item, agent, tx)).map((item) => (
-                     <DropdownMenuItem key={item.label} onClick={() => quick(item)}>
-                        <span className="flex flex-col">
-                           <span>{tx(item.label)}</span>
-                           <span className="text-xs text-muted-foreground">{tx(item.hint)}</span>
+                  {actions.map((item, index) => (
+                     <DropdownMenuItem key={`${index}-${item.label}`} onClick={() => quick(item)}>
+                        <span className="flex min-w-0 flex-col">
+                           <span>{item.label}</span>
+                           <span className="truncate text-xs text-muted-foreground">
+                              {item.hint ?? item.text}
+                           </span>
                         </span>
                      </DropdownMenuItem>
                   ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem disabled={!saved} onClick={() => setEditing(true)}>
+                     <Pencil className="size-4" /> {tx('Edit quick actions…')}
+                  </DropdownMenuItem>
                </DropdownMenuContent>
             </DropdownMenu>
+            {editing && saved && (
+               <QuickEditor
+                  saved={saved}
+                  dir={dir}
+                  agent={agent}
+                  onClose={() => setEditing(false)}
+                  onSaved={() => {
+                     setEditing(false);
+                     void loadQuick();
+                  }}
+               />
+            )}
             <button
                type="button"
                aria-label={tx('Attach files')}

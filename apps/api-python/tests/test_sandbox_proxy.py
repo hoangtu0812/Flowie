@@ -456,3 +456,22 @@ def test_pipelines_reach_the_agent(monkeypatch):
     assert json.loads(seen[-1][3]) == body
     assert client.post('/api/v1/sandbox/ci', json={**body, 'action': 'delete'}).status_code == 422
     assert len(seen) == 3
+
+
+def test_quick_actions_reach_the_agent(monkeypatch):
+    seen = []
+
+    def agent(request, path):
+        seen.append((request.method, path, dict(request.url.params), request.content))
+        return httpx.Response(200, json={'shared': None})
+
+    client = agent_client(ME, monkeypatch, agent)
+    assert client.get('/api/v1/sandbox/quick?dir=/home/node/w').json() == {'data': {'shared': None}}
+    body = {'scope': 'project', 'dir': '/home/node/w', 'actions': [{'label': 'Deploy', 'text': 'Deploy now', 'ask': True}]}
+    assert client.put('/api/v1/sandbox/quick', json=body).status_code == 200
+    assert json.loads(seen[-1][3]) == body
+    assert client.put('/api/v1/sandbox/quick', json={'scope': 'shared', 'actions': None}).status_code == 200
+    for bad in ({'scope': 'all'}, {'scope': 'shared', 'actions': [{'label': '', 'text': 'x'}]},
+                {'scope': 'shared', 'actions': [{'label': 'x', 'text': 'x'}] * 31}):
+        assert client.put('/api/v1/sandbox/quick', json=bad).status_code == 422
+    assert len(seen) == 3
