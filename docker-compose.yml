@@ -150,6 +150,42 @@ services:
          api:
             condition: service_started
 
+   # Creates and stops the per-user coding sandboxes (docs/sandbox.md). It is
+   # the only service given the Docker socket, publishes no port and stays on
+   # the default network, which the sandboxes are never attached to. It refuses
+   # to start without a SANDBOX_MANAGER_TOKEN of at least 32 characters, and
+   # without SANDBOX_DOCKER_GID (the group of /var/run/docker.sock on the host)
+   # the container cannot be created at all.
+   # VI: Tạo và dừng sandbox lập trình của từng người (docs/sandbox.md). Đây là
+   # VI: service duy nhất được cấp Docker socket, không mở cổng nào và chỉ ở mạng
+   # VI: default, mạng mà sandbox không bao giờ được gắn vào. Nó từ chối khởi động khi
+   # VI: thiếu SANDBOX_MANAGER_TOKEN dài ít nhất 32 ký tự, và khi thiếu
+   # VI: SANDBOX_DOCKER_GID (group của /var/run/docker.sock trên host) thì container
+   # VI: không tạo được.
+   sandbox-manager:
+      profiles: ['sandbox']
+      pull_policy: never
+      build:
+         context: .
+         dockerfile: infrastructure/docker/python-api.Dockerfile
+         args:
+            PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+      container_name: circle-sandbox-manager
+      restart: unless-stopped
+      command: ['python', '-m', 'app.sandbox_manager']
+      group_add:
+         - '${SANDBOX_DOCKER_GID:-docker}'
+      environment:
+         SANDBOX_MANAGER_TOKEN: ${SANDBOX_MANAGER_TOKEN:-}
+         SANDBOX_IMAGE: ${SANDBOX_IMAGE:-flowie-sandbox:latest}
+         SANDBOX_SUBNET: ${SANDBOX_SUBNET:-172.31.250.0/24}
+         SANDBOX_CPUS: ${SANDBOX_CPUS:-1}
+         SANDBOX_MEMORY_MB: ${SANDBOX_MEMORY_MB:-2048}
+         SANDBOX_PIDS: ${SANDBOX_PIDS:-512}
+         DOCKER_NETWORK_MTU: ${DOCKER_NETWORK_MTU:-1400}
+      volumes:
+         - /var/run/docker.sock:/var/run/docker.sock
+
 networks:
    default:
       driver: bridge
