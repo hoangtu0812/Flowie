@@ -14,7 +14,7 @@ import httpx
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.modules.scm.contracts import ProviderRepository
-from app.modules.scm.providers.azure_devops import AzureDevOpsProvider
+from app.modules.scm.providers.azure_devops import AzureDevOpsProvider, azure_pull_request_web_url
 from app.modules.scm.providers.github import GitHubProvider
 from app.modules.scm.security import verify_azure_basic_auth, verify_github_signature
 
@@ -162,6 +162,41 @@ class ScmProviderTests(unittest.TestCase):
         self.assertEqual(review.latestRevisionKey, 'iteration:2:head-sha')
         self.assertEqual(review.reviewers[0].decision, 'WAITING_FOR_AUTHOR')
         self.assertTrue(review.reviewers[0].isRequired)
+
+    def test_azure_review_links_to_the_pull_request_page_not_the_rest_api(self) -> None:
+        api_url = (
+            'https://dev.azure.com/bsr-idt/83f4d3e9-add6-4fb0-a91f-66acbcb60269'
+            '/_apis/git/repositories/4355f3c1-fd27-4004-a1f7-8f081e766ba8/pullRequests/220'
+        )
+        item = {
+            'pullRequestId': 220,
+            'title': 'Azure review',
+            'status': 'completed',
+            'createdBy': {'id': 'author-id'},
+            'creationDate': '2026-11-25T08:36:25Z',
+            'url': api_url,
+            'repository': {'webUrl': 'https://dev.azure.com/bsr-idt/AI-Platform/_git/AI-Platform'},
+            '_links': {'self': {'href': api_url}},
+        }
+
+        self.assertEqual(
+            AzureDevOpsProvider._review(item).remoteUrl,
+            'https://dev.azure.com/bsr-idt/AI-Platform/_git/AI-Platform/pullrequest/220',
+        )
+        without_repository = {**item, 'repository': {}}
+        self.assertEqual(
+            AzureDevOpsProvider._review(without_repository).remoteUrl,
+            'https://dev.azure.com/bsr-idt/83f4d3e9-add6-4fb0-a91f-66acbcb60269'
+            '/_git/4355f3c1-fd27-4004-a1f7-8f081e766ba8/pullrequest/220',
+        )
+
+    def test_azure_web_url_leaves_other_urls_unchanged(self) -> None:
+        for url in (
+            '',
+            'https://github.com/acme/repo/pull/7',
+            'https://dev.azure.com/acme/project/_git/repo/pullrequest/73',
+        ):
+            self.assertEqual(azure_pull_request_web_url(url), url)
 
 
 if __name__ == '__main__':

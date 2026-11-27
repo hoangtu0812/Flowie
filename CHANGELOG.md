@@ -101,6 +101,11 @@ pull request and commit references, which are for us.
 - The project Timeline is back to its earlier layout: the Gantt view tried in DTD-1026 (#318, #319) is withdrawn because it was harder to read than the old timeline. The API keeps the extra `milestoneId` and `blockedBy` issue fields. Rebuild `web`. (DTD-1026, #320)
   VI: Timeline của dự án trở lại giao diện trước đây: bản Gantt thử trong DTD-1026 (#318, #319) được gỡ vì khó đọc hơn timeline cũ. API vẫn giữ hai trường `milestoneId` và `blockedBy` của issue. Build lại `web`.
 
+### Fixed
+
+- "Open on Azure DevOps" on a pull request now opens the pull request page instead of a page of raw JSON, including for pull requests synced before this fix. Rebuild `api`; no migration.
+  VI: "Open on Azure DevOps" trên pull request giờ mở trang pull request thay vì một trang JSON thô, kể cả với pull request đã đồng bộ trước bản sửa này. Build lại `api`; không có migration.
+
 ## [0.25.0] — 2026-11-19 14:31 +07
 
 ### Added
