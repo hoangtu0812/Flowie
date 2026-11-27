@@ -29,6 +29,7 @@ import sys
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Protocol
+from urllib.parse import quote
 
 # Flowie user ids are cuids: lowercase letters and digits only. Checking the
 # shape keeps the id safe inside a container name and a Docker API path.
@@ -209,7 +210,19 @@ class Manager:
             'userId': user_id,
             'state': body['State']['Status'],
             'address': (networks.get(self.config.network) or {}).get('IPAddress') or None,
+            'startedAt': body['State'].get('StartedAt'),
         }
+
+    def running(self) -> list[dict[str, Any]]:
+        """Every running sandbox this manager labelled, for the API's idle check.
+        VI: Mọi sandbox đang chạy do manager gắn nhãn, cho việc kiểm tra rảnh của API."""
+        filters = json.dumps({'label': [USER_LABEL], 'status': ['running']})
+        status, body = self.docker.request('GET', f'/containers/json?filters={quote(filters)}')
+        if status != 200:
+            raise SandboxError(502, f'Docker returned {status}')
+        users = [(item.get('Labels') or {}).get(USER_LABEL, '') for item in body]
+        found = [self.describe(user_id) for user_id in users if USER_ID.match(user_id)]
+        return [item for item in found if item and item['state'] == 'running']
 
     def ensure(self, user_id: str) -> dict[str, Any]:
         found = self.describe(user_id)
@@ -254,12 +267,17 @@ class Manager:
 
 def handle(manager: Manager, method: str, path: str, authorization: str) -> tuple[int, Any]:
     """Routes one request. Authentication is checked first with a constant-time
-    comparison; only `/sandboxes/<userId>` and `/sandboxes/<userId>/stop` exist.
+    comparison; only `/sandboxes`, `/sandboxes/<userId>` and `/sandboxes/<userId>/stop` exist.
     VI: Định tuyến một request. Xác thực được kiểm trước bằng phép so sánh thời gian
-    VI: không đổi; chỉ có `/sandboxes/<userId>` và `/sandboxes/<userId>/stop`."""
+    VI: không đổi; chỉ có `/sandboxes`, `/sandboxes/<userId>` và `/sandboxes/<userId>/stop`."""
     if not secrets.compare_digest(authorization.encode(), f'Bearer {manager.config.token}'.encode()):
         return 401, {'error': 'Unauthorized'}
     parts = path.split('?', 1)[0].strip('/').split('/')
+    if parts == ['sandboxes'] and method == 'GET':
+        try:
+            return 200, manager.running()
+        except SandboxError as error:
+            return error.status, {'error': error.message}
     if len(parts) not in (2, 3) or parts[0] != 'sandboxes':
         return 404, {'error': 'Not found'}
     user_id = parts[1]

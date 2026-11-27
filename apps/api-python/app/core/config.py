@@ -121,6 +121,9 @@ class Settings:
     sandbox_users: tuple[str, ...] = ()
     sandbox_manager_url: str = 'http://circle-sandbox-manager:4100'
     sandbox_manager_token: str = ''
+    # A running sandbox with no terminal input or output for this long is stopped; 0 never stops.
+    # VI: Sandbox đang chạy không có nhập hay output terminal trong ngần này phút thì bị dừng; 0 là không bao giờ.
+    sandbox_idle_minutes: int = 60
 
     @classmethod
     def from_environment(cls) -> Settings:
@@ -186,6 +189,7 @@ class Settings:
             sandbox_users=_origins(getenv('SANDBOX_USERS', '').lower()),
             sandbox_manager_url=getenv('SANDBOX_MANAGER_URL', 'http://circle-sandbox-manager:4100').rstrip('/'),
             sandbox_manager_token=getenv('SANDBOX_MANAGER_TOKEN', ''),
+            sandbox_idle_minutes=int(getenv('SANDBOX_IDLE_MINUTES', '60')),
         )
 
 

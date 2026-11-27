@@ -27,12 +27,14 @@ class FakeDocker:
     def request(self, method: str, path: str, body: Any = None) -> tuple[int, Any]:
         self.calls.append((method, path, body))
         name = path.split('/')[2].split('?')[0] if path.startswith('/containers/') else ''
+        if method == 'GET' and path.startswith('/containers/json?filters='):
+            return 200, [{'Labels': {USER_LABEL: owner}} for state, owner in self.containers.values() if state == 'running']
         if method == 'GET' and path.endswith('/json'):
             if name not in self.containers:
                 return 404, None
             state, owner = self.containers[name]
             return 200, {
-                'State': {'Status': state},
+                'State': {'Status': state, 'StartedAt': '2026-11-27T02:00:00.123456789Z'},
                 'Config': {'Labels': {USER_LABEL: owner}},
                 'NetworkSettings': {'Networks': {'flowie-sandbox': {'IPAddress': '172.31.250.2'}}},
             }
@@ -81,7 +83,9 @@ def test_ensure_creates_a_locked_down_container_and_starts_it():
     docker = FakeDocker()
     status, body = handle(manager(docker), 'PUT', f'/sandboxes/{USER}', AUTH)
     assert status == 200
-    assert body == {'userId': USER, 'state': 'running', 'address': '172.31.250.2'}
+    assert body == {
+        'userId': USER, 'state': 'running', 'address': '172.31.250.2', 'startedAt': '2026-11-27T02:00:00.123456789Z'
+    }
     create = next(call for call in docker.calls if call[1].startswith('/containers/create'))
     host = create[2]['HostConfig']
     assert host['CapDrop'] == ['ALL']
@@ -119,3 +123,17 @@ def test_spec_never_takes_image_or_mounts_from_the_caller():
     spec = container_spec(Config(token=TOKEN, image='flowie-sandbox:1'), USER)
     assert spec['Image'] == 'flowie-sandbox:1'
     assert spec['User'] == 'node'
+
+
+def test_list_returns_only_running_labelled_sandboxes():
+    other = 'cotheruser000000000000000'
+    docker = FakeDocker({
+        f'flowie-sandbox-{USER}': ('running', USER),
+        f'flowie-sandbox-{other}': ('exited', other),
+    })
+    status, body = handle(manager(docker), 'GET', '/sandboxes', AUTH)
+    assert status == 200
+    assert [item['userId'] for item in body] == [USER]
+    assert body[0]['startedAt'] == '2026-11-27T02:00:00.123456789Z'
+    assert '%22label%22' in docker.calls[0][1]
+    assert handle(manager(docker), 'GET', '/sandboxes', 'Bearer wrong')[0] == 401
