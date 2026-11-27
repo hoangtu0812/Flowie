@@ -75,7 +75,7 @@ test('MCP logs filter the call log from tiles, Top errors and the tool table', a
          });
       await callTool(context.request, connection.token, 'get_issue', { issueId: 'missing' });
 
-      await page.goto(`/${fixture.slug}/settings/integrations`);
+      await page.goto(`/${fixture.slug}/settings/mcp`);
       await page.getByRole('link', { name: 'View MCP logs' }).click();
       await expect(page).toHaveURL(new RegExp(`/${fixture.slug}/settings/mcp-logs$`));
       await expect(page.getByRole('heading', { name: 'MCP logs', level: 1 })).toBeVisible();
