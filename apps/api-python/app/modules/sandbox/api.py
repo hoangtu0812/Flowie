@@ -38,7 +38,6 @@ import websockets
 from fastapi import APIRouter, Depends, Query, Request, WebSocket
 from fastapi.responses import RedirectResponse, StreamingResponse
 from pydantic import Field
-from sqlalchemy import text
 from starlette.background import BackgroundTask
 from websockets.asyncio.client import connect
 
@@ -53,6 +52,7 @@ from ..identity.security.sessions import active_identity, decode_access, expired
 from ..mcp.contracts import StrictInput
 from ..mcp.domain import Principal
 from ..mcp.policy import AccessPolicy
+from .queries import ISSUE_WORKSPACE_SELECT_ISSUES
 
 router = APIRouter(prefix='/api/v1/sandbox', tags=['sandbox'])
 
@@ -131,7 +131,7 @@ class OpenInput(StrictInput):
 async def _readable_issue(db: Any, user: dict[str, Any], issue_id: str) -> tuple[AccessPolicy, dict[str, Any]]:
     """The issue, if the caller may read it, with the policy that decided so.
     VI: Task, nếu người gọi đọc được, cùng policy đã quyết định điều đó."""
-    workspace = await db.scalar(text('SELECT workspace_id FROM issues WHERE id=:id'), {'id': issue_id})
+    workspace = await db.scalar(ISSUE_WORKSPACE_SELECT_ISSUES, {'id': issue_id})
     if workspace is None:
         raise ApiError(404, 'Issue not found.', 'Not Found')
     await workspace_role(db, workspace, user['id'])
