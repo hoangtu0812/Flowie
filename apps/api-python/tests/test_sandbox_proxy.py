@@ -331,3 +331,64 @@ def test_strangers_reach_no_agent(monkeypatch):
     assert client.get('/api/v1/sandbox/dirs').status_code == 403
     assert client.get('/api/v1/sandbox/conversations').status_code == 403
     assert client.post('/api/v1/sandbox/sessions', json={'name': 'x'}).status_code == 403
+
+
+def test_send_text_and_uploads_reach_the_agent(monkeypatch):
+    seen = []
+
+    def agent(request, path):
+        seen.append((request.method, path, request.headers.get('x-filename'), request.content))
+        if path == 'uploads':
+            return httpx.Response(201, json={'path': '/home/node/.flowie/uploads/1-a.png'})
+        if path.endswith('/text'):
+            return httpx.Response(200, json={'text': 'hello'})
+        return httpx.Response(200, json={'ok': True})
+
+    client = agent_client(ME, monkeypatch, agent)
+    body = {'text': 'Sửa lỗi\nrồi chạy test', 'enter': True}
+    assert client.post('/api/v1/sandbox/sessions/cl/send', json=body).json() == {'data': {'ok': True}}
+    assert json.loads(seen[-1][3]) == body
+    assert client.post('/api/v1/sandbox/sessions/cl/send', json={'key': 'C-z'}).status_code == 422
+    assert client.post('/api/v1/sandbox/sessions/cl/send', json={'text': 'x' * 20_001}).status_code == 422
+    assert client.post('/api/v1/sandbox/sessions/a.b/send', json={'key': 'Enter'}).status_code == 400
+    assert client.get('/api/v1/sandbox/sessions/cl/text').json() == {'data': {'text': 'hello'}}
+
+    response = client.post(
+        '/api/v1/sandbox/uploads', content=b'\x89PNG', headers={'x-filename': '%E1%BA%A3nh%20m%C3%A0n.png'}
+    )
+    assert response.json() == {'data': {'path': '/home/node/.flowie/uploads/1-a.png'}}
+    assert seen[-1][0] == 'POST' and seen[-1][1] == 'uploads' and seen[-1][3] == b'\x89PNG'
+    assert seen[-1][2] == '%E1%BA%A3nh%20m%C3%A0n.png'
+    count = len(seen)
+    too_big = client.post('/api/v1/sandbox/uploads', content=b'x', headers={'content-length': str(26 * 1024 * 1024)})
+    assert too_big.status_code in (413, 400) and len(seen) == count
+
+
+def test_files_and_git_reach_the_agent_with_their_parameters(monkeypatch):
+    seen = []
+
+    def agent(request, path):
+        seen.append((request.method, path, dict(request.url.params), request.content))
+        if path == 'raw':
+            if request.url.params['path'].endswith('.svg'):
+                return httpx.Response(200, content=b'<svg/>', headers={'content-type': 'image/svg+xml'})
+            return httpx.Response(415, json={'error': 'Only images can be shown directly.'})
+        return httpx.Response(200, json={'ok': path})
+
+    client = agent_client(ME, monkeypatch, agent)
+    assert client.get('/api/v1/sandbox/files?dir=/home/node/w').json() == {'data': {'ok': 'ls'}}
+    assert client.get('/api/v1/sandbox/file?path=/home/node/a.md').json() == {'data': {'ok': 'file'}}
+    assert client.get('/api/v1/sandbox/git?dir=/home/node/w').json() == {'data': {'ok': 'git'}}
+    assert client.get('/api/v1/sandbox/git/diff?dir=/home/node/w&file=a.md&staged=true').status_code == 200
+    assert seen[-1][2] == {'dir': '/home/node/w', 'rev': '', 'file': 'a.md', 'staged': '1'}
+    assert client.get('/api/v1/sandbox/git/diff?dir=/w&rev=HEAD~1').status_code == 422
+    body = {'dir': '/home/node/w', 'op': 'commit', 'message': 'Sửa README'}
+    assert client.post('/api/v1/sandbox/git', json=body).json() == {'data': {'ok': 'git/op'}}
+    assert json.loads(seen[-1][3]) == body
+    for bad in ({**body, 'op': 'reset'}, {**body, 'op': 'switch', 'branch': 'a b'}, {**body, 'extra': 1}):
+        assert client.post('/api/v1/sandbox/git', json=bad).status_code == 422
+
+    image = client.get('/api/v1/sandbox/file/raw?path=/home/node/logo.svg')
+    assert image.content == b'<svg/>' and image.headers['content-type'] == 'image/svg+xml'
+    assert image.headers['content-security-policy'] == 'sandbox' and image.headers['x-content-type-options'] == 'nosniff'
+    assert client.get('/api/v1/sandbox/file/raw?path=/home/node/a.md').status_code == 404

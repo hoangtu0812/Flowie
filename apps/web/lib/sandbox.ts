@@ -71,8 +71,12 @@ export async function openInSandbox(
 
 /** The terminal (ttyd) attached to one tmux session; ttyd creates the session if it is new. */
 /** VI: Terminal (ttyd) gắn vào một phiên tmux; ttyd tạo phiên nếu chưa có. */
-export function sandboxSessionUrl(session: string): string {
-   return `${sandboxUiUrl}?${new URLSearchParams({ arg: session })}`;
+export function sandboxSessionUrl(session: string, fontSize?: number): string {
+   const query = new URLSearchParams({ arg: session });
+   // ttyd reads its client options from the page's query, so the font size travels with it.
+   // VI: ttyd đọc tuỳ chọn client từ query của trang, nên cỡ chữ đi kèm URL.
+   if (fontSize) query.set('fontSize', String(fontSize));
+   return `${sandboxUiUrl}?${query}`;
 }
 
 /** A tmux session and the agent running in it (`state` is `shell` when there is none). */
@@ -147,4 +151,146 @@ export async function closeSandboxSession(name: string): Promise<void> {
       { method: 'DELETE' }
    );
    if (!response.ok) await responseData(response, 'Could not close the session.');
+}
+
+export type SandboxKey =
+   | 'Escape'
+   | 'C-c'
+   | 'C-d'
+   | 'Tab'
+   | 'BTab'
+   | 'Up'
+   | 'Down'
+   | 'Left'
+   | 'Right'
+   | 'Enter'
+   | 'PageUp'
+   | 'PageDown';
+
+/** Types into a session: a key, then text as one bracketed paste, then Enter if asked. */
+/** VI: Gõ vào một phiên: một phím, rồi chữ dạng một lần bracketed paste, rồi Enter nếu cần. */
+export async function sendToSandboxSession(
+   name: string,
+   input: { text?: string; key?: SandboxKey; enter?: boolean }
+): Promise<void> {
+   const response = await authenticatedFetch(
+      `${api}/sandbox/sessions/${encodeURIComponent(name)}/send`,
+      {
+         method: 'POST',
+         headers: { 'content-type': 'application/json' },
+         body: JSON.stringify(input),
+      }
+   );
+   await responseData(response, 'Could not send to the session.');
+}
+
+export async function loadSandboxSessionText(name: string): Promise<string> {
+   const response = await authenticatedFetch(
+      `${api}/sandbox/sessions/${encodeURIComponent(name)}/text`
+   );
+   return (await responseData<{ text: string }>(response, 'Could not read the session.')).text;
+}
+
+/** Puts an attached file in the sandbox and returns its path there. */
+/** VI: Đưa file đính kèm vào sandbox và trả đường dẫn của nó trong đó. */
+export async function uploadToSandbox(file: File): Promise<string> {
+   const response = await authenticatedFetch(`${api}/sandbox/uploads`, {
+      method: 'POST',
+      headers: { 'x-filename': encodeURIComponent(file.name) },
+      body: file,
+   });
+   return (await responseData<{ path: string }>(response, 'Could not upload the file.')).path;
+}
+
+export type SandboxEntry = {
+   name: string;
+   path: string;
+   dir: boolean;
+   size: number;
+   mtime: number;
+   git?: string;
+};
+
+export type SandboxFile = { path: string; text?: string; image?: boolean; binary?: boolean };
+
+export type SandboxCommit = {
+   h: string;
+   p: string[];
+   refs: string[];
+   s: string;
+   a: string;
+   t: number;
+};
+
+export type SandboxGit = {
+   dir: string;
+   head: string;
+   files: { x: string; y: string; path: string }[];
+   commits: SandboxCommit[];
+   graph: { width: number; rows: { col: number; seg: [number, number, number, number][] }[] };
+   branches: string[];
+};
+
+export type SandboxDiff = {
+   text: string;
+   files?: { path: string; add: number | null; del: number | null }[];
+   commit?: { hash: string; author: string; t: number; subject: string; body: string } | null;
+};
+
+const query = (values: Record<string, string>) => new URLSearchParams(values).toString();
+
+/** A folder of the sandbox's home (the home itself when `dir` is empty). */
+/** VI: Một thư mục trong home của sandbox (chính home khi `dir` rỗng). */
+export async function loadSandboxFolder(
+   dir: string
+): Promise<{ dir: string; parent: string | null; entries: SandboxEntry[] }> {
+   return responseData(
+      await authenticatedFetch(`${api}/sandbox/files${dir ? `?${query({ dir })}` : ''}`),
+      'Could not open the folder.'
+   );
+}
+
+export async function loadSandboxFile(path: string): Promise<SandboxFile> {
+   return responseData(
+      await authenticatedFetch(`${api}/sandbox/file?${query({ path })}`),
+      'Could not open the file.'
+   );
+}
+
+export const sandboxImageUrl = (path: string) => `${api}/sandbox/file/raw?${query({ path })}`;
+
+export async function loadSandboxGit(dir: string): Promise<SandboxGit> {
+   return responseData(
+      await authenticatedFetch(`${api}/sandbox/git?${query({ dir })}`),
+      'Could not read the repository.'
+   );
+}
+
+export async function loadSandboxDiff(
+   dir: string,
+   options: { rev?: string; file?: string; staged?: boolean }
+): Promise<SandboxDiff> {
+   const values = { dir, rev: options.rev ?? '', file: options.file ?? '' };
+   const staged = options.staged ? '&staged=true' : '';
+   return responseData(
+      await authenticatedFetch(`${api}/sandbox/git/diff?${query(values)}${staged}`),
+      'Could not read the diff.'
+   );
+}
+
+export type SandboxGitOp =
+   | { op: 'stage' | 'unstage'; paths: string[] }
+   | { op: 'commit'; message: string }
+   | { op: 'switch'; branch: string }
+   | { op: 'push' | 'pull' | 'fetch' };
+
+/** One git operation in a repository of the sandbox; returns git's output. */
+/** VI: Một thao tác git trong một repository của sandbox; trả output của git. */
+export async function runSandboxGit(dir: string, op: SandboxGitOp): Promise<string> {
+   const response = await authenticatedFetch(`${api}/sandbox/git`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ dir, ...op }),
+   });
+   return (await responseData<{ output: string }>(response, 'The git operation failed.')).output;
 }
