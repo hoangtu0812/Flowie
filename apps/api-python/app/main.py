@@ -87,6 +87,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         scm_stop = asyncio.Event()
         scm_task = tracked('scm-delivery',scm_delivery_loop(session_factory, runtime, scm_stop),scm_stop)
         scm_sync_task = tracked('scm-sync',scm_sync_loop(session_factory, runtime, scm_stop),scm_stop) if runtime.scm_sync_interval_seconds > 0 else None
+        from .modules.sandbox.idle import sandbox_idle_loop
+        sandbox_on = runtime.sandbox_users and runtime.sandbox_manager_token and runtime.sandbox_idle_minutes > 0
+        sandbox_idle_task = tracked('sandbox-idle',sandbox_idle_loop(runtime,outbox_stop),outbox_stop) if sandbox_on else None
         try:
             yield
         finally:
@@ -96,7 +99,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             dispatch_stop.set()
             team_policy_stop.set()
             scm_stop.set()
-            await asyncio.gather(*[task for task in [reminder_task,digest_task,dispatch_task,team_policy_task,scm_task,scm_sync_task,outbox_task,channel_task,maintenance_task,bulk_task,import_task,recurring_task,sla_task,ticket_status_task,sharepoint_task,news_task,webhook_task,automation_task] if task],return_exceptions=True)
+            await asyncio.gather(*[task for task in [reminder_task,digest_task,dispatch_task,team_policy_task,scm_task,scm_sync_task,outbox_task,channel_task,maintenance_task,bulk_task,import_task,recurring_task,sla_task,ticket_status_task,sharepoint_task,news_task,webhook_task,automation_task,sandbox_idle_task] if task],return_exceptions=True)
             await mcp_stack.aclose()
             await engine.dispose()
 

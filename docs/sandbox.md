@@ -8,8 +8,7 @@ image, the manager and the host firewall; phase 2 (DTD-1057) runs termi in the
 container and proxies it through the API; phase 3 adds the Sandbox page
 (`/<workspace>/sandbox`, in the sidebar only for people in `SANDBOX_USERS`),
 which starts and stops the sandbox and embeds termi; phase 4 adds "Open
-with…" on an issue (below). Stopping an idle sandbox on its own is still to
-come.
+with…" on an issue (below); DTD-1062 stops sandboxes left idle.
 
 ## Pieces
 
@@ -93,6 +92,19 @@ the embedded terminal works only when the web app and the API share an origin,
 as on the server (`/flowie` and `/flowie/api/v1`). In local development (web
 on port 3000, API on port 4000) use "Open in a new tab".
 
+## Stopping idle sandboxes
+
+Every 5 minutes the API lists the running sandboxes (`GET /sandboxes` on the
+manager) and asks each one's termi for its sessions. A sandbox is idle since
+the latest of its start and the last input or output in any of its tmux
+sessions; past `SANDBOX_IDLE_MINUTES` (default 60) the API stops it. An agent
+that is still working prints to its screen, so it keeps the sandbox running;
+an open tab with nothing happening does not. When termi does not answer, only
+the start time counts. The home volume stays, so Start or "Open with…" brings
+everything back. `SANDBOX_IDLE_MINUTES=0` turns this off. The check runs only
+when `SANDBOX_USERS` and `SANDBOX_MANAGER_TOKEN` are set; it shows as
+`sandbox-idle` among the background jobs.
+
 ## Manager API
 
 All requests need `Authorization: Bearer $SANDBOX_MANAGER_TOKEN`. The manager
@@ -100,7 +112,8 @@ listens on port 4100 of the default Compose network.
 
 | Request | Result |
 | --- | --- |
-| `GET /sandboxes/<id>` | `200 {userId, state, address}` or `404` |
+| `GET /sandboxes` | `200 [{userId, state, address, startedAt}]` for every running sandbox |
+| `GET /sandboxes/<id>` | `200 {userId, state, address, startedAt}` or `404` |
 | `PUT /sandboxes/<id>` | Create if missing, start if stopped; `200 {userId, state, address}` |
 | `POST /sandboxes/<id>/stop` | `200` with the new state, `404` if none |
 | `DELETE /sandboxes/<id>` | Remove the container, keep the volume; `204` |
@@ -159,6 +172,7 @@ first sandbox starts: a sandbox started without it can reach the whole LAN.
    SANDBOX_MANAGER_TOKEN=$(openssl rand -hex 32)
    SANDBOX_DOCKER_GID=$(stat -c %g /var/run/docker.sock)
    SANDBOX_USERS=first@bsr.com.vn,second@bsr.com.vn
+   SANDBOX_IDLE_MINUTES=60   # optional; 0 never stops an idle sandbox
    ```
 
 4. API (it joins the sandbox network and reads the settings) and manager:
