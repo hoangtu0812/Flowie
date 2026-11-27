@@ -16,7 +16,7 @@ test('MCP setup shows token-free certificate guidance for every client and OS be
       payload.data.endpointPath = 'https://flowie.example.test/flowie/mcp/';
       await route.fulfill({ response, json: payload });
    });
-   await page.goto(`/${fixture.slug}/settings/integrations`);
+   await page.goto(`/${fixture.slug}/settings/mcp`);
    const guide = page.getByRole('region', { name: 'Certificates (.crt / TLS)', exact: true });
    await expect(
       guide.getByRole('heading', { name: 'Certificates (.crt / TLS)', exact: true })

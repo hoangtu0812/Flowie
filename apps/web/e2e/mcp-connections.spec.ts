@@ -47,7 +47,7 @@ test('MCP connections table filters by status and name; form groups permissions'
    const revoked = await context.request.delete(`${api}/mcp/connections/${ids[1]}?${scope}`);
    expect(revoked.ok()).toBeTruthy();
    try {
-      await page.goto(`/${fixture.slug}/settings/integrations`);
+      await page.goto(`/${fixture.slug}/settings/mcp`);
       const table = page.getByRole('table');
       await page.getByRole('textbox', { name: 'Search connections' }).fill(suffix);
       await expect(table.getByText(`Table active ${suffix}`, { exact: true })).toBeVisible();
