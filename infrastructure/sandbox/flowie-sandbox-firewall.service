@@ -1,0 +1,15 @@
+[Unit]
+Description=Network isolation for Flowie coding sandboxes
+After=docker.service
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=root
+EnvironmentFile=-/etc/flowie-sandbox/firewall.env
+ExecStart=/opt/flowie/infrastructure/sandbox/sandbox-firewall.sh apply
+ExecStop=/opt/flowie/infrastructure/sandbox/sandbox-firewall.sh remove
+
+[Install]
+WantedBy=multi-user.target docker.service
