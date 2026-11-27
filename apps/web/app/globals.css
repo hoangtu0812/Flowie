@@ -306,3 +306,8 @@ input[type='search'] {
    --sidebar-accent: #26282e;
    --sidebar-accent-foreground: #eef0f3;
 }
+
+/* Phrases that open document comments point at (DTD-1070). VI: Cụm chữ mà comment tài liệu đang mở trỏ tới. */
+::highlight(document-comment) {
+   background-color: rgb(250 204 21 / 0.35);
+}

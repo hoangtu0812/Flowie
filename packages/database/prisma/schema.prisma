@@ -252,6 +252,7 @@ model User {
   createdDocuments         Document[]               @relation("DocumentCreator")
   updatedDocuments         Document[]               @relation("DocumentUpdater")
   comments                 Comment[]
+  documentComments         DocumentComment[]
   activities               Activity[]               @relation("ActivityActor")
   notifications            Notification[]
   notificationPreferences  NotificationPreference[]
@@ -2309,6 +2310,7 @@ model Document {
   links       DocumentLink[]
   publication DocumentPublication?
   reviewers   DocumentReviewer[]
+  comments    DocumentComment[]
 
   @@index([workspaceId, teamId])
   @@index([folderId, pinned, position])
@@ -2402,6 +2404,34 @@ model SharepointConnection {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@map("sharepoint_connections")
+}
+
+// Comment pinned to a block or a selected phrase of a Markdown document (DTD-1070). `anchor`
+// ({blockText, blockIndex, quote}) is set on a thread's first comment; replies leave it null.
+// VI: Comment gắn vào một đoạn hoặc cụm chữ bôi đen của tài liệu Markdown (DTD-1070). `anchor`
+// VI: ({blockText, blockIndex, quote}) có ở comment đầu thread; trả lời để null.
+model DocumentComment {
+  id           String    @id @default(cuid())
+  documentId   String    @map("document_id")
+  authorId     String    @map("author_id")
+  parentId     String?   @map("parent_id")
+  anchor       Json?
+  content      String
+  mentionIds   Json      @default("[]") @map("mention_ids")
+  resolvedAt   DateTime? @map("resolved_at")
+  resolvedById String?   @map("resolved_by")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  document Document          @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  author   User              @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  parent   DocumentComment?  @relation("DocumentCommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies  DocumentComment[] @relation("DocumentCommentReplies")
+
+  @@index([documentId, createdAt])
+  @@index([parentId])
+  @@map("document_comments")
 }
 
 model Comment {

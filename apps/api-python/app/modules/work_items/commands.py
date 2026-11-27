@@ -422,3 +422,19 @@ MUTATE_STATUS_UPDATE_ISSUE_STATUSES = text('''UPDATE issue_statuses SET name=:na
 
 MUTATE_STATUS_INSERT_ISSUE_STATUSES = text('''INSERT INTO issue_statuses(id,workspace_id,name,category,color,position,required_before_start,created_at,updated_at)
                 VALUES (:id,:workspace,:name,:category,:color,:position,:requiredBeforeStart,:now,:now)''')
+
+
+# Document comments (DTD-1070). VI: Comment tài liệu (DTD-1070).
+DOCUMENT_COMMENT_INSERT = text("""INSERT INTO document_comments(id,document_id,author_id,parent_id,anchor,content,mention_ids,created_at,updated_at)
+        VALUES (:id,:document,:author,:parent,CAST(:anchor AS jsonb),:content,CAST(:mentions AS jsonb),:now,:now)""")
+
+
+DOCUMENT_COMMENT_UPDATE = text("""UPDATE document_comments SET content=:content,mention_ids=CAST(:mentions AS jsonb),updated_at=:now
+        WHERE id=:id""")
+
+
+DOCUMENT_COMMENT_RESOLVE = text("""UPDATE document_comments SET resolved_at=:resolved_at,resolved_by=:resolved_by,updated_at=:now
+        WHERE id=:id""")
+
+
+DOCUMENT_COMMENT_DELETE = text("UPDATE document_comments SET deleted_at=:now,updated_at=:now WHERE id=:id")

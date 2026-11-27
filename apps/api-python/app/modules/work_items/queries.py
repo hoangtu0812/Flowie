@@ -938,3 +938,25 @@ def reorder_select_projects_sql(project_clause) -> TextClause:
         + project_clause
         + " AND p.id=ANY(CAST(:ids AS text[])) FOR UPDATE OF p"
     )
+
+
+# Document comments (DTD-1070). VI: Comment tài liệu (DTD-1070).
+DOCUMENT_COMMENTS_SELECT = text("""SELECT c.id,c.parent_id AS "parentId",c.anchor,c.content,c.mention_ids AS "mentionIds",
+        c.resolved_at AS "resolvedAt",c.created_at AS "createdAt",c.updated_at AS "updatedAt",
+        u.id AS author_id,u.name AS author_name,u.avatar_url AS author_avatar_url,
+        r.id AS resolver_id,r.name AS resolver_name
+        FROM document_comments c JOIN users u ON u.id=c.author_id LEFT JOIN users r ON r.id=c.resolved_by
+        LEFT JOIN document_comments p ON p.id=c.parent_id
+        WHERE c.document_id=:document AND c.deleted_at IS NULL AND (c.parent_id IS NULL OR p.deleted_at IS NULL)
+        ORDER BY c.created_at,c.id""")
+
+
+DOCUMENT_COMMENT_SELECT = text("""SELECT id,document_id,author_id,parent_id,content,mention_ids
+        FROM document_comments WHERE id=:id AND document_id=:document AND deleted_at IS NULL""")
+
+
+DOCUMENT_COMMENT_MENTION_OPTIONS = text("""SELECT u.id,u.name,u.avatar_url AS "avatarUrl"
+        FROM workspace_members wm JOIN users u ON u.id=wm.user_id
+        WHERE wm.workspace_id=:workspace AND wm.status='ACTIVE' AND u.status='ACTIVE'
+        AND (CAST(:team AS text) IS NULL OR EXISTS(SELECT 1 FROM team_members tm WHERE tm.team_id=:team AND tm.user_id=u.id))
+        ORDER BY u.name,u.id""")

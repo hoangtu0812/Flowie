@@ -118,6 +118,19 @@ class NotificationHub:
         for socket in stale:
             self.disconnect(key[0], key[1], socket)
 
+    async def broadcast(self, workspace_id: str, payload: dict[str, Any]) -> None:
+        """Sends `payload` to every open socket of the workspace; carries ids only, never content.
+        VI: Gửi `payload` tới mọi socket đang mở của workspace; chỉ mang id, không mang nội dung.
+        """
+        for (workspace, user_id), sockets in tuple(self._connections.items()):
+            if workspace != workspace_id:
+                continue
+            for socket in tuple(sockets):
+                try:
+                    await socket.send_json(payload)
+                except Exception:  # pragma: no cover - depends on a disconnected peer
+                    self.disconnect(workspace, user_id, socket)
+
 
 notification_hub = NotificationHub()
 
