@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import re
 import shlex
 from typing import Any, Literal
@@ -61,6 +62,29 @@ from ..mcp.policy import AccessPolicy
 from .queries import ISSUE_WORKSPACE_SELECT_ISSUES
 
 router = APIRouter(prefix='/api/v1/sandbox', tags=['sandbox'])
+
+
+class _RedactTerminalToken(logging.Filter):
+    """httpx logs every request URL at INFO, and a sandbox URL carries the sandbox's secret
+    base path; this replaces any 64-hex path segment with `<token>` before the line is written.
+    VI: httpx ghi mọi URL request ở mức INFO, mà URL của sandbox chứa đường dẫn gốc bí mật; bộ
+    VI: lọc này thay mọi đoạn đường dẫn 64 ký tự hex bằng `<token>` trước khi ghi log."""
+
+    SECRET = re.compile(r'/[0-9a-f]{64}(?=/|$)')
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.args:
+            args = record.args if isinstance(record.args, tuple) else (record.args,)
+            # Numbers stay numbers: the line's format has %d for the status code.
+            # VI: Số giữ nguyên là số: định dạng của dòng log có %d cho mã trạng thái.
+            record.args = tuple(
+                arg if isinstance(arg, (int, float)) else self.SECRET.sub('/<token>', str(arg)) for arg in args
+            )
+        record.msg = self.SECRET.sub('/<token>', str(record.msg))
+        return True
+
+
+logging.getLogger('httpx').addFilter(_RedactTerminalToken())
 
 REQUEST_HEADERS = ('accept', 'range', 'if-none-match', 'if-modified-since')
 RESPONSE_HEADERS = ('content-type', 'cache-control', 'content-range', 'accept-ranges', 'etag', 'last-modified')
