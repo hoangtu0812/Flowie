@@ -24,10 +24,11 @@ import re
 import subprocess
 import sys
 import time
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, unquote, urlsplit
+from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 PORT = 7681
 SESSION_NAME = re.compile(r'^[A-Za-z0-9_-]{1,40}$')
@@ -1013,6 +1014,246 @@ def conversation_chat(agent: str, conversation: str, limit: int) -> dict[str, An
     return {'agent': agent, 'dir': cwd, 'items': chat_items(EVENTS[agent], _tail_lines(file), limit, cwd)}
 
 
+# ---- Pipelines, ported from termi (src/ci/*): GitHub through gh, Azure DevOps through its REST API ----
+# VI: ---- Pipeline, chuyển từ termi (src/ci/*): GitHub qua gh, Azure DevOps qua REST API của nó ----
+
+CI_RUNS = 40
+CI_CACHE_SECONDS = 15
+CI_LOG_LINES = 400
+CI_FAILED_STEPS = 3
+SAFE_PART = re.compile(r'^[\w.\- ]{1,100}$')
+GITHUB_REMOTES = (
+    re.compile(r'^https://(?:[^@/]+@)?github\.com/([^/]+)/([^/]+?)(?:\.git)?/?$'),
+    re.compile(r'^(?:ssh://)?git@github\.com[:/]([^/]+)/([^/]+?)(?:\.git)?$'),
+)
+AZURE_REMOTES = (
+    re.compile(r'^https://(?:[^@/]+@)?dev\.azure\.com/([^/]+)/([^/]+)/_git/([^/]+?)/?$'),
+    re.compile(r'^(?:ssh://)?git@ssh\.dev\.azure\.com:v3/([^/]+)/([^/]+)/([^/]+?)$'),
+    re.compile(r'^https://(?:[^@/]+@)?([^.]+)\.visualstudio\.com/(?:DefaultCollection/)?([^/]+)/_git/([^/]+?)/?$'),
+)
+ANSI = re.compile(r'\x1b\[[0-9;]*[A-Za-z]')
+GITHUB_STATUS = {'queued': 'queued', 'waiting': 'queued', 'requested': 'queued', 'pending': 'queued', 'in_progress': 'running'}
+GITHUB_RESULT = {'success': 'success', 'failure': 'failure', 'cancelled': 'cancelled', 'timed_out': 'failure'}
+GITHUB_TRIGGER = {'pull_request': 'pr', 'pull_request_target': 'pr', 'workflow_dispatch': 'manual', 'push': 'push',
+                  'schedule': 'schedule'}
+AZURE_STATUS = {'notStarted': 'queued', 'postponed': 'queued', 'inProgress': 'running', 'cancelling': 'running'}
+AZURE_RESULT = {'succeeded': 'success', 'partiallySucceeded': 'warning', 'failed': 'failure', 'canceled': 'cancelled'}
+AZURE_TRIGGER = {'pullRequest': 'pr', 'manual': 'manual', 'individualCI': 'push', 'batchedCI': 'push',
+                 'schedule': 'schedule', 'resourceTrigger': 'other'}
+NEEDS_GH = 'Sign in to GitHub in the terminal first: gh auth login'
+NEEDS_AZURE = 'Clone or push this Azure DevOps repository once in the terminal so git keeps your personal access token.'
+_ci_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+
+
+def parse_remote(url: str) -> dict[str, str] | None:
+    """The CI host of a git remote: GitHub owner/repo or Azure DevOps org/project/repo.
+    VI: Nơi chạy CI của một git remote: owner/repo của GitHub hoặc org/project/repo của Azure DevOps."""
+    text = (url or '').strip()
+    for pattern in GITHUB_REMOTES:
+        match = pattern.match(text)
+        if match:
+            owner, repo = (unquote(part) for part in match.groups())
+            return {'provider': 'github', 'owner': owner, 'repo': repo} if all(SAFE_PART.match(p) for p in (owner, repo)) else None
+    for pattern in AZURE_REMOTES:
+        match = pattern.match(text)
+        if match:
+            org, project, repo = (unquote(part) for part in match.groups())
+            ok = all(SAFE_PART.match(p) for p in (org, project, repo))
+            return {'provider': 'azure', 'org': org, 'project': project, 'repo': repo} if ok else None
+    return None
+
+
+def _millis(value: Any) -> int | None:
+    """An ISO time as epoch milliseconds; Azure writes 7 fractional digits, cut to 6.
+    VI: Thời gian ISO thành mili giây epoch; Azure ghi 7 chữ số phần giây, cắt còn 6."""
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        text = re.sub(r'(\.\d{6})\d+', r'\1', value.replace('Z', '+00:00'))
+        return int(datetime.fromisoformat(text).timestamp() * 1000)
+    except ValueError:
+        return None
+
+
+def github_run(run: dict[str, Any]) -> dict[str, Any]:
+    status = GITHUB_STATUS.get(run.get('status') or '', 'completed')
+    return {
+        'id': str(run.get('id')), 'number': f"#{run.get('run_number')}", 'title': run.get('display_title') or run.get('name'),
+        'pipeline': run.get('name') or '', 'pipelineId': str(run.get('workflow_id')), 'status': status,
+        'result': GITHUB_RESULT.get(run.get('conclusion') or '', 'other') if status == 'completed' else None,
+        'trigger': GITHUB_TRIGGER.get(run.get('event') or '', 'other'), 'branch': run.get('head_branch') or '',
+        'ref': run.get('head_branch') or '', 'sha': str(run.get('head_sha') or '')[:8],
+        'actor': (run.get('actor') or {}).get('login', ''), 'queuedAt': _millis(run.get('created_at')),
+        'startedAt': _millis(run.get('run_started_at')),
+        'finishedAt': _millis(run.get('updated_at')) if status == 'completed' else None, 'url': run.get('html_url'),
+    }
+
+
+def azure_run(run: dict[str, Any], remote: dict[str, str]) -> dict[str, Any]:
+    status = 'completed' if run.get('status') == 'completed' else AZURE_STATUS.get(run.get('status') or '', 'queued')
+    try:
+        source = json.loads(run.get('parameters') or '{}').get('system.pullRequest.sourceBranch', '')
+    except ValueError:
+        source = ''
+    web = f"https://dev.azure.com/{quote(remote['org'])}/{quote(remote['project'])}"
+    pr = (run.get('triggerInfo') or {}).get('pr.number')
+    title = run.get('_subject') or (f'PR {pr}' if pr else str(run.get('sourceVersion') or '')[:8])
+    return {
+        'id': str(run.get('id')), 'number': f"#{run.get('buildNumber')}", 'title': title,
+        'pipeline': (run.get('definition') or {}).get('name', ''), 'pipelineId': str((run.get('definition') or {}).get('id', '')),
+        'status': status, 'result': AZURE_RESULT.get(run.get('result') or '', 'other') if status == 'completed' else None,
+        'trigger': AZURE_TRIGGER.get(run.get('reason') or '', 'other'),
+        'branch': str(source or run.get('sourceBranch') or '').removeprefix('refs/heads/'), 'ref': run.get('sourceBranch') or '',
+        'sha': str(run.get('sourceVersion') or '')[:8], 'actor': (run.get('requestedFor') or {}).get('displayName', ''),
+        'queuedAt': _millis(run.get('queueTime')), 'startedAt': _millis(run.get('startTime')),
+        'finishedAt': _millis(run.get('finishTime')), 'url': f"{web}/_build/results?buildId={run.get('id')}",
+    }
+
+
+def pipelines_of(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    by_id: dict[str, dict[str, Any]] = {}
+    for run in runs:
+        entry = by_id.setdefault(run['pipelineId'], {'id': run['pipelineId'], 'name': run['pipeline'], 'recent': []})
+        if len(entry['recent']) < 3:
+            entry['recent'].append(run['result'] if run['status'] == 'completed' else run['status'])
+    return sorted(by_id.values(), key=lambda entry: entry['name'])
+
+
+def gh(*args: str, timeout: float = 60) -> str:
+    try:
+        result = run('gh', *args, timeout=timeout)
+    except FileNotFoundError as error:
+        raise Refused(400, NEEDS_GH) from error
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        raise Refused(400, NEEDS_GH) if re.search(r'auth login|not logged|401', detail, re.I) else Refused(502, detail[:300])
+    return result.stdout
+
+
+def azure_token(top: str, remote: dict[str, str]) -> str:
+    """The personal access token git keeps for this Azure DevOps repository, asked from git's own
+    credential helper without ever prompting. VI: PAT mà git lưu cho repository Azure DevOps này, hỏi
+    VI: từ credential helper của chính git mà không bao giờ hiện lời nhắc."""
+    request = f"protocol=https\nhost=dev.azure.com\npath={remote['org']}/{remote['project']}/_git/{remote['repo']}\n\n"
+    result = subprocess.run(
+        ['git', '-C', top, '-c', 'credential.interactive=never', 'credential', 'fill'], input=request,
+        capture_output=True, text=True, timeout=15, check=False,
+        env={**os.environ, 'GIT_TERMINAL_PROMPT': '0', 'GIT_ASKPASS': '/bin/false', 'SSH_ASKPASS': '/bin/false'},
+    )
+    password = next((line[9:] for line in result.stdout.splitlines() if line.startswith('password=')), '')
+    if result.returncode != 0 or not password:
+        raise Refused(400, NEEDS_AZURE)
+    return password
+
+
+def azure_api(top: str, remote: dict[str, str], method: str, path: str, body: Any = None, raw: bool = False) -> Any:
+    import base64
+    import urllib.error
+    import urllib.request
+    url = f"https://dev.azure.com/{quote(remote['org'])}/{quote(remote['project'])}/_apis/{path}"
+    url += ('&' if '?' in url else '?') + 'api-version=7.1'
+    auth = base64.b64encode(f':{azure_token(top, remote)}'.encode()).decode()
+    data = json.dumps(body).encode() if body is not None else None
+    request = urllib.request.Request(url, data=data, method=method, headers={
+        'Authorization': f'Basic {auth}', 'Content-Type': 'application/json', 'Accept': 'application/json'})
+    try:
+        with urllib.request.urlopen(request, timeout=45) as response:  # noqa: S310 - fixed https host
+            payload = response.read().decode('utf-8', 'replace')
+    except urllib.error.HTTPError as error:
+        raise Refused(400, NEEDS_AZURE) if error.code in (401, 203) else Refused(502, f'Azure DevOps answered {error.code}.') from error
+    except (urllib.error.URLError, TimeoutError) as error:
+        raise Refused(502, 'Azure DevOps cannot be reached.') from error
+    return payload if raw else json.loads(payload or 'null')
+
+
+def ci_overview(directory: str, fresh: bool = False) -> dict[str, Any]:
+    top = repository(directory)
+    cached = _ci_cache.get(top)
+    if cached and not fresh and time.monotonic() - cached[0] < CI_CACHE_SECONDS:
+        return cached[1]
+    try:
+        url = git(top, 'remote', 'get-url', 'origin').strip()
+    except Refused:
+        url = ''
+    remote = parse_remote(url)
+    if not remote:
+        overview: dict[str, Any] = {'provider': None}
+    else:
+        if remote['provider'] == 'github':
+            data = json.loads(gh('api', f"repos/{remote['owner']}/{remote['repo']}/actions/runs?per_page={CI_RUNS}") or '{}')
+            runs = [github_run(item) for item in data.get('workflow_runs') or []]
+            page = f"https://github.com/{remote['owner']}/{remote['repo']}/actions"
+            label = f"{remote['owner']}/{remote['repo']}"
+        else:
+            data = azure_api(top, remote, 'GET', f'build/builds?$top={CI_RUNS}') or {}
+            builds = [b for b in data.get('value') or [] if not (b.get('repository') or {}).get('name') or b['repository']['name'] == remote['repo']]
+            for build in builds:
+                sha = str(build.get('sourceVersion') or '')
+                if re.fullmatch(r'[0-9a-f]{40}', sha):
+                    try:
+                        build['_subject'] = git(top, 'log', '-1', '--format=%s', sha).strip()
+                    except Refused:
+                        pass
+            runs = [azure_run(build, remote) for build in builds]
+            page = f"https://dev.azure.com/{quote(remote['org'])}/{quote(remote['project'])}/_build"
+            label = f"{remote['org']}/{remote['project']}/{remote['repo']}"
+        runs.sort(key=lambda r: r['queuedAt'] or 0, reverse=True)
+        try:
+            branch = git(top, 'rev-parse', '--abbrev-ref', 'HEAD').strip()
+        except Refused:
+            branch = ''
+        overview = {'provider': remote['provider'], 'remote': remote, 'repo': label, 'page': page,
+                    'branch': '' if branch == 'HEAD' else branch, 'pipelines': pipelines_of(runs), 'runs': runs}
+    _ci_cache[top] = (time.monotonic(), overview)
+    return overview
+
+
+def _ci_run(directory: str, run_id: str) -> tuple[str, dict[str, str], dict[str, Any]]:
+    if not re.fullmatch(r'\d{1,20}', str(run_id or '')):
+        raise Refused(400, 'Invalid run.')
+    overview = ci_overview(directory)
+    found = next((r for r in overview.get('runs') or [] if r['id'] == str(run_id)), None)
+    if not found:
+        raise Refused(404, 'No such run.')
+    return repository(directory), overview['remote'], found
+
+
+def ci_log(directory: str, run_id: str) -> dict[str, Any]:
+    top, remote, found = _ci_run(directory, run_id)
+    if remote['provider'] == 'github':
+        text = gh('run', 'view', found['id'], '--log-failed', '-R', f"{remote['owner']}/{remote['repo']}")
+    else:
+        timeline = azure_api(top, remote, 'GET', f"build/builds/{found['id']}/timeline") or {}
+        failed = [r for r in timeline.get('records') or []
+                  if r.get('type') == 'Task' and r.get('result') == 'failed' and (r.get('log') or {}).get('id')][:CI_FAILED_STEPS]
+        parts = [f"== {task.get('name')} ==\n" + azure_api(top, remote, 'GET', f"build/builds/{found['id']}/logs/{task['log']['id']}", raw=True)
+                 for task in failed]
+        text = '\n\n'.join(parts)
+    lines = ANSI.sub('', text).rstrip().split('\n')
+    return {'text': '\n'.join(lines[-CI_LOG_LINES:]) if text.strip() else '(no failed-step log)'}
+
+
+def ci_action(body: dict[str, Any]) -> dict[str, Any]:
+    action = body.get('action')
+    if action not in ('rerun', 'cancel'):
+        raise Refused(400, 'Unsupported action.')
+    directory = str(body.get('dir') or '')
+    top, remote, found = _ci_run(directory, str(body.get('id') or ''))
+    if remote['provider'] == 'github':
+        repo = ['-R', f"{remote['owner']}/{remote['repo']}"]
+        if action == 'cancel':
+            gh('run', 'cancel', found['id'], *repo)
+        else:
+            gh('run', 'rerun', found['id'], *(['--failed'] if found['result'] == 'failure' else []), *repo)
+    elif action == 'cancel':
+        azure_api(top, remote, 'PATCH', f"build/builds/{found['id']}", {'status': 'cancelling'})
+    else:
+        azure_api(top, remote, 'POST', f"pipelines/{found['pipelineId']}/runs",
+                  {'resources': {'repositories': {'self': {'refName': found['ref']}}}})
+    _ci_cache.pop(top, None)
+    return {'ok': True}
+
+
 def _limit(query: dict[str, list[str]]) -> int:
     try:
         return max(10, min(200, int(query.get('limit', [CHAT_LIMIT])[0])))
@@ -1071,6 +1312,12 @@ def route(token: str, method: str, raw_path: str, body: bytes, filename: str = '
             return 200, session_chat(path[1], _limit(query))
         if method == 'GET' and len(path) == 3 and path[0] == 'conversations':
             return 200, conversation_chat(path[1], path[2], _limit(query))
+        if method == 'GET' and path == ['ci']:
+            return 200, ci_overview(query.get('dir', [''])[0], query.get('fresh', [''])[0] == '1')
+        if method == 'GET' and path == ['ci', 'log']:
+            return 200, ci_log(query.get('dir', [''])[0], query.get('id', [''])[0])
+        if method == 'POST' and path == ['ci', 'action']:
+            return 200, ci_action(request)
         if method == 'GET' and path == ['usage']:
             return 200, usage()
         if method == 'GET' and path == ['dirs']:

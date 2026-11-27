@@ -707,3 +707,124 @@ test('Chat shows the conversation, folds tool steps and opens changed files', as
    await views.getByRole('tab', { name: 'Terminal' }).click();
    await expect(page.locator('iframe[title="Sandbox terminal"]')).toBeVisible();
 });
+
+test('Pipelines list the branch runs, flag a failure and rerun, cancel or show logs', async ({
+   page,
+}) => {
+   const repo = '/home/node/work/DTD-7-flowie';
+   const actions: unknown[] = [];
+   const run = (
+      id: string,
+      pipelineId: string,
+      pipeline: string,
+      status: string,
+      result: string | null,
+      branch: string
+   ) => ({
+      id,
+      number: `#${id}`,
+      title: `Run ${id}`,
+      pipeline,
+      pipelineId,
+      status,
+      result,
+      trigger: 'push',
+      branch,
+      ref: branch,
+      sha: 'abc',
+      actor: 'tu',
+      queuedAt: Date.now() - 120_000,
+      startedAt: null,
+      finishedAt: null,
+      url: `https://github.com/o/r/actions/runs/${id}`,
+   });
+   const ci = {
+      provider: 'github',
+      repo: 'o/r',
+      page: 'https://github.com/o/r/actions',
+      branch: 'flowie/DTD-7',
+      pipelines: [
+         { id: '1', name: 'CI', recent: ['failure'] },
+         { id: '2', name: 'Deploy', recent: ['running'] },
+      ],
+      runs: [
+         run('30', '1', 'CI', 'completed', 'failure', 'flowie/DTD-7'),
+         run('29', '2', 'Deploy', 'running', null, 'flowie/DTD-7'),
+         run('28', '1', 'CI', 'completed', 'success', 'main'),
+      ],
+   };
+   await page.route('**/api/v1/sandbox', (route) =>
+      route.fulfill({ json: { data: { state: 'running' } } })
+   );
+   await page.route('**/api/v1/sandbox/dirs', (route) =>
+      route.fulfill({ json: { data: { home: '/home/node', recent: [] } } })
+   );
+   await page.route('**/api/v1/sandbox/sessions', (route) =>
+      route.fulfill({
+         json: {
+            data: [
+               {
+                  name: 'DTD-7',
+                  dir: repo,
+                  agent: 'claude',
+                  state: 'idle',
+                  preview: '',
+                  branch: 'flowie/DTD-7',
+                  changes: 0,
+               },
+            ],
+         },
+      })
+   );
+   await page.route('**/api/v1/sandbox/ci?*', (route) => route.fulfill({ json: { data: ci } }));
+   await page.route('**/api/v1/sandbox/ci/log?*', (route) =>
+      route.fulfill({ json: { data: { text: 'FAILED test_login' } } })
+   );
+   await page.route('**/api/v1/sandbox/ci', (route) => {
+      actions.push(route.request().postDataJSON());
+      return route.fulfill({ json: { data: { ok: true } } });
+   });
+   await page.route(/\/api\/v1\/sandbox\/ui\/\?arg=/, (route) =>
+      route.fulfill({ contentType: 'text/html', body: '<p>terminal is here</p>' })
+   );
+   await signIn(page);
+   await page.goto(`/${fixture.slug}/sandbox`);
+   await page
+      .getByRole('list', { name: 'Terminal sessions' })
+      .getByRole('button', { name: /^DTD-7/ })
+      .click();
+
+   await expect(page.getByTestId('badge-pipelines')).toHaveAttribute('data-state', 'failure');
+   const status = page.getByRole('contentinfo', { name: 'Status bar' });
+   await status.getByRole('button', { name: 'Pipeline failed' }).click();
+   const runs = page.getByRole('list', { name: 'Runs' });
+   await expect(runs.getByRole('listitem')).toHaveCount(2); // this branch only
+   await page
+      .getByRole('group', { name: 'Pipelines' })
+      .getByRole('button', { name: 'flowie/DTD-7' })
+      .click();
+   await expect(runs.getByRole('listitem')).toHaveCount(3);
+   await page
+      .getByRole('group', { name: 'Pipelines' })
+      .getByRole('button', { name: /^Deploy/ })
+      .click();
+   await expect(runs.getByRole('listitem')).toHaveCount(1);
+   await page
+      .getByRole('group', { name: 'Pipelines' })
+      .getByRole('button', { name: 'All pipelines' })
+      .click();
+
+   await runs.getByRole('button', { name: 'Log of #30' }).click();
+   await expect(page.getByTestId('ci-log')).toHaveText('FAILED test_login');
+   await page.keyboard.press('Escape');
+   await runs.getByRole('button', { name: 'Rerun #30' }).click();
+   await expect.poll(() => actions.length).toBe(1);
+   expect(actions[0]).toEqual({ dir: repo, id: '30', action: 'rerun' });
+   await runs.getByRole('button', { name: 'Cancel #29' }).click();
+   await expect.poll(() => actions.length).toBe(2);
+   expect(actions[1]).toEqual({ dir: repo, id: '29', action: 'cancel' });
+   await expect(runs.getByRole('link', { name: 'Run 30' })).toHaveAttribute(
+      'href',
+      'https://github.com/o/r/actions/runs/30'
+   );
+});

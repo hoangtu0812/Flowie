@@ -437,3 +437,22 @@ def test_chat_and_conversations_reach_the_agent(monkeypatch):
     assert client.get('/api/v1/sandbox/conversations/claude/x').status_code == 400
     assert client.get('/api/v1/sandbox/sessions/DTD-7/chat?limit=999').status_code == 422
     assert len(seen) == 2
+
+
+def test_pipelines_reach_the_agent(monkeypatch):
+    seen = []
+
+    def agent(request, path):
+        seen.append((request.method, path, dict(request.url.params), request.content))
+        return httpx.Response(200, json={'ok': path})
+
+    client = agent_client(ME, monkeypatch, agent)
+    assert client.get('/api/v1/sandbox/ci?dir=/home/node/w&fresh=true').json() == {'data': {'ok': 'ci'}}
+    assert seen[-1][2] == {'dir': '/home/node/w', 'fresh': '1'}
+    assert client.get('/api/v1/sandbox/ci/log?dir=/home/node/w&id=42').status_code == 200
+    assert client.get('/api/v1/sandbox/ci/log?dir=/home/node/w&id=4;2').status_code == 422
+    body = {'dir': '/home/node/w', 'id': '42', 'action': 'rerun'}
+    assert client.post('/api/v1/sandbox/ci', json=body).status_code == 200
+    assert json.loads(seen[-1][3]) == body
+    assert client.post('/api/v1/sandbox/ci', json={**body, 'action': 'delete'}).status_code == 422
+    assert len(seen) == 3

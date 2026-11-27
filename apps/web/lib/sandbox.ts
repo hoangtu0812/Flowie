@@ -350,3 +350,71 @@ export async function loadSandboxConversation(
       'Could not read the conversation.'
    );
 }
+
+export type SandboxRun = {
+   id: string;
+   number: string;
+   title: string;
+   pipeline: string;
+   pipelineId: string;
+   status: 'queued' | 'running' | 'completed';
+   result: 'success' | 'failure' | 'cancelled' | 'warning' | 'other' | null;
+   trigger: string;
+   branch: string;
+   ref: string;
+   sha: string;
+   actor: string;
+   queuedAt: number | null;
+   startedAt: number | null;
+   finishedAt: number | null;
+   url: string;
+};
+
+export type SandboxCi =
+   | { provider: null }
+   | {
+        provider: 'github' | 'azure';
+        repo: string;
+        page: string;
+        branch: string;
+        pipelines: { id: string; name: string; recent: string[] }[];
+        runs: SandboxRun[];
+     };
+
+/** CI runs of a folder's repository, as termi's Pipelines. VI: Lần chạy CI của repo chứa thư mục. */
+export async function loadSandboxCi(dir: string, fresh = false): Promise<SandboxCi> {
+   const query = new URLSearchParams({ dir, ...(fresh ? { fresh: 'true' } : {}) });
+   return responseData(
+      await authenticatedFetch(`${api}/sandbox/ci?${query}`),
+      'Could not read the pipelines.'
+   );
+}
+
+export async function loadSandboxCiLog(dir: string, id: string): Promise<string> {
+   const response = await authenticatedFetch(
+      `${api}/sandbox/ci/log?${new URLSearchParams({ dir, id })}`
+   );
+   return (await responseData<{ text: string }>(response, 'Could not read the log.')).text;
+}
+
+export async function runSandboxCiAction(
+   dir: string,
+   id: string,
+   action: 'rerun' | 'cancel'
+): Promise<void> {
+   const response = await authenticatedFetch(`${api}/sandbox/ci`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ dir, id, action }),
+   });
+   await responseData(response, 'The pipeline action failed.');
+}
+
+/** The latest run on the branch: failure, running or ok, for badges. VI: Lần chạy mới nhất của nhánh. */
+export function ciBadge(ci: SandboxCi | null): 'failure' | 'running' | 'ok' | null {
+   if (!ci || !ci.provider) return null;
+   const latest = ci.runs.find((run) => !ci.branch || run.branch === ci.branch);
+   if (!latest) return null;
+   if (latest.status !== 'completed') return 'running';
+   return latest.result === 'failure' ? 'failure' : 'ok';
+}

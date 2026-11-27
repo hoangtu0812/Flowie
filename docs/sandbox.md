@@ -67,6 +67,9 @@ For a signed-in user whose email is in `SANDBOX_USERS` (everyone else gets 403):
 | `GET /api/v1/sandbox/usage` | `{data: {cpu, memory: {used, limit}, disk: {free, total}, claude, codex}}`, null while stopped |
 | `GET /api/v1/sandbox/sessions/<name>/chat?limit=` | `{data: {agent, state, dir, items}}`: the session's conversation as termi's chat; `items` are messages `{kind: msg, who, text}` and tool groups `{kind: tools, steps: [{verb, detail, file?, change?, files?}]}` |
 | `GET /api/v1/sandbox/conversations/<agent>/<id>` | A past conversation in the same form, read without reopening it |
+| `GET /api/v1/sandbox/ci?dir=&fresh=` | `{data: {provider, repo, page, branch, pipelines, runs}}` for the folder's repository on GitHub Actions or Azure Pipelines; `{provider: null}` elsewhere; cached 15 s unless `fresh` |
+| `GET /api/v1/sandbox/ci/log?dir=&id=` | `{data: {text}}`: the last 400 lines of the run's failed steps |
+| `POST /api/v1/sandbox/ci` | `{dir, id, action}` with `rerun` (only failed jobs on GitHub; a new run of the pipeline on the same ref on Azure) or `cancel` |
 | `GET /api/v1/sandbox/dirs` | `{data: {home, recent}}`: open sessions' folders, `~/work/*`, `~/repos/*`, folders of past conversations |
 | `GET /api/v1/sandbox/conversations?dir=` | `{data: [{agent, id, cwd, title, mtime}]}`: past Claude Code and Codex conversations, newest first |
 | `/api/v1/sandbox/ui/?arg=<name>` | ttyd attached to that session (created if new), for the caller's own container only |
@@ -131,6 +134,18 @@ the agent's answers (Markdown), and folds the tool calls between them into one
 the file (Codex's `apply_patch` counts too). It refreshes every 3 seconds. The
 start page can also read a project's latest conversation without reopening it
 and resume it from there.
+
+Pipelines (DTD-1076) is the fourth view of the activity bar (Alt+4). It reads
+`origin` of the session's repository: GitHub through the sandbox's own `gh`
+login (`gh auth login` once), Azure DevOps (dev.azure.com and
+*.visualstudio.com) through its REST API 7.1 with the personal access token git
+stored when the repository was first cloned or pushed (asked from git's
+credential helper, never prompting); the image has no Azure CLI. The panel
+filters by pipeline (the row wraps so every pipeline shows) and by the current
+branch or all; each run opens on the web, reruns, cancels and shows its failed
+steps' log. Every minute the page checks the branch's latest run: a red dot on
+the Pipelines icon and "Pipeline failed" in the status bar when it failed, blue
+while it runs.
 
 The Sandbox page lists the sessions beside the terminal, as termi does: the
 ones waiting for the person first, then working, idle and plain shells, each

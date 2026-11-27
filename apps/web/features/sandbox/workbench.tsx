@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { FileText, Folder, GitBranch, List, SquareTerminal } from 'lucide-react';
+import { FileText, Folder, GitBranch, List, SquareTerminal, Zap } from 'lucide-react';
 import { useMessages } from '@/features/shared/use-messages';
 import type { SandboxSession } from '@/lib/sandbox';
 import { cn } from '@/lib/utils';
@@ -9,7 +9,9 @@ import { messages } from './messages.vi';
 import { shortDir } from './session-list';
 import { UsageChip } from './usage-chip';
 
-export type SidePanel = 'sessions' | 'files' | 'git';
+export type SidePanel = 'sessions' | 'files' | 'git' | 'pipelines';
+/** A count, or the state of the latest pipeline run as a dot. VI: Một con số, hoặc chấm trạng thái pipeline. */
+export type Badge = number | 'failure' | 'running';
 
 const WIDTH_KEY = 'flowie.sandbox.panelWidth';
 const OFF_KEY = 'flowie.sandbox.panelOff';
@@ -105,6 +107,7 @@ const PANELS: { key: SidePanel; label: keyof typeof messages; icon: ReactNode }[
    { key: 'sessions', label: 'Sessions', icon: <List className="size-5" /> },
    { key: 'files', label: 'Files', icon: <Folder className="size-5" /> },
    { key: 'git', label: 'Git', icon: <GitBranch className="size-5" /> },
+   { key: 'pipelines', label: 'Pipelines', icon: <Zap className="size-5" /> },
 ];
 
 /**
@@ -127,7 +130,7 @@ export function ActivityBar({
    /** On phones: whether the terminal fills the screen instead of a panel. */
    terminalShown: boolean;
    onTerminal: () => void;
-   badges: Partial<Record<SidePanel, number>>;
+   badges: Partial<Record<SidePanel, Badge>>;
 }) {
    const tx = useMessages(messages);
    const button = (active: boolean) =>
@@ -159,10 +162,20 @@ export function ActivityBar({
                   )}
                >
                   {item.icon}
-                  {badges[item.key] ? (
+                  {typeof badges[item.key] === 'number' && badges[item.key] ? (
                      <span className="absolute -right-0.5 -top-0.5 rounded-full bg-primary px-1 text-[10px] leading-4 text-primary-foreground">
                         {badges[item.key]}
                      </span>
+                  ) : null}
+                  {typeof badges[item.key] === 'string' ? (
+                     <span
+                        data-testid={`badge-${item.key}`}
+                        data-state={badges[item.key]}
+                        className={cn(
+                           'absolute right-1 top-1 size-2 rounded-full',
+                           badges[item.key] === 'failure' ? 'bg-red-500' : 'bg-sky-500'
+                        )}
+                     />
                   ) : null}
                </button>
             );
@@ -190,10 +203,15 @@ export function StatusBar({
    session,
    home,
    onGit,
+   ci,
+   onPipelines,
 }: {
    session: SandboxSession | undefined;
    home: string;
    onGit: () => void;
+   /** The latest pipeline run on the session's branch, as termi's status bar shows it. */
+   ci: 'failure' | 'running' | 'ok' | null;
+   onPipelines: () => void;
 }) {
    const tx = useMessages(messages);
    return (
@@ -228,6 +246,24 @@ export function StatusBar({
                   </button>
                ) : null}
             </>
+         )}
+         {ci && (
+            <button
+               type="button"
+               onClick={onPipelines}
+               className={cn(
+                  'flex items-center gap-1 hover:text-foreground',
+                  ci === 'failure' && 'text-red-600',
+                  ci === 'running' && 'text-sky-600'
+               )}
+            >
+               <Zap className="size-3.5" />
+               {ci === 'failure'
+                  ? tx('Pipeline failed')
+                  : ci === 'running'
+                    ? tx('Pipeline running')
+                    : tx('Pipeline OK')}
+            </button>
          )}
          <span className="ml-auto">
             <UsageChip />
