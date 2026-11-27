@@ -1,5 +1,8 @@
 import asyncio
 import contextlib
+import json
+import os
+import subprocess
 import threading
 import time
 from dataclasses import replace
@@ -174,3 +177,85 @@ def test_open_terminal_outlives_the_access_token_but_not_the_session(monkeypatch
     sessions.clear()
     with pytest.raises(ApiError):
         asyncio.run(sandbox._socket_user(socket, opening=False))
+
+
+ISSUE = {'id': 'cissue', 'identifier': 'DTD-7', 'title': "Fix the user's login", 'description': 'Steps:\n1. it\'s "broken" $(rm -rf /)'}
+REPOSITORY = {'id': 'crepo', 'name': 'flowie.web', 'repositoryUrl': '', 'baseBranch': 'main', 'instructions': 'Run pnpm test.'}
+
+
+def test_open_command_clones_once_gives_the_issue_a_worktree_and_starts_the_agent(tmp_path):
+    origin = tmp_path / 'origin'
+    git = lambda *args, cwd=origin: subprocess.run(['git', *args], cwd=cwd, check=True, capture_output=True)  # noqa: E731
+    origin.mkdir()
+    git('init', '-q', '-b', 'main')
+    git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'first')
+    bin_dir = tmp_path / 'bin'
+    bin_dir.mkdir()
+    agent = bin_dir / 'claude'
+    agent.write_text('#!/bin/sh\npwd > "$HOME/agent-dir"\nprintf %s "$1" > "$HOME/agent-prompt"\n')
+    agent.chmod(0o755)
+    home = tmp_path / 'home'
+    home.mkdir()
+    command = sandbox.open_command(ISSUE, {**REPOSITORY, 'repositoryUrl': str(origin)}, 'claude', 'DTD-7-flowie-web')
+    env = {**os.environ, 'HOME': str(home), 'PATH': f'{bin_dir}:{os.environ["PATH"]}'}
+    for _ in range(2):  # the second run reuses the clone and the worktree
+        subprocess.run(['bash', '-c', command], env=env, check=True, capture_output=True)
+    work = home / 'work' / 'DTD-7-flowie-web'
+    assert (home / 'agent-dir').read_text().strip() == str(work.resolve())
+    branch = subprocess.run(['git', 'branch', '--show-current'], cwd=work, capture_output=True, text=True).stdout
+    assert branch.strip() == 'flowie/DTD-7-flowie-web'
+    prompt = (home / 'agent-prompt').read_text()
+    assert prompt.startswith("Flowie task DTD-7: Fix the user's login\n\nSteps:\n1. it's \"broken\" $(rm -rf /)")
+    assert prompt.endswith('Run pnpm test.')
+
+
+def open_client(user, monkeypatch, termi):
+    async def readable(db, caller, issue_id):
+        assert issue_id == ISSUE['id']
+        return None, ISSUE
+
+    async def repositories(db, policy, issue):
+        return [REPOSITORY]
+
+    monkeypatch.setattr(sandbox, '_readable_issue', readable)
+    monkeypatch.setattr(sandbox, '_repositories', repositories)
+
+    def handler(request):
+        if request.url.port == 4100:
+            return httpx.Response(200, json={'state': 'running'})
+        return termi(request)
+
+    client = make_client(user, monkeypatch, handler)
+    client.app.dependency_overrides[sandbox.get_session] = lambda: None
+    return client
+
+
+def test_open_creates_the_issue_session_and_types_the_command(monkeypatch):
+    seen = []
+
+    def termi(request):
+        seen.append(request)
+        assert request.url.host == f"flowie-sandbox-{ME['id']}"
+        assert request.headers['x-termi'] == '1'
+        assert request.headers['x-termi-token'] == termi_token(TOKEN, ME['id'])
+        return httpx.Response(200, json={'ok': True})
+
+    client = open_client(ME, monkeypatch, termi)
+    body = {'issueId': ISSUE['id'], 'repositoryId': REPOSITORY['id'], 'agent': 'codex'}
+    assert client.post('/api/v1/sandbox/open', json=body).json() == {'data': {'session': 'DTD-7-flowie-web'}}
+    assert [r.url.path for r in seen] == ['/api/sessions', '/api/send']
+    sent = json.loads(seen[1].content)
+    assert sent['session'] == 'DTD-7-flowie-web' and sent['enter'] is True
+    assert 'codex ' in sent['text']
+
+
+def test_open_reuses_an_existing_session_and_refuses_strangers_and_other_repositories(monkeypatch):
+    seen = []
+    client = open_client(ME, monkeypatch, lambda request: seen.append(request) or httpx.Response(409, json={}))
+    body = {'issueId': ISSUE['id'], 'repositoryId': REPOSITORY['id'], 'agent': 'claude'}
+    assert client.post('/api/v1/sandbox/open', json=body).status_code == 200
+    assert [r.url.path for r in seen] == ['/api/sessions']
+    assert client.post('/api/v1/sandbox/open', json={**body, 'repositoryId': 'cother'}).status_code == 404
+    assert client.post('/api/v1/sandbox/open', json={**body, 'agent': 'bash'}).status_code == 422
+    stranger = open_client(STRANGER, monkeypatch, lambda request: httpx.Response(500))
+    assert stranger.post('/api/v1/sandbox/open', json=body).status_code == 403

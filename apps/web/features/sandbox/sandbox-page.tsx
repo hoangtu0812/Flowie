@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Button } from '@astryxdesign/core/Button';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Text } from '@astryxdesign/core/Text';
@@ -12,7 +13,7 @@ import { useMessages } from '@/features/shared/use-messages';
 import { ApiRequestError } from '@/lib/http';
 import {
    loadSandbox,
-   sandboxUiUrl,
+   sandboxSessionUrl,
    startSandbox,
    stopSandbox,
    type SandboxState,
@@ -33,6 +34,9 @@ export function SandboxPage() {
    const tx = useMessages(messages);
    const [view, setView] = useState<View>({ kind: 'loading' });
    const [busy, setBusy] = useState(false);
+   // Set by "Open with Claude/Codex" on an issue: the terminal opens on that session.
+   // VI: Do "Mở bằng Claude/Codex" trên task đặt: terminal mở thẳng phiên đó.
+   const uiUrl = sandboxSessionUrl(useSearchParams().get('session'));
 
    const run = useCallback(async (action: () => Promise<SandboxState>) => {
       try {
@@ -86,7 +90,7 @@ export function SandboxPage() {
                      <Button
                         label={tx('Open in a new tab')}
                         icon={<ExternalLink className="size-4" />}
-                        href={sandboxUiUrl}
+                        href={uiUrl}
                         target="_blank"
                         size="sm"
                         variant="ghost"
@@ -138,7 +142,7 @@ export function SandboxPage() {
          {running && (
             <iframe
                title={tx('Sandbox terminal')}
-               src={sandboxUiUrl}
+               src={uiUrl}
                allow="clipboard-read; clipboard-write"
                className="min-h-0 w-full flex-1 border-0"
             />

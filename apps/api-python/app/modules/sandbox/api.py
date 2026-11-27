@@ -28,21 +28,31 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from typing import Any
+import re
+import shlex
+from typing import Any, Literal
 from urllib.parse import urlsplit
 
 import httpx
 import websockets
-from fastapi import APIRouter, Depends, Request, WebSocket
+from fastapi import APIRouter, Depends, Query, Request, WebSocket
 from fastapi.responses import RedirectResponse, StreamingResponse
+from pydantic import Field
+from sqlalchemy import text
 from starlette.background import BackgroundTask
 from websockets.asyncio.client import connect
 
 from ...core.config import Settings
 from ...core.errors import ApiError
+from ...db.session import get_session
 from ...sandbox_manager import TERMI_PORT, USER_ID, container_name, termi_token
+from ..access.membership import workspace_role
+from ..agent_runs.queries import list_repositories_select_project_repositories_sql
 from ..identity.auth import current_user
 from ..identity.security.sessions import active_identity, decode_access, expired
+from ..mcp.contracts import StrictInput
+from ..mcp.domain import Principal
+from ..mcp.policy import AccessPolicy
 
 router = APIRouter(prefix='/api/v1/sandbox', tags=['sandbox'])
 
@@ -106,6 +116,129 @@ async def start_sandbox(request: Request, user: Any = Depends(current_user)):
 async def stop_sandbox(request: Request, user: Any = Depends(current_user)):
     user_id = _sandbox_user(_settings(request), user)
     return _state(*await _manager(_settings(request), 'POST', f'/sandboxes/{user_id}/stop'))
+
+
+PROMPT_DESCRIPTION_CHARS = 4000
+TERMI_READY_ATTEMPTS = 20
+
+
+class OpenInput(StrictInput):
+    issueId: str = Field(min_length=1, max_length=100)
+    repositoryId: str = Field(min_length=1, max_length=100)
+    agent: Literal['claude', 'codex']
+
+
+async def _readable_issue(db: Any, user: dict[str, Any], issue_id: str) -> tuple[AccessPolicy, dict[str, Any]]:
+    """The issue, if the caller may read it, with the policy that decided so.
+    VI: Task, nếu người gọi đọc được, cùng policy đã quyết định điều đó."""
+    workspace = await db.scalar(text('SELECT workspace_id FROM issues WHERE id=:id'), {'id': issue_id})
+    if workspace is None:
+        raise ApiError(404, 'Issue not found.', 'Not Found')
+    await workspace_role(db, workspace, user['id'])
+    policy = AccessPolicy(db, Principal('', workspace, user, frozenset(), (), ()))
+    return policy, await policy.issue(issue_id)
+
+
+async def _repositories(db: Any, policy: AccessPolicy, issue: dict[str, Any]) -> list[dict[str, Any]]:
+    if not issue.get('project_id'):
+        return []
+    rows = await db.execute(
+        list_repositories_select_project_repositories_sql(policy), {**policy.params, 'project': issue['project_id']}
+    )
+    return [dict(row) for row in rows.mappings()]
+
+
+@router.get('/repositories')
+async def sandbox_repositories(
+    request: Request, issueId: str = Query(min_length=1), user: Any = Depends(current_user), db: Any = Depends(get_session)
+):
+    """The repositories of the issue's project that "Open with Claude/Codex" can use.
+    VI: Các repository của dự án chứa task mà "Mở bằng Claude/Codex" dùng được."""
+    _sandbox_user(_settings(request), user)
+    policy, issue = await _readable_issue(db, user, issueId)
+    return {'data': [{'id': r['id'], 'name': r['name']} for r in await _repositories(db, policy, issue)]}
+
+
+def _slug(name: str) -> str:
+    return re.sub(r'[^A-Za-z0-9_-]+', '-', name).strip('-') or 'repo'
+
+
+def open_command(issue: dict[str, Any], repository: dict[str, Any], agent: str, session: str) -> str:
+    """One shell line for the sandbox terminal: clone the repository once into ~/repos, give the
+    issue its own worktree and branch `flowie/<session>` in ~/work (reused when it already exists),
+    then start the agent there with the issue as its first prompt. Every value is shell-quoted.
+    VI: Một dòng shell cho terminal sandbox: clone repository một lần vào ~/repos, tạo cho task
+    VI: worktree và nhánh `flowie/<session>` riêng trong ~/work (dùng lại nếu đã có), rồi chạy agent
+    VI: ở đó với task làm prompt đầu tiên. Mọi giá trị đều được quote cho shell."""
+    repo = f"$HOME/repos/{_slug(repository['name'])}"
+    work = f'$HOME/work/{session}'
+    branch = shlex.quote(f'flowie/{session}')
+    base = shlex.quote(f"origin/{repository['baseBranch']}")
+    description = (issue.get('description') or '').strip()[:PROMPT_DESCRIPTION_CHARS]
+    prompt = '\n\n'.join(
+        part
+        for part in (
+            f"Flowie task {issue['identifier']}: {issue['title']}",
+            description,
+            f"Repository {repository['name']}; you are on branch flowie/{session}, "
+            f"created from {repository['baseBranch']}.",
+            repository.get('instructions') or '',
+        )
+        if part
+    )
+    return (
+        f'mkdir -p "$HOME/repos" "$HOME/work" '
+        f'&& {{ [ -d "{repo}/.git" ] || git clone {shlex.quote(repository["repositoryUrl"])} "{repo}"; }} '
+        f'&& git -C "{repo}" fetch origin '
+        f'&& {{ [ -d "{work}" ] || git -C "{repo}" worktree add "{work}" {branch} 2>/dev/null '
+        f'|| git -C "{repo}" worktree add -b {branch} "{work}" {base}; }} '
+        f'&& cd "{work}" && {agent} {shlex.quote(prompt)}'
+    )
+
+
+async def _termi(settings: Settings, user_id: str, path: str, body: dict[str, Any]) -> httpx.Response:
+    """POSTs to the caller's termi, waiting while a sandbox that has just started brings it up.
+    VI: POST tới termi của người gọi, chờ trong lúc sandbox vừa khởi động bật termi lên."""
+    headers = _upstream_headers({'x-termi': '1'}, settings, user_id)
+    url = f'http://{container_name(user_id)}:{TERMI_PORT}{path}'
+    failure: Exception | None = None
+    async with httpx.AsyncClient(timeout=30) as client:
+        for _ in range(TERMI_READY_ATTEMPTS):
+            try:
+                return await client.post(url, json=body, headers=headers)
+            except httpx.TransportError as error:
+                failure = error
+                await asyncio.sleep(1)
+    raise ApiError(502, 'The sandbox terminal did not start.', 'Bad Gateway') from failure
+
+
+@router.post('/open')
+async def open_in_sandbox(
+    payload: OpenInput, request: Request, user: Any = Depends(current_user), db: Any = Depends(get_session)
+):
+    """Starts the caller's sandbox and opens a terminal session for the issue with Claude Code or
+    Codex working in the chosen repository of its project. A session that already exists for the
+    issue is returned as it is, so opening twice resumes instead of starting over.
+    VI: Khởi động sandbox của người gọi và mở một phiên terminal cho task, với Claude Code hoặc
+    VI: Codex làm việc trong repository đã chọn của dự án. Phiên đã có cho task được trả lại như
+    VI: cũ, nên mở lần hai là quay lại chứ không bắt đầu lại."""
+    settings = _settings(request)
+    user_id = _sandbox_user(settings, user)
+    policy, issue = await _readable_issue(db, user, payload.issueId)
+    repository = next((r for r in await _repositories(db, policy, issue) if r['id'] == payload.repositoryId), None)
+    if repository is None:
+        raise ApiError(404, 'Repository not found for this issue.', 'Not Found')
+    session = f"{issue['identifier']}-{_slug(repository['name'])}"[:40].rstrip('-')
+    await _manager(settings, 'PUT', f'/sandboxes/{user_id}')
+    created = await _termi(settings, user_id, '/api/sessions', {'name': session, 'dir': '/home/node'})
+    if created.status_code == 200:
+        command = open_command(issue, repository, payload.agent, session)
+        sent = await _termi(settings, user_id, '/api/send', {'session': session, 'text': command, 'enter': True})
+        if sent.status_code != 200:
+            raise ApiError(502, 'The sandbox terminal refused the command.', 'Bad Gateway')
+    elif created.status_code != 409:
+        raise ApiError(502, 'The sandbox terminal refused the session.', 'Bad Gateway')
+    return {'data': {'session': session}}
 
 
 @router.get('/ui', include_in_schema=False)
