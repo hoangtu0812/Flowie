@@ -418,3 +418,22 @@ def test_the_terminal_token_never_reaches_the_logs(monkeypatch, caplog):
     lines = [record.getMessage() for record in caplog.records if record.name == 'httpx']
     assert lines and all(token not in line for line in lines)
     assert any('/<token>/sessions' in line for line in lines)
+
+
+def test_chat_and_conversations_reach_the_agent(monkeypatch):
+    seen = []
+
+    def agent(request, path):
+        seen.append((path, dict(request.url.params)))
+        return httpx.Response(200, json={'agent': 'claude', 'items': []})
+
+    client = agent_client(ME, monkeypatch, agent)
+    assert client.get('/api/v1/sandbox/sessions/DTD-7/chat').json()['data']['agent'] == 'claude'
+    assert seen[-1] == ('sessions/DTD-7/chat', {'limit': '80'})
+    conversation = '0f8fad5b-d9cb-469f-a165-70867728950e'
+    assert client.get(f'/api/v1/sandbox/conversations/codex/{conversation}?limit=20').status_code == 200
+    assert seen[-1] == (f'conversations/codex/{conversation}', {'limit': '20'})
+    assert client.get(f'/api/v1/sandbox/conversations/bash/{conversation}').status_code == 422
+    assert client.get('/api/v1/sandbox/conversations/claude/x').status_code == 400
+    assert client.get('/api/v1/sandbox/sessions/DTD-7/chat?limit=999').status_code == 422
+    assert len(seen) == 2

@@ -823,6 +823,203 @@ def usage() -> dict[str, Any]:
     }
 
 
+# ---- Chat view, ported from termi (src/agents/chat.mjs, tools.mjs, claude.mjs, codex.mjs) ----
+# VI: ---- Màn hình Chat, chuyển từ termi (src/agents/chat.mjs, tools.mjs, claude.mjs, codex.mjs) ----
+
+CHAT_TAIL_BYTES = 4 * 1024 * 1024
+CHAT_LIMIT = 80
+MAX_STEP_DETAIL = 140
+INJECTED = ('<', '# AGENTS.md')
+# Verbs are English keys the web page translates. VI: Động từ là khoá tiếng Anh, trang web dịch.
+TOOL_VERBS: dict[str, tuple[str, str]] = {
+    'Read': ('Read', 'file_path'), 'Edit': ('Edit', 'file_path'), 'MultiEdit': ('Edit', 'file_path'),
+    'NotebookEdit': ('Edit', 'notebook_path'), 'Write': ('Create', 'file_path'), 'Bash': ('Run', 'command'),
+    'Grep': ('Search', 'pattern'), 'Glob': ('Find files', 'pattern'), 'WebFetch': ('Read the web', 'url'),
+    'WebSearch': ('Search the web', 'query'), 'Agent': ('Delegate', 'description'), 'Task': ('Delegate', 'description'),
+    'TodoWrite': ('Update the to-do list', ''), 'AskUserQuestion': ('Ask you', 'questions'),
+}
+FILE_CHANGES = {'Edit': 'edit', 'MultiEdit': 'edit', 'NotebookEdit': 'edit', 'Write': 'create'}
+PATCH_FILE = re.compile(r'^\*\*\* (Add|Update|Delete) File: (.+)$', re.M)
+
+
+def _tail_lines(file: Path, size: int = CHAT_TAIL_BYTES) -> list[str]:
+    """The last lines of a file, newest first. VI: Các dòng cuối của file, mới nhất trước."""
+    try:
+        with file.open('rb') as handle:
+            handle.seek(max(0, file.stat().st_size - size))
+            return handle.read().decode('utf-8', 'replace').split('\n')[::-1]
+    except OSError:
+        return []
+
+
+def tool_step(name: str, raw: Any, cwd: str = '') -> dict[str, Any]:
+    """One tool call as a step: a verb, a short detail, and the file it edits or creates.
+    VI: Một lời gọi tool thành một bước: động từ, chi tiết ngắn, và file nó sửa hay tạo."""
+    if isinstance(raw, str):
+        try:
+            data = json.loads(raw)
+        except ValueError:
+            data = {'raw': raw}
+    else:
+        data = raw if isinstance(raw, dict) else {}
+    data = data if isinstance(data, dict) else {}
+    verb, field = TOOL_VERBS.get(name, ('Run' if name in ('exec', 'shell', 'exec_command') else name, 'command'))
+    detail: Any = data.get(field) if field else ''
+    if field in ('file_path', 'notebook_path'):
+        detail = os.path.basename(str(detail or ''))
+    elif field == 'questions' and isinstance(detail, list) and detail:
+        detail = (detail[0] or {}).get('question', '')
+    elif field == 'description' and not detail:
+        detail = data.get('prompt', '')
+    if isinstance(detail, list):
+        detail = ' '.join(str(part) for part in detail)
+    step: dict[str, Any] = {'verb': verb, 'detail': re.sub(r'\s+', ' ', str(detail or '')).strip()[:MAX_STEP_DETAIL]}
+    file = data.get('file_path') or data.get('notebook_path')
+    if name in FILE_CHANGES and isinstance(file, str) and file.startswith('/'):
+        step.update(file=file, change=FILE_CHANGES[name])
+    if name == 'apply_patch':  # Codex edits files through a patch
+        patch = data.get('raw') or data.get('input') or ''
+        files = [(kind, path.strip()) for kind, path in PATCH_FILE.findall(str(patch))]
+        step['verb'], step['detail'] = 'Edit', ', '.join(os.path.basename(path) for _, path in files)[:MAX_STEP_DETAIL]
+        step['files'] = [{'file': path if path.startswith('/') else os.path.join(cwd, path),
+                          'change': 'create' if kind == 'Add' else 'edit'} for kind, path in files if kind != 'Delete']
+    return step
+
+
+def claude_events(record: dict[str, Any]) -> list[dict[str, Any]]:
+    if record.get('type') not in ('user', 'assistant') or record.get('isMeta') or record.get('isSidechain'):
+        return []
+    content = (record.get('message') or {}).get('content')
+    parts = [{'type': 'text', 'text': content}] if isinstance(content, str) else content if isinstance(content, list) else []
+    events: list[dict[str, Any]] = []
+    for part in parts:
+        if not isinstance(part, dict):
+            continue
+        text = part.get('text')
+        if part.get('type') == 'text' and isinstance(text, str) and text.strip() and not text.startswith('<'):
+            events.append({'who': record['type'], 'text': text.strip()})
+        elif part.get('type') == 'tool_use' and record['type'] == 'assistant':
+            events.append({'tool': tool_step(str(part.get('name')), part.get('input'), record.get('cwd') or '')})
+    return events
+
+
+def codex_events(record: dict[str, Any]) -> list[dict[str, Any]]:
+    if record.get('type') != 'response_item':
+        return []
+    payload = record.get('payload') or {}
+    if payload.get('type') == 'message' and payload.get('role') in ('user', 'assistant'):
+        text = '\n'.join(
+            p.get('text', '') for p in payload.get('content') or [] if p.get('type') in ('input_text', 'output_text')
+        ).strip()
+        return [{'who': payload['role'], 'text': text}] if text and not text.startswith(INJECTED) else []
+    if payload.get('type') in ('function_call', 'custom_tool_call'):
+        return [{'tool': tool_step(str(payload.get('name')), payload.get('arguments', payload.get('input')))}]
+    return []
+
+
+def chat_items(events_of: Any, lines: list[str], limit: int = CHAT_LIMIT, cwd: str = '') -> list[dict[str, Any]]:
+    """termi's chat: messages, with consecutive tool calls grouped into one step list; `lines`
+    newest first, stopping after `limit` messages.
+    VI: Chat của termi: các tin, với các lời gọi tool liền nhau gộp thành một danh sách bước;
+    VI: `lines` mới nhất trước, dừng sau `limit` tin."""
+    events: list[dict[str, Any]] = []
+    messages = 0
+    for line in lines:
+        try:
+            record = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(record, dict):
+            continue
+        at = record.get('timestamp')
+        found = [{**event, 't': at} for event in events_of(record)]
+        for event in found:
+            if 'tool' in event and cwd:
+                for change in event['tool'].get('files') or []:
+                    change['file'] = change['file'] if change['file'].startswith('/') else os.path.join(cwd, change['file'])
+        events.extend(reversed(found))
+        messages += sum(1 for event in found if 'who' in event)
+        if messages >= limit:
+            break
+    items: list[dict[str, Any]] = []
+    for event in reversed(events):
+        if 'tool' in event and items and items[-1]['kind'] == 'tools':
+            items[-1]['steps'].append(event['tool'])
+            items[-1]['t'] = event['t']
+        elif 'tool' in event:
+            items.append({'kind': 'tools', 'steps': [event['tool']], 't': event['t']})
+        else:
+            items.append({'kind': 'msg', 'who': event['who'], 'text': event['text'], 't': event['t']})
+    return items
+
+
+def claude_project_dir(directory: str) -> Path:
+    return home() / '.claude' / 'projects' / re.sub(r'[^A-Za-z0-9]', '-', directory)
+
+
+def transcript_of(agent: str, directory: str) -> Path | None:
+    """The newest conversation file of an agent in a folder.
+    VI: File hội thoại mới nhất của một agent trong một thư mục."""
+    if agent == 'claude':
+        folder = claude_project_dir(directory)
+        files = [f for f in folder.glob('*.jsonl') if f.is_file()] if folder.is_dir() else []
+        return max(files, key=lambda f: f.stat().st_mtime) if files else None
+    if agent == 'codex':
+        root = home() / '.codex' / 'sessions'
+        rollouts = sorted(root.glob('**/rollout-*.jsonl'), key=lambda f: f.stat().st_mtime, reverse=True) if root.is_dir() else []
+        for file in rollouts[:ROLLOUT_FILES]:
+            meta = next((r for r in _records(file) if r.get('type') == 'session_meta'), None)
+            if meta and (meta.get('payload') or {}).get('cwd') == directory:
+                return file
+    return None
+
+
+def conversation_file(agent: str, conversation: str) -> Path | None:
+    if not UUID.match(conversation):
+        raise Refused(400, 'Invalid conversation.')
+    if agent == 'claude':
+        root = home() / '.claude' / 'projects'
+        return next(iter(root.glob(f'*/{conversation}.jsonl')), None) if root.is_dir() else None
+    if agent == 'codex':
+        root = home() / '.codex' / 'sessions'
+        for file in root.glob('**/rollout-*.jsonl') if root.is_dir() else []:
+            meta = next((r for r in _records(file) if r.get('type') == 'session_meta'), None)
+            if meta and (meta.get('payload') or {}).get('id') == conversation:
+                return file
+        return None
+    raise Refused(400, 'Unknown agent.')
+
+
+EVENTS = {'claude': claude_events, 'codex': codex_events}
+
+
+def session_chat(name: str, limit: int) -> dict[str, Any]:
+    _session(name)
+    session = next((s for s in list_sessions() if s['name'] == name), None)
+    if not session:
+        raise Refused(404, 'No such session.')
+    agent = session.get('agent')
+    file = transcript_of(agent, session['dir']) if agent else None
+    items = chat_items(EVENTS[agent], _tail_lines(file), limit, session['dir']) if agent and file else []
+    return {'agent': agent, 'state': session.get('state'), 'dir': session['dir'], 'items': items}
+
+
+def conversation_chat(agent: str, conversation: str, limit: int) -> dict[str, Any]:
+    file = conversation_file(agent, conversation)
+    if not file:
+        raise Refused(404, 'No such conversation.')
+    first = next((r for r in _records(file) if r.get('cwd') or r.get('type') == 'session_meta'), {})
+    cwd = first.get('cwd') or (first.get('payload') or {}).get('cwd') or ''
+    return {'agent': agent, 'dir': cwd, 'items': chat_items(EVENTS[agent], _tail_lines(file), limit, cwd)}
+
+
+def _limit(query: dict[str, list[str]]) -> int:
+    try:
+        return max(10, min(200, int(query.get('limit', [CHAT_LIMIT])[0])))
+    except ValueError:
+        return CHAT_LIMIT
+
+
 def route(token: str, method: str, raw_path: str, body: bytes, filename: str = '') -> tuple[int, Any]:
     parts = urlsplit(raw_path)
     segments = parts.path.strip('/').split('/')
@@ -870,6 +1067,10 @@ def route(token: str, method: str, raw_path: str, body: bytes, filename: str = '
             )
         if method == 'POST' and path == ['git', 'op']:
             return 200, git_op(request)
+        if method == 'GET' and len(path) == 3 and path[0] == 'sessions' and path[2] == 'chat':
+            return 200, session_chat(path[1], _limit(query))
+        if method == 'GET' and len(path) == 3 and path[0] == 'conversations':
+            return 200, conversation_chat(path[1], path[2], _limit(query))
         if method == 'GET' and path == ['usage']:
             return 200, usage()
         if method == 'GET' and path == ['dirs']:

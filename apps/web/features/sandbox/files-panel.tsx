@@ -52,7 +52,9 @@ export function FilesPanel({
    } | null>(null);
    const [error, setError] = useState('');
 
-   useEffect(() => setDir(start), [start]);
+   useEffect(() => {
+      setDir(start);
+   }, [start]);
    useEffect(() => {
       setError('');
       loadSandboxFolder(dir).then(setListing, (failure: Error) => setError(failure.message));

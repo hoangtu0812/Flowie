@@ -24,14 +24,17 @@ import {
    sandboxSessionUrl,
    startSandbox,
    stopSandbox,
+   createSandboxSession,
+   type SandboxAgent,
    type SandboxFile,
    type SandboxSession,
    type SandboxState,
 } from '@/lib/sandbox';
-import { NewSessionDialog } from './new-session-dialog';
+import { NewSessionDialog, sessionName } from './new-session-dialog';
 import { Composer, KeyRow } from './session-controls';
 import { FilesPanel, FileViewer } from './files-panel';
 import { HomePage } from './home-page';
+import { ConversationViewer, SessionChat } from './chat-view';
 import { ActivityBar, ResizeHandle, StatusBar, useSidePanel, type SidePanel } from './workbench';
 import { GitPanel } from './git-panel';
 import { UsageChip } from './usage-chip';
@@ -85,11 +88,21 @@ export function SandboxPage() {
    // VI: Trên điện thoại một màn hình chiếm toàn bộ: một panel, hoặc terminal của phiên.
    const [terminalShown, setTerminalShown] = useState(Boolean(selected));
    const [openFile, setOpenFile] = useState<SandboxFile | null>(null);
+   // Chat or Terminal, remembered per session as termi does. VI: Chat hay Terminal, nhớ theo phiên như termi.
+   const [mainTabs, setMainTabs] = useState<Record<string, 'chat' | 'terminal'>>({});
+   const mainTab = (current && currentAgent && mainTabs[current]) || 'terminal';
+   const [viewing, setViewing] = useState<{
+      agent: SandboxAgent;
+      id: string;
+      title: string;
+      dir: string;
+   } | null>(null);
    const [draft, setDraft] = useState('');
 
    const openSession = (name: string | null) => {
       setSelected(name);
       setOpenFile(null);
+      setViewing(null);
       setTerminalShown(Boolean(name));
    };
 
@@ -130,7 +143,9 @@ export function SandboxPage() {
    // A per-browser convenience, so it lives in localStorage.
    // VI: Tiện ích theo từng trình duyệt nên lưu trong localStorage.
    const [fontSize, setFontSize] = useState(FONT_DEFAULT);
-   useEffect(() => setFontSize(savedFont()), []);
+   useEffect(() => {
+      setFontSize(savedFont());
+   }, []);
    const changeFont = (delta: number) => {
       const next = Math.min(28, Math.max(9, fontSize + delta));
       setFontSize(next);
@@ -363,7 +378,34 @@ export function SandboxPage() {
                         }}
                      />
                   )}
-                  {!current && !openFile && (
+                  {viewing && !openFile && (
+                     <ConversationViewer
+                        agent={viewing.agent}
+                        id={viewing.id}
+                        title={viewing.title}
+                        onClose={() => setViewing(null)}
+                        onOpenFile={setOpenFile}
+                        onResume={() =>
+                           void createSandboxSession({
+                              name: sessionName(
+                                 viewing.dir,
+                                 viewing.agent,
+                                 sessions.map((session) => session.name)
+                              ),
+                              dir: viewing.dir,
+                              agent: viewing.agent,
+                              resume: viewing.id,
+                           }).then(
+                              (name) => {
+                                 openSession(name);
+                                 void refreshSessions();
+                              },
+                              (error: Error) => toast.error(error.message)
+                           )
+                        }
+                     />
+                  )}
+                  {!current && !openFile && !viewing && (
                      <HomePage
                         sessions={sessions}
                         home={home}
@@ -372,7 +414,34 @@ export function SandboxPage() {
                            void refreshSessions();
                         }}
                         onNewSession={() => setCreating(true)}
+                        onView={setViewing}
                      />
+                  )}
+                  {current && currentAgent && !openFile && (
+                     <div
+                        role="tablist"
+                        aria-label={tx('Session views')}
+                        className="flex shrink-0 gap-1 border-b px-2 py-1"
+                     >
+                        {(['chat', 'terminal'] as const).map((tab) => (
+                           <button
+                              key={tab}
+                              type="button"
+                              role="tab"
+                              aria-selected={mainTab === tab}
+                              onClick={() => setMainTabs((tabs) => ({ ...tabs, [current]: tab }))}
+                              className={cn(
+                                 'rounded px-2 py-0.5 text-xs text-muted-foreground hover:bg-accent',
+                                 mainTab === tab && 'bg-accent text-foreground'
+                              )}
+                           >
+                              {tx(tab === 'chat' ? 'Chat' : 'Terminal')}
+                           </button>
+                        ))}
+                     </div>
+                  )}
+                  {current && mainTab === 'chat' && !openFile && (
+                     <SessionChat session={current} onOpenFile={setOpenFile} />
                   )}
                   {current && (
                      <>
@@ -381,7 +450,10 @@ export function SandboxPage() {
                            title={tx('Sandbox terminal')}
                            src={sandboxSessionUrl(current, fontSize)}
                            allow="clipboard-read; clipboard-write"
-                           className={cn('min-h-0 w-full flex-1 border-0', openFile && 'hidden')}
+                           className={cn(
+                              'min-h-0 w-full flex-1 border-0',
+                              (openFile || mainTab === 'chat') && 'hidden'
+                           )}
                            onLoad={(event) => {
                               // The terminal is same-origin, so the shortcuts work while it has focus.
                               // VI: Terminal cùng origin, nên phím tắt vẫn chạy khi terminal đang focus.
@@ -396,7 +468,7 @@ export function SandboxPage() {
                               }
                            }}
                         />
-                        <KeyRow session={current} onFont={changeFont} />
+                        {mainTab === 'terminal' && <KeyRow session={current} onFont={changeFont} />}
                         <Composer
                            session={current}
                            agent={currentAgent}
